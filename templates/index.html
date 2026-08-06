@@ -1,0 +1,382 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ACQUA 測試自動化</title>
+<style>
+  :root {
+    --bg:#0f1115; --panel:#171a21; --border:#272b35; --fg:#e6e8ee; --muted:#8b93a7;
+    --accent:#4f8ef7; --ok:#3fb950; --fail:#f85149; --warn:#d29922;
+  }
+  @media (prefers-color-scheme: light) {
+    :root { --bg:#f5f6f8; --panel:#fff; --border:#dfe2e8; --fg:#1c1f26; --muted:#666e80; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; font:14px/1.5 "Segoe UI","Microsoft JhengHei",system-ui,sans-serif;
+         background:var(--bg); color:var(--fg); }
+  header { padding:14px 20px; border-bottom:1px solid var(--border); background:var(--panel);
+           display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+  h1 { font-size:17px; margin:0; font-weight:600; }
+  .badge { font-size:12px; padding:3px 9px; border-radius:20px; border:1px solid var(--border); }
+  .badge.mock { background:#d2992222; color:var(--warn); border-color:var(--warn); }
+  .badge.com  { background:#3fb95022; color:var(--ok);   border-color:var(--ok); }
+  main { display:grid; grid-template-columns:340px 1fr 380px; gap:16px; padding:16px;
+         align-items:start; }
+  @media (max-width:1200px) { main { grid-template-columns:1fr; } }
+  .panel { background:var(--panel); border:1px solid var(--border); border-radius:10px;
+           padding:14px; }
+  .panel h2 { font-size:13px; margin:0 0 10px; color:var(--muted); font-weight:600;
+              text-transform:uppercase; letter-spacing:.04em; }
+  label { display:block; font-size:12px; color:var(--muted); margin:8px 0 3px; }
+  input, select, button { font:inherit; }
+  input[type=text], input[type=password], select {
+    width:100%; padding:7px 9px; border-radius:6px; border:1px solid var(--border);
+    background:var(--bg); color:var(--fg); }
+  button { padding:8px 14px; border-radius:6px; border:1px solid var(--border);
+           background:var(--bg); color:var(--fg); cursor:pointer; }
+  button:hover:not(:disabled) { border-color:var(--accent); }
+  button:disabled { opacity:.45; cursor:not-allowed; }
+  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600; }
+  button.danger  { background:var(--fail);   border-color:var(--fail);   color:#fff; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+  .smd-list { max-height:44vh; overflow-y:auto; border:1px solid var(--border);
+              border-radius:8px; margin-top:8px; }
+  .smd { display:flex; align-items:center; gap:9px; padding:8px 11px;
+         border-bottom:1px solid var(--border); }
+  .smd:last-child { border-bottom:none; }
+  .smd:hover { background:#7f8faa14; }
+  .smd input { width:16px; height:16px; accent-color:var(--accent); flex:none; }
+  .smd .title { flex:1; }
+  .smd .rid { font-size:11px; color:var(--muted); font-variant-numeric:tabular-nums; }
+  .smd .res { font-size:11px; font-weight:700; padding:2px 7px; border-radius:4px; }
+  .res.PASS { background:#3fb95022; color:var(--ok); }
+  .res.FAIL { background:#f8514922; color:var(--fail); }
+  .smd.active { background:#4f8ef71f; box-shadow:inset 3px 0 0 var(--accent); }
+  #log { height:52vh; overflow-y:auto; background:var(--bg); border:1px solid var(--border);
+         border-radius:8px; padding:10px; font:12px/1.55 Consolas,"Cascadia Mono",monospace;
+         white-space:pre-wrap; word-break:break-word; }
+  .l-warn  { color:var(--warn); }
+  .l-error { color:var(--fail); }
+  .stats { display:flex; gap:8px; margin-top:10px; }
+  .stat { flex:1; text-align:center; padding:9px; border-radius:8px; border:1px solid var(--border); }
+  .stat b { display:block; font-size:20px; font-variant-numeric:tabular-nums; }
+  .stat.ok b   { color:var(--ok); }
+  .stat.fail b { color:var(--fail); }
+  progress { width:100%; height:7px; margin-top:9px; }
+  .hint { font-size:12px; color:var(--muted); margin-top:8px; }
+  .empty { padding:22px; text-align:center; color:var(--muted); font-size:13px; }
+  .modes { display:flex; gap:8px; }
+  .mode { flex:1; display:flex; align-items:flex-start; gap:8px; padding:9px 11px;
+          border:1px solid var(--border); border-radius:8px; cursor:pointer; margin:0; }
+  .mode:has(input:checked) { border-color:var(--accent); background:#4f8ef714; }
+  .mode input { margin-top:3px; accent-color:var(--accent); flex:none; }
+  .mode b { display:block; font-size:13px; color:var(--fg); }
+  .mode small { display:block; font-size:11px; color:var(--muted); margin-top:2px; }
+  .var { display:flex; gap:6px; align-items:center; margin-top:6px; }
+  .var input[type=text] { flex:1; }
+  .var .vname { flex:0 0 46%; font-family:Consolas,monospace; font-size:12px; }
+  .var .del { flex:none; padding:5px 9px; }
+  code { background:#7f8faa22; padding:1px 5px; border-radius:4px; font-size:12px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>ACQUA 測試自動化</h1>
+  <span class="badge" id="badge-backend">—</span>
+  <span class="badge" id="badge-conn">未連線</span>
+  <span class="badge" id="badge-proj">未開啟專案</span>
+</header>
+
+<main>
+  <!-- ── 左:連線與選取 ────────────────────────── -->
+  <section class="panel">
+    <h2>1. 連線</h2>
+    <label>SQL Server</label>
+    <input type="text" id="server" value="{{ config.get('database',{}).get('server','') }}">
+    <label>資料庫名稱</label>
+    <input type="text" id="database" value="{{ config.get('database',{}).get('name','') }}"
+           placeholder="尚未建立 ACQUA 資料庫">
+    <div class="row"><button class="primary" id="btn-connect">連線</button></div>
+
+    <h2 style="margin-top:20px">2. 選擇專案</h2>
+    <label>專案群組</label>
+    <select id="group"></select>
+    <label>專案</label>
+    <select id="project"></select>
+    <div class="row"><button id="btn-open">開啟專案</button></div>
+
+    <h2 style="margin-top:20px">3. 受測物 (DUT)</h2>
+    <label>量測物件名稱</label>
+    <input type="text" id="mo"
+           value="{{ config.get('target',{}).get('measurement_object','DUT_001') }}">
+    <div class="row"><button id="btn-mo">選定 / 建立</button></div>
+    <p class="hint">選定後會把 config.json 的 metadata 透過 UpdateProperty 寫入。</p>
+  </section>
+
+  <!-- ── 中:測項勾選 ─────────────────────────── -->
+  <section class="panel">
+    <h2>4. 執行模式</h2>
+    <div class="modes">
+      <label class="mode"><input type="radio" name="mode" value="selected" checked>
+        <span><b>逐項勾選</b><small>我決定跑哪幾項 · StartSingleMeasurement</small></span></label>
+      <label class="mode"><input type="radio" name="mode" value="conditional">
+        <span><b>變數驅動</b><small>設 DUT 屬性,ACQUA 自己篩 · StartMeasurements</small></span></label>
+    </div>
+
+    <!-- 變數驅動模式的面板 -->
+    <div id="var-panel" style="display:none">
+      <p class="hint">這些值會寫進 ACQUA 變數,由專案樹的 <code>ConditionalExecution</code>
+         決定哪些測項要跑。變數名稱取自 HEAD 官方的 DUT 精靈。</p>
+      <div id="vars"></div>
+      <div class="row">
+        <button id="btn-var-add">+ 自訂變數</button>
+        <button id="btn-var-push">寫入 ACQUA</button>
+        <button id="btn-var-read">讀回目前值</button>
+      </div>
+    </div>
+
+    <h2 style="margin-top:18px">5. 選擇測項</h2>
+    <div class="row">
+      <input type="text" id="search" placeholder="關鍵字過濾(留空 = 全部)" style="flex:1">
+      <button id="btn-list">載入測項</button>
+    </div>
+    <div class="row">
+      <button id="btn-all">全選</button>
+      <button id="btn-none">全不選</button>
+      <button id="btn-failed">只選失敗的</button>
+      <span style="flex:1"></span>
+      <span class="hint" id="sel-count">已選 0 項</span>
+    </div>
+
+    <div class="smd-list" id="smds"><div class="empty">尚未載入測項</div></div>
+
+    <div class="row">
+      <button class="primary" id="btn-run">▶ 執行選取的測項</button>
+      <button class="danger" id="btn-cancel" disabled>■ 中止</button>
+      <button id="btn-report">產生報告</button>
+      <button id="btn-csv">匯出 CSV</button>
+    </div>
+    <progress id="prog" value="0" max="100" style="display:none"></progress>
+
+    <div class="stats">
+      <div class="stat"><b id="s-total">0</b>總計</div>
+      <div class="stat ok"><b id="s-pass">0</b>PASS</div>
+      <div class="stat fail"><b id="s-fail">0</b>FAIL</div>
+    </div>
+  </section>
+
+  <!-- ── 右:日誌 ─────────────────────────────── -->
+  <section class="panel">
+    <h2>執行日誌</h2>
+    <div id="log"></div>
+    <div class="row"><button id="btn-clearlog">清除畫面</button></div>
+  </section>
+</main>
+
+<script>
+const $ = s => document.querySelector(s);
+let S = {}, selected = new Set(), resultMap = {};
+
+async function post(url, body) {
+  const r = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'},
+                             body: JSON.stringify(body || {})});
+  const j = await r.json().catch(() => ({ok:false, error:'回應不是合法的 JSON'}));
+  if (!j.ok) addLog('✗ ' + (j.error || '未知錯誤'), 'error');
+  if (j.state) render(j.state);
+  return j;
+}
+
+function addLog(text, level) {
+  const el = $('#log');
+  const near = el.scrollTop + el.clientHeight >= el.scrollHeight - 40;
+  const d = document.createElement('div');
+  if (level && level !== 'info') d.className = 'l-' + level;
+  d.textContent = text;
+  el.appendChild(d);
+  while (el.childNodes.length > 800) el.removeChild(el.firstChild);
+  if (near) el.scrollTop = el.scrollHeight;
+}
+
+function render(s) {
+  S = s;
+  $('#badge-backend').textContent = s.backend === 'com' ? 'COM(真實 ACQUA)' : '模擬模式';
+  $('#badge-backend').className = 'badge ' + (s.backend === 'com' ? 'com' : 'mock');
+  $('#badge-conn').textContent = s.connected ? `${s.server} / ${s.database}` : '未連線';
+  $('#badge-proj').textContent = s.open_project
+      ? `${s.open_group} / ${s.open_project}` + (s.measurement_object ? ` · ${s.measurement_object}` : '')
+      : '未開啟專案';
+
+  // 專案群組下拉
+  const g = $('#group');
+  if (g.dataset.n != s.project_groups.length) {
+    g.dataset.n = s.project_groups.length;
+    g.innerHTML = s.project_groups.map(x => `<option>${x.name}</option>`).join('');
+    syncProjects();
+  }
+
+  // 結果對照
+  resultMap = {};
+  for (const r of s.results) resultMap[r.row_id] = r.passed ? 'PASS' : 'FAIL';
+
+  $('#s-total').textContent = s.summary.total;
+  $('#s-pass').textContent  = s.summary.passed;
+  $('#s-fail').textContent  = s.summary.failed;
+
+  $('#btn-run').disabled    = s.running;
+  $('#btn-cancel').disabled = !s.running;
+
+  const p = $('#prog');
+  if (s.running && s.progress && s.progress.total) {
+    p.style.display = 'block'; p.max = s.progress.total; p.value = s.progress.value;
+  } else if (s.running) {
+    p.style.display = 'block'; p.removeAttribute('value');
+  } else { p.style.display = 'none'; }
+
+  renderSmds();
+}
+
+function syncProjects() {
+  const grp = S.project_groups?.find(x => x.name === $('#group').value);
+  $('#project').innerHTML = (grp?.projects || []).map(p => `<option>${p}</option>`).join('');
+}
+
+function renderSmds() {
+  const box = $('#smds');
+  const list = S.smds || [];
+  if (!list.length) { box.innerHTML = '<div class="empty">尚未載入測項</div>'; updCount(); return; }
+  box.innerHTML = list.map(s => {
+    const res = resultMap[s.row_id];
+    const active = S.current && S.current.title === s.title && S.running;
+    return `<label class="smd${active ? ' active' : ''}">
+        <input type="checkbox" data-id="${s.row_id}" ${selected.has(s.row_id) ? 'checked' : ''}>
+        <span class="title">${s.title}</span>
+        ${res ? `<span class="res ${res}">${res}</span>` : ''}
+        <span class="rid">#${s.row_id}</span>
+      </label>`;
+  }).join('');
+  box.querySelectorAll('input').forEach(cb => cb.onchange = () => {
+    const id = +cb.dataset.id;
+    cb.checked ? selected.add(id) : selected.delete(id);
+    updCount();
+  });
+  updCount();
+}
+
+const updCount = () => $('#sel-count').textContent = `已選 ${selected.size} 項`;
+
+// ── 事件繫結 ──────────────────────────────────
+$('#group').onchange = syncProjects;
+
+$('#btn-connect').onclick = async () => {
+  await post('/api/connect', {server: $('#server').value, database: $('#database').value});
+  await post('/api/refresh-groups');
+};
+$('#btn-open').onclick = () =>
+  post('/api/open-project', {group: $('#group').value, project: $('#project').value});
+$('#btn-mo').onclick   = () => post('/api/select-mo', {title: $('#mo').value});
+$('#btn-list').onclick = async () => {
+  selected.clear();
+  await post('/api/list-smds', {search: $('#search').value});
+};
+$('#btn-all').onclick    = () => { (S.smds||[]).forEach(s => selected.add(s.row_id)); renderSmds(); };
+$('#btn-none').onclick   = () => { selected.clear(); renderSmds(); };
+$('#btn-failed').onclick = () => {
+  selected.clear();
+  (S.results||[]).filter(r => !r.passed).forEach(r => selected.add(r.row_id));
+  renderSmds();
+};
+// ── 執行模式與變數 ────────────────────────────
+const DEFAULT_VARS = [
+  ['DUT_speakerphone_type', 'Shared'],
+  ['DUT_connection_type',   'USB'],
+  ['DUT_premium_reqs',      'true'],
+  ['DUT_is_deskphone',      'false'],
+];
+
+function curMode() { return document.querySelector('input[name=mode]:checked').value; }
+
+function addVarRow(name = '', value = '') {
+  const d = document.createElement('div');
+  d.className = 'var';
+  d.innerHTML = `<input type="text" class="vname" placeholder="變數名稱" value="${name}">
+                 <input type="text" class="vval" placeholder="值" value="${value}">
+                 <button class="del">✕</button>`;
+  d.querySelector('.del').onclick = () => d.remove();
+  $('#vars').appendChild(d);
+}
+
+function collectVars() {
+  const out = {};
+  document.querySelectorAll('#vars .var').forEach(d => {
+    const k = d.querySelector('.vname').value.trim();
+    let v = d.querySelector('.vval').value.trim();
+    if (!k) return;
+    // 讓 true/false/數字 以正確型別送出 —— ACQUA 的變數型別要對
+    if (v === 'true') v = true;
+    else if (v === 'false') v = false;
+    else if (v !== '' && !isNaN(v)) v = Number(v);
+    out[k] = v;
+  });
+  return out;
+}
+
+document.querySelectorAll('input[name=mode]').forEach(el => el.onchange = () => {
+  $('#var-panel').style.display = curMode() === 'conditional' ? 'block' : 'none';
+});
+$('#btn-var-add').onclick  = () => addVarRow();
+$('#btn-var-push').onclick = () => post('/api/variables', {values: collectVars()});
+$('#btn-var-read').onclick = async () => {
+  const r = await (await fetch('/api/variables')).json();
+  const vs = r.state?.variables || [];
+  $('#vars').innerHTML = '';
+  if (!vs.length) addLog('ACQUA 目前沒有任何變數', 'warn');
+  vs.forEach(v => addVarRow(v.name, String(v.value)));
+};
+DEFAULT_VARS.forEach(([k, v]) => addVarRow(k, v));
+
+$('#btn-run').onclick = async () => {
+  const mode = curMode();
+  const body = {mode};
+  if (mode === 'conditional') {
+    body.variables = collectVars();
+  } else {
+    if (!selected.size) return addLog('✗ 沒有選擇任何測項', 'error');
+    body.row_ids = [...selected];
+  }
+  const r = await fetch('/api/run', {method:'POST', headers:{'Content-Type':'application/json'},
+                                     body: JSON.stringify(body)});
+  const j = await r.json();
+  if (!j.ok) addLog('✗ ' + j.error, 'error');
+};
+$('#btn-cancel').onclick   = () => fetch('/api/cancel', {method:'POST'});
+$('#btn-report').onclick   = () => post('/api/report', {});
+$('#btn-csv').onclick      = () => location.href = '/api/results.csv';
+$('#btn-clearlog').onclick = () => $('#log').innerHTML = '';
+
+// ── SSE:即時日誌與狀態 ────────────────────────
+// 狀態拉取做節流 —— 一次量測會噴出大量日誌事件,
+// 每一則都去 fetch /api/status 會把伺服器打爆。
+let statusPending = false;
+function refreshStatus() {
+  if (statusPending) return;
+  statusPending = true;
+  setTimeout(async () => {
+    statusPending = false;
+    try { render(await (await fetch('/api/status')).json()); } catch {}
+  }, 200);
+}
+
+const es = new EventSource('/api/stream');
+es.onmessage = ev => {
+  const d = JSON.parse(ev.data);
+  if (d.kind === 'log') addLog(d.text, d.level);
+  refreshStatus();
+};
+es.onerror = () => addLog('(事件串流中斷,重新整理頁面可恢復)', 'warn');
+
+fetch('/api/status').then(r => r.json()).then(render);
+</script>
+</body>
+</html>

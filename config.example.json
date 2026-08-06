@@ -1,0 +1,51 @@
+{
+  "_comment": "複製成 config.json 後修改。config.json 不要提交進版控(含密碼)。",
+
+  "backend": "mock",
+  "_backend_options": "mock = 模擬(不需要 ACQUA);com = 真實連接 ACQUA",
+
+  "database": {
+    "server": ".\\ACQUADBSERVER",
+    "_server_note": "本機實測:SQL Server 執行個體名稱為 ACQUADBSERVER,已在運行中",
+    "name": "",
+    "_name_note": "⚠️ 目前這台機器上還沒有任何 ACQUA 資料庫。要先用 DBAdmin.exe 建立。",
+    "use_windows_auth": true,
+    "username": "",
+    "password": ""
+  },
+
+  "target": {
+    "project_group": "",
+    "project": "",
+    "measurement_object": "DUT_001",
+    "create_mo_if_missing": true
+  },
+
+  "run": {
+    "use_mmd_settings": true,
+    "_use_mmd_settings_note": "true = 使用 SMD/MMD 內建設定;false = 需自行指定 MFE 設定",
+    "max_retries": 1,
+    "_max_retries_note": "單一測項失敗時自動重試次數(0 = 不重試)",
+    "stop_on_first_failure": false,
+    "single_measurement_timeout_sec": 1800
+  },
+
+  "report": {
+    "enabled": false,
+    "output_dir": "reports",
+    "selection_type": 3,
+    "_selection_type_note": "0=FirstPosition 3=LastPosition 4=AllPositions 5=ForIndex(注意數值不連續)"
+  },
+
+  "metadata": {
+    "_note": "這些會透過 IAcquaBaseObject.UpdateProperty 寫進量測物件,跟量測資料一起存進資料庫",
+    "Operator": "",
+    "Fixture": "",
+    "TestPlan": ""
+  },
+
+  "web": {
+    "host": "127.0.0.1",
+    "port": 5000
+  }
+}

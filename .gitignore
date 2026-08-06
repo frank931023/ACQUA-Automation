@@ -1,0 +1,21 @@
+# Python 快取檔與編譯檔
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# 虛擬環境
+.venv/
+venv/
+ENV/
+
+# 敏感設定檔（只留 config.example.json）
+config.json
+
+# IDE 與編輯器設定（視情況加入）
+.vscode/
+.idea/
+
+# 作業系統產生的雜檔
+.DS_Store
+Thumbs.db

@@ -1,0 +1,9 @@
+# ACQUA 自動化 — Python 相依套件
+#
+# ⚠️ 必須使用 32-bit Python(對齊 ACQUA 的 x86 安裝)
+#    驗證:python -c "import struct; print(struct.calcsize('P')*8)"  → 必須印出 32
+
+Flask==3.0.3
+
+# pywin32 只在 Windows 上安裝;mock 模式不需要它
+pywin32==306; sys_platform == "win32"
