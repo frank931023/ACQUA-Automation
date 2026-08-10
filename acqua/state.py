@@ -20,6 +20,7 @@ class SharedState:
         self.connected = False
         self.server = None
         self.database = None
+        self.databases = []            # [{name, is_acqua, online, smds, mmds, results}]
 
         # 階層
         self.project_groups = []       # [{"name": str, "projects": [str]}]
@@ -67,6 +68,7 @@ class SharedState:
                 "connected": self.connected,
                 "server": self.server,
                 "database": self.database,
+                "databases": self.databases,
                 "project_groups": self.project_groups,
                 "open_group": self.open_group,
                 "open_project": self.open_project,

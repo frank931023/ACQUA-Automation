@@ -103,6 +103,14 @@ def api_connect():
                 password=body.get("password") or db.get("password", ""))
 
 
+@app.route("/api/databases", methods=["POST"])
+def api_databases():
+    """列出 SQL Server 上的資料庫,讓 UI 做成下拉選單。"""
+    body = request.get_json(silent=True) or {}
+    return _cmd("list_databases", timeout=120,
+                server=body.get("server") or config.get("database", {}).get("server", ""))
+
+
 @app.route("/api/refresh-groups", methods=["POST"])
 def api_refresh_groups():
     return _cmd("refresh_groups", timeout=120)

@@ -37,6 +37,10 @@ class AcquaBackend(ABC):
         ...
 
     @abstractmethod
+    def list_databases(self, server: str) -> list:
+        """列出伺服器上的資料庫。不需要先連線 ACQUA。"""
+
+    @abstractmethod
     def refresh_project_groups(self) -> list:
         """回傳 [{"name": str, "projects": [str]}]"""
 

@@ -79,6 +79,38 @@
   .var .del { flex:none; padding:5px 9px; }
   code { background:#7f8faa22; padding:1px 5px; border-radius:4px; font-size:12px; }
 
+  /* ── 開關 ── */
+  .sw { display:inline-flex; align-items:center; gap:7px; cursor:pointer;
+        font-size:12px; color:var(--muted); user-select:none; }
+  .sw input { display:none; }
+  .sw i { width:34px; height:19px; border-radius:19px; background:var(--border);
+          position:relative; transition:background .15s; flex:none; }
+  .sw i::after { content:''; position:absolute; top:2px; left:2px; width:15px; height:15px;
+                 border-radius:50%; background:var(--panel); transition:transform .15s;
+                 box-shadow:0 1px 3px #0004; }
+  .sw input:checked + i { background:var(--accent); }
+  .sw input:checked + i::after { transform:translateX(15px); }
+
+  /* ── 測項樹 ── */
+  .grp { display:flex; align-items:center; gap:6px; padding:6px 11px;
+         background:#7f8faa10; border-bottom:1px solid var(--border);
+         font-size:12px; font-weight:600; color:var(--muted); }
+  .grp input { width:15px; height:15px; accent-color:var(--accent); flex:none; }
+  .grp .tog { flex:1; display:flex; align-items:center; gap:7px; cursor:pointer;
+              user-select:none; padding:2px 0; }
+  .grp .tog:hover { color:var(--fg); }
+  .grp .chev { flex:none; width:11px; text-align:center; font-size:10px;
+               transition:transform .12s; display:inline-block; }
+  .grp.closed .chev { transform:rotate(-90deg); }
+  .grp .gname { flex:1; }
+  .grp .gcount { font-size:11px; font-weight:400; opacity:.75; flex:none; }
+  .hdr-row { display:flex; align-items:center; justify-content:space-between;
+             margin:18px 0 0; gap:12px; flex-wrap:wrap; }
+  .hdr-row h2 { margin:0; }
+  .dbrow { display:flex; gap:8px; align-items:center; }
+  .dbrow select { flex:1; }
+  .dbrow button { flex:none; padding:7px 11px; }
+
   /* ── 等待中的遮罩 ── */
   #busy { position:fixed; inset:0; background:#0008; backdrop-filter:blur(2px);
           display:none; align-items:center; justify-content:center; z-index:99; }
@@ -141,9 +173,12 @@
     <h2>1. 連線</h2>
     <label>SQL Server</label>
     <input type="text" id="server" value="{{ config.get('database',{}).get('server','') }}">
-    <label>資料庫名稱</label>
-    <input type="text" id="database" value="{{ config.get('database',{}).get('name','') }}"
-           placeholder="尚未建立 ACQUA 資料庫">
+    <label>資料庫</label>
+    <div class="dbrow">
+      <select id="database"><option value="{{ config.get('database',{}).get('name','') }}">{{ config.get('database',{}).get('name','') or '(按掃描)' }}</option></select>
+      <button id="btn-scan" title="掃描伺服器上的 ACQUA 資料庫">掃描</button>
+    </div>
+    <p class="hint" id="db-hint"></p>
     <div class="row"><button class="primary" id="btn-connect">連線</button></div>
 
     <h2 style="margin-top:20px">2. 選擇專案</h2>
@@ -183,12 +218,17 @@
       </div>
     </div>
 
-    <h2 style="margin-top:18px">5. 選擇測項</h2>
+    <div class="hdr-row">
+      <h2>5. 選擇測項</h2>
+      <label class="sw"><input type="checkbox" id="sw-tree"><i></i>顯示階層架構</label>
+    </div>
     <div class="row">
       <input type="text" id="search" placeholder="關鍵字過濾(留空 = 全部)" style="flex:1">
       <button id="btn-list">載入測項</button>
     </div>
     <div class="row">
+      <button id="btn-expand">全部展開</button>
+      <button id="btn-collapse">全部收合</button>
       <button id="btn-all">全選</button>
       <button id="btn-none">全不選</button>
       <button id="btn-failed">只選失敗的</button>
@@ -384,43 +424,155 @@ function syncProjects() {
   $('#project').innerHTML = (grp?.projects || []).map(p => `<option>${p}</option>`).join('');
 }
 
+const esc = s => String(s).replace(/[&<>"]/g, c =>
+  ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+function smdRow(s, indent) {
+  const res = resultMap[s.row_id];
+  const active = S.current && S.current.title === s.title && S.running;
+  return `<label class="smd${active ? ' active' : ''}" style="padding-left:${indent}px">
+      <input type="checkbox" data-id="${s.row_id}" ${selected.has(s.row_id) ? 'checked' : ''}>
+      <span class="title">${esc(s.title)}</span>
+      ${res ? `<span class="res ${res}">${res}</span>` : ''}
+      <span class="rid">#${s.row_id}</span>
+    </label>`;
+}
+
+// 收合狀態:存「被收起來的群組路徑」
+let collapsed = new Set();
+const segsOf = p => (p || '').split(' / ').filter(Boolean);
+const prefixAt = (segs, d) => segs.slice(0, d + 1).join(' / ');
+// 只要有任何一個「嚴格祖先」被收起來,這一列就不顯示
+const hiddenBy = (segs, upTo) => segs.slice(0, upTo)
+  .some((_, k) => collapsed.has(prefixAt(segs, k)));
+
+function kidsOf(prefix) {
+  return (S.smds || []).filter(x => (x.path || '') === prefix ||
+                                    (x.path || '').startsWith(prefix + ' / '));
+}
+
+function allGroupPaths() {
+  const set = new Set();
+  for (const s of (S.smds || [])) {
+    const segs = segsOf(s.path);
+    for (let d = 0; d < segs.length; d++) set.add(prefixAt(segs, d));
+  }
+  return set;
+}
+
 function renderSmds() {
   const box = $('#smds');
   const list = S.smds || [];
   if (!list.length) { box.innerHTML = '<div class="empty">尚未載入測項</div>'; updCount(); return; }
-  box.innerHTML = list.map(s => {
-    const res = resultMap[s.row_id];
-    const active = S.current && S.current.title === s.title && S.running;
-    return `<label class="smd${active ? ' active' : ''}">
-        <input type="checkbox" data-id="${s.row_id}" ${selected.has(s.row_id) ? 'checked' : ''}>
-        <span class="title">${s.title}</span>
-        ${res ? `<span class="res ${res}">${res}</span>` : ''}
-        <span class="rid">#${s.row_id}</span>
-      </label>`;
-  }).join('');
-  box.querySelectorAll('input').forEach(cb => cb.onchange = () => {
+
+  if (!$('#sw-tree').checked) {
+    box.innerHTML = list.map(s => smdRow(s, 11)).join('');
+  } else {
+    let prev = [], html = '';
+    for (const s of list) {
+      const segs = segsOf(s.path);
+      let i = 0;
+      while (i < segs.length && i < prev.length && segs[i] === prev[i]) i++;
+
+      for (let d = i; d < segs.length; d++) {
+        if (hiddenBy(segs, d)) continue;              // 祖先收起來了,這層不畫
+        const prefix = prefixAt(segs, d);
+        const shut = collapsed.has(prefix);
+        html += `<div class="grp${shut ? ' closed' : ''}" style="padding-left:${11 + d * 15}px">
+            <input type="checkbox" data-prefix="${esc(prefix)}">
+            <span class="tog" data-toggle="${esc(prefix)}">
+              <span class="chev">▼</span>
+              <span class="gname">${esc(segs[d])}</span>
+            </span>
+            <span class="gcount">${kidsOf(prefix).length} 項</span>
+          </div>`;
+      }
+      prev = segs;
+      if (!hiddenBy(segs, segs.length)) html += smdRow(s, 11 + segs.length * 15);
+    }
+    box.innerHTML = html;
+  }
+
+  box.querySelectorAll('input[data-id]').forEach(cb => cb.onchange = () => {
     const id = +cb.dataset.id;
     cb.checked ? selected.add(id) : selected.delete(id);
-    updCount();
+    syncGroupBoxes(); updCount();
   });
+  box.querySelectorAll('input[data-prefix]').forEach(cb => cb.onchange = () => {
+    kidsOf(cb.dataset.prefix)
+      .forEach(x => cb.checked ? selected.add(x.row_id) : selected.delete(x.row_id));
+    renderSmds();
+  });
+  box.querySelectorAll('[data-toggle]').forEach(el => el.onclick = () => {
+    const p = el.dataset.toggle;
+    collapsed.has(p) ? collapsed.delete(p) : collapsed.add(p);
+    renderSmds();
+  });
+  syncGroupBoxes();
   updCount();
 }
+
+$('#btn-expand').onclick   = () => { collapsed.clear(); renderSmds(); };
+$('#btn-collapse').onclick = () => { collapsed = allGroupPaths(); renderSmds(); };
+
+// 群組的勾選框要反映底下的狀態:全選 / 部分(indeterminate)/ 全不選
+function syncGroupBoxes() {
+  document.querySelectorAll('#smds input[data-prefix]').forEach(cb => {
+    const p = cb.dataset.prefix;
+    const kids = (S.smds || []).filter(x => (x.path || '') === p ||
+                                            (x.path || '').startsWith(p + ' / '));
+    const on = kids.filter(x => selected.has(x.row_id)).length;
+    cb.checked = kids.length > 0 && on === kids.length;
+    cb.indeterminate = on > 0 && on < kids.length;
+  });
+}
+
+$('#sw-tree').onchange = renderSmds;
 
 const updCount = () => $('#sel-count').textContent = `已選 ${selected.size} 項`;
 
 // ── 事件繫結 ──────────────────────────────────
 $('#group').onchange = syncProjects;
 
+// ── 資料庫下拉 ────────────────────────────────
+function fillDatabases(list) {
+  const sel = $('#database'), keep = sel.value;
+  const acqua = list.filter(d => d.is_acqua);
+  const other = list.filter(d => !d.is_acqua);
+  sel.innerHTML =
+    acqua.map(d => `<option value="${d.name}">${d.name} — ${d.smds} 測項 / ${d.results} 筆結果</option>`).join('') +
+    (other.length ? '<optgroup label="非 ACQUA 資料庫(不能用)">' +
+      other.map(d => `<option value="${d.name}" disabled>${d.name}${d.online ? '' : ' — ' + (d.state || '離線')}</option>`).join('') +
+      '</optgroup>' : '');
+  if ([...sel.options].some(o => o.value === keep)) sel.value = keep;
+  $('#db-hint').textContent =
+    `找到 ${acqua.length} 個 ACQUA 資料庫` + (other.length ? `,另有 ${other.length} 個不是` : '');
+}
+
+$('#btn-scan').onclick = async () => {
+  const r = await post('/api/databases', {server: $('#server').value});
+  if (r.ok) fillDatabases(r.state.databases || []);
+};
+
 $('#btn-connect').onclick = async () => {
-  await post('/api/connect', {server: $('#server').value, database: $('#database').value});
-  await post('/api/refresh-groups');
+  const r = await post('/api/connect',
+                       {server: $('#server').value, database: $('#database').value});
+  if (r.ok) await post('/api/refresh-groups');
 };
 $('#btn-open').onclick = () =>
   post('/api/open-project', {group: $('#group').value, project: $('#project').value});
 $('#btn-mo').onclick   = () => post('/api/select-mo', {title: $('#mo').value});
 $('#btn-list').onclick = async () => {
   selected.clear();
-  await post('/api/list-smds', {search: $('#search').value});
+  const r = await post('/api/list-smds', {search: $('#search').value});
+  // 測項多的時候(例如 MS Teams 那 4300 項)預設全部收起來,不然畫面爆掉
+  if (r.ok && (r.state.smds || []).length > 150) {
+    collapsed = allGroupPaths();
+    addLog(`測項較多(${r.state.smds.length} 項),已預設收合 —— 點資料夾展開`, 'warn');
+  } else {
+    collapsed.clear();
+  }
+  renderSmds();
 };
 $('#btn-all').onclick    = () => { (S.smds||[]).forEach(s => selected.add(s.row_id)); renderSmds(); };
 $('#btn-none').onclick   = () => { selected.clear(); renderSmds(); };

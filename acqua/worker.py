@@ -115,6 +115,7 @@ class AcquaWorker(threading.Thread):
     def _dispatch(self, cmd: Command):
         handlers = {
             "connect": lambda **kw: self.backend.connect(**kw),
+            "list_databases": lambda **kw: self.backend.list_databases(**kw),
             "refresh_groups": lambda **kw: self.backend.refresh_project_groups(),
             "open_project": lambda **kw: self.backend.open_project(**kw),
             "select_mo": lambda **kw: self.backend.select_measurement_object(**kw),

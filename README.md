@@ -119,14 +119,75 @@ FindFirstSMD("3QUEST") 回傳的 20 個 RowID
 所以 SQL 查到的 `row_id` 可以直接餵給 `StartSingleMeasurement()`。
 這條路比 DBMask 更好 —— 一次拿到標題、MMD 階層、`SMDType`、參考檔需求。
 
-### ⬜ 仍未驗證(需要實際跑一次量測)
+### ✅ 真實量測驗證(2026-08-10)
 
-- ByRef 輸出參數(`UserReaction` / `Continue`)是否真的用 return 回傳
-- `StartSingleMeasurement` 之後等 `IsMeasuring` 翻轉有沒有 race condition
-- `OnFinishedMeasurements` 的 `ResultOverview` 結構
-- `sqlcat.read_results()` 的欄位對應(資料庫目前 0 筆結果)
+在 `51_MS_Teams_Rev05_SP2` / `MS Teams v5 Rev05 SP2 - Speakerphone`
+跑 SMD **#3579 `Info: MS Teams Information`**(SMDType=34,不驅動硬體)。
+
+完整事件序列:
+
+```
+ 0.94s  OnEvent                     [Measurement]: Setting measurement object…
+ 1.00s  OnBeginMeasurements         n=1
+ 1.06s  OnProgress                  Measurements started (0/1)
+ 2.62s  OnBeginSingleMeasurement    Info: MS Teams Information
+ 4.77s  OnEvent                     [Measurement]: Measurement done
+ 4.91s  OnEvent                     [Results]: No data to store.
+ 5.03s  OnProgress                  Measurement done (0/1)
+ 5.09s  OnFinishedSingleMeasurement status=1        ← ByRef 回傳處
+ 6.41s  OnProgress                  Measurements done (1/1)   ← 有繼續往下走
+```
+
+| 驗證項 | 結果 |
+|---|---|
+| **ByRef 輸出參數** | ✅ **確認生效** —— return 之後 ACQUA 繼續跑完,沒有卡住 |
+| 事件接線 | ✅ 11 個事件全數收到 |
+| Flask 端到端 | ✅ 5.2s,`passed=1 failed=0` |
+
+### 🔴 過程中修掉的三個 bug
+
+**1. `Results.rStatus` 是外鍵,不是狀態值 —— 會讓判定相反**
+
+```
+rStatus=3 → idStatusType=3 → Status_OK   (Value=2)
+rStatus=2 → idStatusType=2 → Status_Done (Value=1)
+```
+
+原本直接回傳 `rStatus`,照 `Value` 解讀會把 OK 判成 NotOK。
+已改成 join `TStatusTypes`,回傳 `status` / `status_name` / `passed` 三個欄位。
+
+**2. `StartSingleMeasurement` 之後的 race condition**
+
+`IsMeasuring` 要**約 1 秒**才翻成 True。原本只 `sleep(0.5)` 就等它變 False,
+會立刻誤判「已經跑完」→ 每一項都變成「沒收到結果」。
+
+**3. ⭐ 單筆量測不會觸發 `OnFinishedMeasurements`**
+
+只有 `StartMeasurements`(整批)才會。單筆只到 `OnProgress "Measurements done"`。
+所以完成訊號改看 `OnFinishedSingleMeasurement`,並先等 `OnBeginSingleMeasurement`
+確認真的開始了。
+
+### 🔴 另一個 API 限制
+
+**專案底下一個 MO 都沒有時,`IProjectSelected.MeasurementObjects` 直接丟
+`Index out of range`** —— 連集合物件都拿不到,所以**無法用 COM 建立第一個 MO**。
+
+實測:SP3 的 6 個專案 MO 全是 0,`AddMeasurementObject` 也叫不到。
+
+👉 **每個專案的第一個 MO 必須先在 ACQUA GUI 裡手動建立。** 之後程式才能新增第 2 個以後的。
+程式已加上明確的錯誤訊息,不會再是看不懂的 COM 例外。
+
+### ⬜ 仍未驗證
+
+- `ResultSingleValues` 的欄位對應(value / unit / limit)——
+  目前資料庫裡唯一有結果的是腳本型 SMD 與 Info 型 SMD,**都不產生數值**
+  (事件明講 `[Results]: No data to store.`)。要跑一個真正的量測型 SMD 才能核對
+- `OnFinishedMeasurements` 的 `ResultOverview` 結構(單筆量測不會觸發)
 - `ConditionalExecution` 讀 `UsedVariables` 還是 `ResultVariables`
-  (demo 庫目前 0 個測項有設條件)
+  (目前的庫都沒有測項設條件)
+
+> ⚠️ ACQUA 的事件描述可能混入**簡體中文**。寫日誌沒問題,但若要 `print` 到
+> cp950 主控台會丟 `UnicodeEncodeError` —— 產品程式碼是寫進日誌佇列,不受影響。
 
 ---
 

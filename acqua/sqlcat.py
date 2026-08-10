@@ -42,6 +42,100 @@ def _val(x):
     return x
 
 
+def raw_query(server: str, database: str, sql: str) -> list:
+    """對指定的 server/database 執行查詢。ADODB 是 COM,只能在已 CoInitialize 的執行緒用。"""
+    cn = win32com.client.Dispatch("ADODB.Connection")
+    last = None
+    for prov in _PROVIDERS:
+        try:
+            cn.Open(f"Provider={prov};Data Source={server};"
+                    f"Initial Catalog={database};Integrated Security=SSPI;"
+                    f"TrustServerCertificate=yes")
+            last = None
+            break
+        except Exception as exc:                            # noqa: BLE001
+            last = exc
+    if last is not None:
+        raise RuntimeError(f"所有 OLE DB provider 都連不上:{last}")
+    try:
+        rs = cn.Execute(sql)[0]
+        names = [rs.Fields.Item(i).Name for i in range(rs.Fields.Count)]
+        out = []
+        while not rs.EOF:
+            out.append({n: _val(rs.Fields.Item(i).Value) for i, n in enumerate(names)})
+            rs.MoveNext()
+        rs.Close()
+        return out
+    finally:
+        try:
+            cn.Close()
+        except Exception:                                   # noqa: BLE001
+            pass
+
+
+def list_databases(server: str) -> list:
+    """列出伺服器上的資料庫,標出哪些是 ACQUA 庫並附測項數量。
+
+    判斷依據:有沒有 `acqua.AcquaDB` 這張表(ACQUA 建庫時一定會建)。
+    用三段式名稱 OBJECT_ID('[db].acqua.AcquaDB') 跨資料庫檢查,不用逐一連線。
+    """
+    # 第一步:只拿清單與狀態。⚠️ 這裡不能碰 OBJECT_ID —— 一旦有資料庫處於
+    # RESTORING / OFFLINE / RECOVERING,查詢會直接丟例外把整個列表打掉。
+    rows = raw_query(server, "master", """
+        SELECT d.name, d.state_desc, d.create_date
+        FROM sys.databases d
+        WHERE d.database_id > 4
+        ORDER BY d.name
+    """)
+
+    online = [r["name"] for r in rows
+              if str(r.get("state_desc", "")) == "ONLINE"
+              and "'" not in r["name"] and "]" not in r["name"]]
+
+    # 第二步:只對「上線中」的庫做 ACQUA 判定與計數,一次查完
+    info = {}
+    if online:
+        union = " UNION ALL ".join(
+            f"SELECT '{n}' AS db, "
+            f"CASE WHEN OBJECT_ID('[{n}].acqua.AcquaDB') IS NOT NULL THEN 1 ELSE 0 END AS is_acqua, "
+            f"(SELECT COUNT(*) FROM [{n}].acqua.SMDs) AS smds, "
+            f"(SELECT COUNT(*) FROM [{n}].acqua.MMDs) AS mmds, "
+            f"(SELECT COUNT(*) FROM [{n}].acqua.Results) AS results"
+            for n in online)
+        try:
+            for c in raw_query(server, "master", union):
+                info[c["db"]] = c
+        except Exception:                                   # noqa: BLE001
+            # 有可能某個 ONLINE 的庫沒有 acqua schema,整句 UNION 就編譯失敗。
+            # 退回逐一查詢 —— 慢一點但不會全滅。
+            for n in online:
+                try:
+                    r = raw_query(server, "master",
+                                  f"SELECT 1 AS is_acqua, "
+                                  f"(SELECT COUNT(*) FROM [{n}].acqua.SMDs) AS smds, "
+                                  f"(SELECT COUNT(*) FROM [{n}].acqua.MMDs) AS mmds, "
+                                  f"(SELECT COUNT(*) FROM [{n}].acqua.Results) AS results")
+                    info[n] = r[0]
+                except Exception:                           # noqa: BLE001
+                    info[n] = {"is_acqua": 0}
+
+    out = []
+    for r in rows:
+        name = r["name"]
+        state = str(r.get("state_desc", ""))
+        c = info.get(name, {})
+        out.append({
+            "name": name,
+            "is_acqua": bool(c.get("is_acqua")),
+            "online": state == "ONLINE",
+            "state": state,
+            "smds": int(c.get("smds") or 0),
+            "mmds": int(c.get("mmds") or 0),
+            "results": int(c.get("results") or 0),
+        })
+    return out
+
+
 class SqlCatalog:
     def __init__(self, state):
         self.state = state
@@ -63,35 +157,7 @@ class SqlCatalog:
 
     def query(self, sql: str) -> list:
         """執行查詢,回傳 [dict]。每次都開新連線 —— ADO 連線很輕,不值得為此管生命週期。"""
-        cn = win32com.client.Dispatch("ADODB.Connection")
-        last = None
-        for prov in _PROVIDERS:
-            try:
-                cn.Open(f"Provider={prov};Data Source={self.server};"
-                        f"Initial Catalog={self.database};Integrated Security=SSPI;"
-                        f"TrustServerCertificate=yes")
-                last = None
-                break
-            except Exception as exc:                        # noqa: BLE001
-                last = exc
-        if last is not None:
-            raise RuntimeError(f"所有 OLE DB provider 都連不上:{last}")
-
-        try:
-            rs = cn.Execute(sql)[0]
-            names = [rs.Fields.Item(i).Name for i in range(rs.Fields.Count)]
-            out = []
-            while not rs.EOF:
-                out.append({n: _val(rs.Fields.Item(i).Value)
-                            for i, n in enumerate(names)})
-                rs.MoveNext()
-            rs.Close()
-            return out
-        finally:
-            try:
-                cn.Close()
-            except Exception:                               # noqa: BLE001
-                pass
+        return raw_query(self.server, self.database, sql)
 
     # ── 測項樹 ──────────────────────────────────────
     def _load_tree(self, project_title=None):
@@ -171,12 +237,19 @@ class SqlCatalog:
                      latest_only=True, smd_row_ids=None) -> list:
         """讀出量測的實際數值(含極限值)。
 
-        回傳 [{smd, smd_row_id, dut, status, created,
+        回傳 [{smd, smd_row_id, dut, status, status_name, passed, created,
                 values:[{title, value, unit, precision, channel,
-                         lower_limit, upper_limit, status, type}]}]
+                         lower_limit, upper_limit, status, status_name,
+                         passed, type}]}]
 
-        ⚠️ [未驗證] 撰寫時資料庫裡還沒有任何量測結果(Results 表 0 筆),
-           所以這段 SQL 的欄位對應是依 schema 推導的,跑過一次真實量測後要再核對。
+        ✅ 已用 51_MS_Teams_Rev05_SP2 的真實結果驗證(2026-08-10):
+           Results / TreeItems / MObjects / TStatusTypes 的 join 正確。
+           過程中修掉一個會導致判定相反的 bug —— `rStatus` 是 TStatusTypes 的
+           **外鍵**(idStatusType 1..5),不是狀態值(0/1/2/4/8)。
+
+        ⚠️ [仍未驗證] `ResultSingleValues` 的欄位對應 —— 用來驗證的那 3 筆結果
+           來自腳本型 SMD,沒有產生任何數值(ResultSingleValues 為 0 筆)。
+           要等有真正的量測結果才能核對 value/unit/limit 這幾欄。
         """
         conds = []
         if project_title:
@@ -189,17 +262,24 @@ class SqlCatalog:
             conds.append(f"r.rSMDItem IN ({ids})")
         where = ("WHERE " + " AND ".join(conds)) if conds else ""
 
+        # ⚠️ r.rStatus / sv.rStatus 是 TStatusTypes 的**外鍵**(idStatusType),
+        #    不是狀態值本身。必須 join 出 Name/Value,直接拿 rStatus 當狀態會判定相反。
+        #      idStatusType 1..5  →  Value 0/1/2/4/8
         rows = self.query(f"""
-            SELECT r.idResult, r.rSMDItem, r.rStatus AS ResultStatus, r.CreationDate,
+            SELECT r.idResult, r.rSMDItem, r.CreationDate,
                    ti.Title AS SMDTitle, mo.Title AS MOTitle,
+                   rst.Name AS ResultStatusName, rst.Value AS ResultStatusValue,
                    sv.Title AS ValueTitle, sv.SingleValue, sv.Unit,
                    sv.DecimalPrecision, sv.ChannelName, sv.SingleValueType,
-                   sv.LowerLimit, sv.UpperLimit, sv.rStatus AS ValueStatus
+                   sv.LowerLimit, sv.UpperLimit,
+                   vst.Name AS ValueStatusName, vst.Value AS ValueStatusValue
             FROM {_SCHEMA}.Results r
             JOIN {_SCHEMA}.TreeItems ti ON ti.idTreeItem = r.rSMDItem
             JOIN {_SCHEMA}.Projects  p  ON p.idProject   = ti.rProject
             LEFT JOIN {_SCHEMA}.MObjects mo ON mo.idMObject = r.rMObject
+            LEFT JOIN {_SCHEMA}.TStatusTypes rst ON rst.idStatusType = r.rStatus
             LEFT JOIN {_SCHEMA}.ResultSingleValues sv ON sv.rResult = r.idResult
+            LEFT JOIN {_SCHEMA}.TStatusTypes vst ON vst.idStatusType = sv.rStatus
             {where}
             ORDER BY r.rSMDItem, r.CreationDate DESC, sv.idResultSingleValue
         """)
@@ -209,17 +289,22 @@ class SqlCatalog:
         for r in rows:
             rid = r["idResult"]
             if rid not in by_result:
+                sname = str(r.get("ResultStatusName") or "")
                 by_result[rid] = {
                     "result_id": int(rid),
                     "smd": (r.get("SMDTitle") or "").strip(),
                     "smd_row_id": int(r["rSMDItem"]),
                     "dut": (r.get("MOTitle") or "").strip(),
-                    "status": r.get("ResultStatus"),
+                    "status": r.get("ResultStatusValue"),      # 0/1/2/4/8
+                    "status_name": sname,                      # Status_OK / Status_NotOK …
+                    "passed": sname in ("Status_OK", "Status_Done",
+                                        "Status_NotOKNotRequired"),
                     "created": str(r.get("CreationDate") or ""),
                     "values": [],
                 }
                 order.append(rid)
             if r.get("ValueTitle") is not None or r.get("SingleValue") is not None:
+                vname = str(r.get("ValueStatusName") or "")
                 by_result[rid]["values"].append({
                     "title": (r.get("ValueTitle") or "").strip(),
                     "value": r.get("SingleValue"),
@@ -228,7 +313,9 @@ class SqlCatalog:
                     "channel": (r.get("ChannelName") or "").strip(),
                     "lower_limit": r.get("LowerLimit"),
                     "upper_limit": r.get("UpperLimit"),
-                    "status": r.get("ValueStatus"),
+                    "status": r.get("ValueStatusValue"),
+                    "status_name": vname,
+                    "passed": vname in ("Status_OK", "Status_NotOKNotRequired"),
                     "type": r.get("SingleValueType"),
                 })
 

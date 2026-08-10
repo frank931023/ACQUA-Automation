@@ -92,6 +92,17 @@ class MockBackend(AcquaBackend):
         self.state.log(f"【模擬模式】已連線 {server} / {database}")
         return True
 
+    def list_databases(self, server=""):
+        dbs = [
+            {"name": "61_Demo_SMDs_Rev07", "is_acqua": True, "online": True,
+             "smds": 132, "mmds": 61, "results": 0},
+            {"name": "AUTOMATION_TEST_0806", "is_acqua": True, "online": True,
+             "smds": 0, "mmds": 10, "results": 0},
+        ]
+        self.state.set(databases=dbs)
+        self.state.log(f"【模擬模式】列出 {len(dbs)} 個資料庫")
+        return dbs
+
     def refresh_project_groups(self):
         groups = [{"name": g, "projects": list(p.keys())} for g, p in _FAKE_TREE.items()]
         self.state.set(project_groups=groups)
@@ -125,7 +136,12 @@ class MockBackend(AcquaBackend):
         titles = _FAKE_TREE[group][project]
         base = self._smd_cache.setdefault(
             (group, project),
-            [{"row_id": 1000 + i, "title": t} for i, t in enumerate(titles)],
+            [{"row_id": 1000 + i, "title": t,
+              # 假的階層 —— 讓 UI 的「顯示階層架構」開關在模擬模式也看得到效果
+              "group": (t.split(" - ")[0] if " - " in t else "General"),
+              "path": f"{project} / " + (t.split(" - ")[0] if " - " in t else "General"),
+              "smd_type": -1, "needs_ref": False, "ref_file": "", "conditional": False}
+             for i, t in enumerate(titles)],
         )
         smds = [s for s in base if search.lower() in s["title"].lower()] if search else list(base)
         self.state.set(smds=smds)

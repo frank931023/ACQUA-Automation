@@ -66,13 +66,14 @@ class _Events:
         self._st().log(f"ACQUA 回報:即將進行 {NbrOfMeasurements} 筆量測")
 
     def OnBeginSingleMeasurement(self, SMDTitle, Progress, NbrOfMeasurements):
+        self.backend._meas_started = True
         self._st().log(f"  ACQUA 開始:{SMDTitle}")
 
     # ── 決策點:ByRef 輸出用「回傳值」給回 ACQUA ────────
     def OnFinishedSingleMeasurement(self, SMDTitle, ResultStatus,
                                     Progress, NbrOfMeasurements, UserReaction):
-        # [未驗證] pywin32 對 ByRef out 參數的慣例是「以 return 回傳」。
-        #          階段 4 必須實測確認 —— 若不生效,ACQUA 會停在這裡等回應。
+        # ✅ 已驗證(2026-08-10,SP2 / SMD#3579):pywin32 用 return 回傳 ByRef out 參數
+        #    確實生效 —— 回傳後 ACQUA 有繼續往下走到 "Measurements done"。
         self.backend._on_single_finished(SMDTitle, ResultStatus)
         if self._st().cancel_requested:
             return EUserReaction.CANCEL_ALL
@@ -108,7 +109,8 @@ class ComBackend(AcquaBackend):
         self.sql = None                # SqlCatalog —— 列舉 SMD 與讀數值(實測後改走這條)
         self._pythoncom = None
         self._last_result = None       # (title, status)
-        self._measuring_done = False
+        self._measuring_done = False   # 只有 StartMeasurements(整批)才會被設起來
+        self._meas_started = False
 
     # ── 生命週期 ────────────────────────────────────
     def initialize(self):
@@ -181,6 +183,17 @@ class ComBackend(AcquaBackend):
             self.state.log("資料庫連線失敗(SelectDatabase 回傳 False)", "error")
         return ok
 
+    def list_databases(self, server=""):
+        from .sqlcat import list_databases as _ls
+        srv = server or self.state.server or self.config.get("database", {}).get("server", "")
+        if not srv:
+            raise RuntimeError("沒有指定 SQL Server")
+        dbs = _ls(srv)
+        n = sum(1 for d in dbs if d["is_acqua"])
+        self.state.set(databases=dbs)
+        self.state.log(f"[SQL] {srv} 上有 {len(dbs)} 個資料庫,其中 {n} 個是 ACQUA 庫")
+        return dbs
+
     def refresh_project_groups(self):
         groups = []
         pgs = self.app.ProjectGroups
@@ -217,9 +230,22 @@ class ComBackend(AcquaBackend):
     def select_measurement_object(self, title, create_if_missing=True):
         if self.project is None:
             raise RuntimeError("尚未開啟專案")
-        mos = self.project.MeasurementObjects
-        titles = [str(mos.Item(i).Title) for i in range(mos.Count)]
-        if title not in titles and create_if_missing:
+        # ⚠️ 實測(2026-08-10):專案底下一個 MO 都沒有時,
+        #    存取 .MeasurementObjects 本身就會丟 "Index out of range",
+        #    不是回傳空集合。所以整段都要包起來。
+        mos, titles = None, []
+        try:
+            mos = self.project.MeasurementObjects
+            titles = [str(mos.Item(i).Title) for i in range(mos.Count)]
+        except Exception as exc:                            # noqa: BLE001
+            self.state.log(f"量測物件清單讀取失敗(通常代表一個都沒有):{exc}", "warn")
+
+        if title not in titles:
+            if not create_if_missing:
+                raise RuntimeError(
+                    f"找不到量測物件「{title}」,而且 create_mo_if_missing 是 false")
+            if mos is None:
+                mos = self.project.MeasurementObjects   # 讓它再丟一次,錯誤才看得到
             mos.AddMeasurementObject(title, "由自動化建立")
             self.state.log(f"已新增量測物件:{title}")
 
@@ -363,19 +389,37 @@ class ComBackend(AcquaBackend):
 
                     self._last_result = None
                     self._measuring_done = False
+                    self._meas_started = False
                     # ⚠️ 簽章以 TypeLib 實測為準,比 CHM 多一個 ResultComment 參數:
                     #    StartSingleMeasurement(SMDRowID, UseMMDSettings,
                     #                           MeasurementObject, ResultComment)
                     self.project.StartSingleMeasurement(
                         smd["row_id"], use_mmd, self.mo.Title, result_comment)
 
-                    # ⚠️ [未驗證] StartSingleMeasurement 是非同步的。
-                    #    先給 ACQUA 一點時間把 IsMeasuring 翻成 True,再等它翻回 False。
-                    #    若這裡有 race condition,改成等 self._measuring_done。
-                    time.sleep(0.5)
+                    # ⭐ 實測(2026-08-10)修正過的等待邏輯:
+                    #    1. IsMeasuring 大約 1 秒後才翻成 True —— 不能一 start 就等它變 False,
+                    #       否則會立刻誤判成「已經跑完」。
+                    #    2. 單筆量測**不會**觸發 OnFinishedMeasurements,
+                    #       所以完成訊號要看 OnFinishedSingleMeasurement(_last_result)。
+                    try:
+                        self._wait_until(
+                            lambda: self._meas_started or self.app.IsMeasuring,
+                            timeout=60, what=f"量測啟動:{smd['title']}")
+                    except TimeoutError:
+                        self.state.log("    → 等不到量測啟動的訊號,可能 ACQUA 拒絕了這一項",
+                                       "error")
+
                     self._wait_until(
-                        lambda: (not self.app.IsMeasuring) or self._measuring_done,
+                        lambda: self._last_result is not None
+                        or (self._meas_started and not self.app.IsMeasuring),
                         timeout=timeout, what=f"量測完成:{smd['title']}")
+
+                    # 事件可能比 IsMeasuring 慢一點點,給它一小段時間補送
+                    if self._last_result is None:
+                        grace = time.monotonic() + 3.0
+                        while self._last_result is None and time.monotonic() < grace:
+                            self.pump()
+                            time.sleep(0.05)
 
                     if self._last_result is None:
                         self.state.log("    → 沒有收到 OnFinishedSingleMeasurement 事件"
@@ -519,10 +563,19 @@ class ComBackend(AcquaBackend):
         try:
             # ⚠️ 簽章以 TypeLib 為準,比 CHM 多一個 ResultComment
             self._measuring_done = False
+            self._meas_started = False
             self.project.StartMeasurements(use_mmd, self.mo.Title, result_comment)
-            time.sleep(0.5)
+
+            # 同樣不要一 start 就等 IsMeasuring 變 False —— 先等它真的開始
+            try:
+                self._wait_until(lambda: self._meas_started or self.app.IsMeasuring,
+                                 timeout=120, what="整批量測啟動")
+            except TimeoutError:
+                self.state.log("等不到量測啟動的訊號 —— 可能沒有任何測項符合條件", "warn")
+
             self._wait_until(
-                lambda: (not self.app.IsMeasuring) or self._measuring_done,
+                lambda: self._measuring_done
+                or (self._meas_started and not self.app.IsMeasuring),
                 timeout=timeout, what="整批量測完成")
         finally:
             self.state.set(running=False, current=None, progress=None)
