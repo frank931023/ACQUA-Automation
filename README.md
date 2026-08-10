@@ -1,7 +1,17 @@
 # ACQUA 測試自動化
 
 用 Python + Flask 透過 ACOPT18 COM 介面自動化 HEAD acoustics ACQUA。
-核心情境:**從專案的眾多測項中勾選 n 項,讓它自己依序跑完,收集 pass/fail 與數值結果。**
+核心情境:**從專案的眾多測項中挑出要跑的,讓它自己依序跑完,收集 pass/fail 與數值結果。**
+
+> 最後更新:2026-08-10
+
+### 相關文件
+
+| 文件 | 內容 |
+|---|---|
+| **本文件** | 實作專案的架構、環境、進度、待辦 |
+| `../ACQUA_COM_自動化開發指南.md` | COM 介面的觀念與完整 API 參考 |
+| `../61_Demo_SMDs_Rev07_測項清單.md` | 資料庫裡 132 個測項的完整清單與授權模組對照 |
 
 ---
 
@@ -18,23 +28,25 @@
 切換到真實 ACQUA:
 
 ```powershell
-copy config.example.json config.json     # 填入資料庫名稱等資訊
+# config.json 已經建好並指向 61_Demo_SMDs_Rev07
 .\.venv\Scripts\python.exe app.py --backend com
 ```
 
+> 🔴 **前提:ACOPT18 授權已確認可用。** 沒有的話 `Dispatch()` 會直接失敗。
+
 ---
 
-## 這台機器的環境現況(2026-08-05 實測)
+## 這台機器的環境現況(2026-08-10 更新)
 
 | 項目 | 狀態 |
 |---|---|
 | ACQUA | ✅ 已安裝 `C:\Program Files (x86)\HEAD Analyzer ACQUA\Acqua6.exe` **v6.2.210** |
 | COM 註冊 | ✅ ProgID `Acqua3.AcquaApplication` → LocalServer32 → `Acqua6.exe` |
 | SQL Server | ✅ 執行個體 `ACQUADBSERVER`(SQL Server 2019)運行中 |
-| **ACQUA 資料庫** | ❌ **不存在** —— 只有 4 個系統資料庫,沒有任何 ACQUA 庫 |
+| **ACQUA 資料庫** | ✅ 已建立 —— `61_Demo_SMDs_Rev07`(**132 個 SMD**),詳見下方 |
 | Python | ✅ HEAD 內建 **32-bit Python 3.9.13**,已含 pywin32 |
 | 本專案 venv | ✅ `.venv`(Python 3.9.13 32-bit + Flask 3.1.3 + pywin32 312) |
-| ACOPT18 授權 | ❓ **未確認** —— 沒有它 `Dispatch()` 會失敗 |
+| ACOPT18 授權 | ✅ **已確認可用**(dongle 已插入,2026-08-10 實測 COM 連線成功) |
 | 量測硬體 | ❓ 未確認(已裝 HEAD device drivers) |
 
 ### 資料庫(2026-08-06 更新)
@@ -48,34 +60,73 @@ copy config.example.json config.json     # 填入資料庫名稱等資訊
 
 完整測項清單見 `../61_Demo_SMDs_Rev07_測項清單.md`。
 
-### 🟠 已知問題:demo 專案是「孤兒」
+### ✅ 已解決:「孤兒專案」不是問題
 
-```sql
--- 61_Demo_SMDs_Rev07
-acqua.ProjectGroups:  idProjectGroup=1  "Standards"
-acqua.Projects:       idProject=1  rProjectGroup=NULL  "ACQUA Demo SMDs Rev.07"
-                                   ^^^^^^^^^^^^^^^^^^ 沒有掛在任何群組下
+資料庫裡 `acqua.Projects.rProjectGroup` 是 NULL,原本擔心 COM 列舉不到。
+**實測結果:ACQUA 會自動建一個合成群組收容它。**
+
+```
+ProjectGroups.Count = 2
+  [0] 'Standards'            Projects.Count = 0
+  [1] '(Unsorted Projects)'  Projects.Count = 1
+        └─ 'ACQUA Demo SMDs Rev.07'   RowID=1
 ```
 
-**影響:** COM 的走訪路徑是 `app.ProjectGroups.Item(i).Projects.Item(j)`,
-專案沒有父群組 → **這條路徑很可能列舉不到它**,`open_project` 會找不到。
-
-ACQUA GUI 自己開得起來(MRU 有紀錄),但 COM 列舉是不是也看得到,**必須實測**。
-
-修法(一行,可逆):
-
-```sql
-USE [61_Demo_SMDs_Rev07];
-UPDATE acqua.Projects SET rProjectGroup = 1 WHERE idProject = 1;  -- 掛到 "Standards"
--- 還原:UPDATE acqua.Projects SET rProjectGroup = NULL WHERE idProject = 1;
-```
+👉 **不需要改資料庫。** config 的 `project_group` 設成 `(Unsorted Projects)` 即可。
 
 ### 其他待辦
 
-- ❓ **ACOPT18 授權未確認** —— 沒有它 `Dispatch()` 會失敗
-- ⚠️ **132 個測項各自需要對應的 ACOPT 模組授權**(6819/6820/6844/6857…)
-- ⚠️ **17 個測項需要外部參考檔**(`.dat`/`.fft`),開跑前應先檢查存在
+- ⚠️ **132 個測項各自需要對應的 ACOPT 模組授權**(6819/6820/6844/6857…)——
+  授權不足的測項會在執行時失敗
+- ⚠️ **17 個測項需要外部參考檔**(`.dat`/`.fft`),`list_smds()` 會在日誌警告
 - ⚠️ SQL Server 是 **Express 版**,單一資料庫上限 10 GB
+
+---
+
+## ⭐ 實機驗證結果(2026-08-10,dongle 已插入)
+
+### 已驗證可用
+
+| 項目 | 結果 |
+|---|---|
+| `Dispatch` / `DispatchWithEvents` | ✅ ACQUA 已在執行時**接上現有實例**,0.02 秒 |
+| `AppLoadFinished` | ✅ |
+| `ProjectGroups` 走訪 | ✅ 含合成群組 `(Unsorted Projects)` |
+| `SelectAsActive` + `SelectedProjectLoaded` | ✅ |
+| `SelectActiveMeasurementObject` | ✅ |
+| **SMD 列舉(SQL)** | ✅ **132 個,含標題與 MMD 分組** |
+| **變數讀寫** | ✅ `Add()` → 設 `Name/Type/Value/State` → `Save()` → 讀得回來 |
+| `MeasurementEngine` | ✅ Mfe4~Mfe11 / Labcore / TurnTable / HardwareConfig 都拿得到 |
+| `RunScript("Python", code)` | ✅ 可執行,**腳本例外會以 COM 錯誤傳回** |
+| `PythonAvailable` | ✅ True |
+| Flask 全流程(com 模式) | ✅ 連線→列群組→開專案→選 DUT→列 132 測項→寫變數 |
+
+### 🔴 已知不可用 —— 架構因此改變
+
+| 原本規劃 | 實測 | 改用 |
+|---|---|---|
+| `AcquaDBMask.Application.Connect()` | ❌ **四種參數組合全部回傳 False** | **直接查 SQL**(`acqua/sqlcat.py`) |
+| `GetActiveObject("AcquaDBMask...")` | ❌ 不在 ROT 裡 | 同上 |
+| `FindFirstSMD("")` 當作「列出全部」 | ❌ **回傳 0 個**,且不給標題 | 同上 |
+
+**關鍵驗證:** `acqua.TreeItems.idTreeItem` **就是** Acqua3 的 `SMDRowID`。
+
+```
+FindFirstSMD("3QUEST") 回傳的 20 個 RowID
+   == SQL 查出的 20 個 idTreeItem      交集 20/20,完全一致
+```
+
+所以 SQL 查到的 `row_id` 可以直接餵給 `StartSingleMeasurement()`。
+這條路比 DBMask 更好 —— 一次拿到標題、MMD 階層、`SMDType`、參考檔需求。
+
+### ⬜ 仍未驗證(需要實際跑一次量測)
+
+- ByRef 輸出參數(`UserReaction` / `Continue`)是否真的用 return 回傳
+- `StartSingleMeasurement` 之後等 `IsMeasuring` 翻轉有沒有 race condition
+- `OnFinishedMeasurements` 的 `ResultOverview` 結構
+- `sqlcat.read_results()` 的欄位對應(資料庫目前 0 筆結果)
+- `ConditionalExecution` 讀 `UsedVariables` 還是 `ResultVariables`
+  (demo 庫目前 0 個測項有設條件)
 
 ---
 
@@ -115,20 +166,26 @@ UPDATE acqua.Projects SET rProjectGroup = 1 WHERE idProject = 1;  -- 掛到 "Sta
 ```
 ACQUA Automation/
 ├── app.py                    Flask 入口與 REST API
-├── config.example.json       設定範本(複製成 config.json)
+├── config.json               ⭐ 實際設定(已指向 61_Demo_SMDs_Rev07)
+├── config.example.json       設定範本
 ├── requirements.txt
 ├── acqua/
 │   ├── constants.py          ✅ 列舉常數(數值已從 TypeLib 實測取得)
 │   ├── state.py              執行緒安全的共用狀態
-│   ├── worker.py             ⭐ COM 工作執行緒
+│   ├── worker.py             ⭐ COM 工作執行緒(STA + 訊息幫浦 + 命令佇列)
 │   ├── backend_base.py       後端介面定義
 │   ├── backend_mock.py       模擬後端(無 ACQUA 也能開發)
 │   ├── backend_com.py        真實 COM 後端
-│   └── dbmask.py             ⭐ AcquaDBMask —— 列舉 SMD、讀數值、建 MMD/SMD
-├── templates/index.html      Web UI(勾選測項 + 即時日誌)
+│   ├── sqlcat.py             ⭐ SQL 目錄 —— 列測項、讀數值與極限值(實際在用)
+│   └── dbmask.py             ⚠️ AcquaDBMask —— 連不上,保留僅為記錄為何放棄
+├── templates/index.html      Web UI(模式切換 + 變數面板 + 勾選測項 + 即時日誌)
 ├── tools/dump_typelib.py     ⭐ 唯讀走訪 TypeLib(不啟動 ACQUA)
 └── .venv/                    32-bit Python 3.9 + Flask + pywin32
 ```
+
+> ⚠️ **`dbmask.py` 目前是死碼。** `AcquaDBMask.Application.Connect()` 實測一律回傳
+> False,所以列測項與讀數值全部改走 `sqlcat.py`。保留這個檔案是為了記錄
+> 「為什麼不走 DBMask」,以及萬一未來 HEAD 修好了可以快速切回去。
 
 ---
 
@@ -272,27 +329,50 @@ Application
 
 | 階段 | 內容 | 狀態 |
 |:---:|---|:---:|
-| 0 | 環境準備(Python / venv / Flask) | ✅ 完成 |
+| 0 | 環境準備(venv / Flask / pywin32) | ✅ 完成 |
 | 1 | dump TypeLib 取得真實 API 與列舉數值 | ✅ 完成 |
-| — | **建立 ACQUA 資料庫 + 在 GUI 定義專案與 SMD** | 🔴 **待你操作** |
-| 2 | 最小連通性:`Dispatch()` + `AppLoadFinished` | ⬜ |
-| 3 | 唯讀瀏覽 + SMD 列舉、驗證 DBMask 的 ID 是否等於 SMDRowID | ⬜ |
-| 4 | 事件接線(驗證 ByRef 回傳、dump `ResultOverview`) | ⬜ |
-| 5 | 實際量測 + pass/fail | ⬜ |
-| 6 | 讀取數值結果(DBMask SingleValue) | ⬜ |
+| — | 建立 ACQUA 資料庫 | ✅ 完成(`61_Demo_SMDs_Rev07`,132 個 SMD) |
+| — | 程式開發(兩種執行模式 + mock 驗證) | ✅ 完成 |
+| — | 確認 ACOPT18 授權 | ✅ 完成(dongle 已插入) |
+| 2 | 最小連通性:`Dispatch()` + `AppLoadFinished` | ✅ 完成 |
+| 3 | 唯讀瀏覽 + SMD 列舉、ID 對應驗證 | ✅ 完成(改走 SQL) |
+| 3b | 變數讀寫 / MeasurementEngine / RunScript | ✅ 完成 |
+| 4 | 事件接線(ByRef 回傳、`ResultOverview`) | 🟡 接線 OK,**待真實量測驗證** |
+| 5 | 實際量測 + pass/fail | ⬜ **需要硬體與授權模組** |
+| 6 | 讀取數值結果(SQL `ResultSingleValues`) | 🟡 已實作,**待有結果後核對** |
+| 7 | 產線化(CI 整合、無人值守、結果歸檔) | ⬜ |
+
+> 階段 5 之後需要實際驅動量測硬體 —— 會發出訊號、佔用治具,且耗時。
 
 ### 階段 2~5 必須實測驗證的項目
 
 程式碼裡標了 `[未驗證]` 的地方:
 
+**連線與事件**
+
 - [ ] `DispatchWithEvents` + 類別屬性注入的寫法是否正常運作
 - [ ] **ByRef 輸出參數**(`UserReaction`、`Continue`)是否真的用 return 回傳
-- [ ] `StartSingleMeasurement` 之後等 `IsMeasuring` 翻轉有沒有 race condition
+- [ ] `StartSingleMeasurement` / `StartMeasurements` 之後等 `IsMeasuring`
+      翻轉有沒有 race condition
+- [ ] `OnFinishedMeasurements` 的 `ResultOverview` 到底是什麼結構
+
+**測項與結果**
+
+- [ ] ⚠️ **demo 專案的 `rProjectGroup` 是 NULL** → `ProjectGroups→Projects` 走訪
+      找不找得到它(找不到的話 `open_project` 會失敗,修法見上方「已知問題」)
 - [ ] ⭐ **DBMask 的 `SMD.ID` 是否等於 `StartSingleMeasurement(SMDRowID)` 要的 RowID**
       (兩者都是資料庫 row id,理論上相同 —— 但一定要用一筆實測確認)
-- [ ] `OnFinishedMeasurements` 的 `ResultOverview` 到底是什麼結構
 - [ ] `AddSMD(strTitle, strDescription, strSMDType, strSMDCompleteFileName)`
       後兩個參數的合法值(建議先在 GUI 建一個,再讀它的 `SMDType` 當範本)
+
+**變數驅動模式**
+
+- [ ] `MeasurementEngine.UsedVariables` vs `ResultVariables` ——
+      `ConditionalExecution` 到底讀哪一組
+- [ ] `IVariables.Add()` 後設 `.Name` 是否需要 `Save()` 才生效
+- [ ] `RunScript(Language, Code)` 的回傳值格式與錯誤處理
+- [ ] ⚠️ demo 資料庫目前 **0 個測項有設定 `ConditionalExecution`** ——
+      conditional 模式要真的篩選,得先在 ACQUA GUI 裡加條件
 
 ---
 

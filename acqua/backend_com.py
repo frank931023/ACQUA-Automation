@@ -1,13 +1,31 @@
 """真實的 ACQUA COM 後端。
 
-⚠️ 這個檔案尚未在真實環境驗證過 —— 撰寫時這台機器上沒有可用的 Python,
-   也還沒有 ACQUA 資料庫。凡是標 [未驗證] 的地方請在階段 2~5 逐一實測。
+## 實機驗證狀態(2026-08-10,ACOPT18 dongle 已插入)
+
+已驗證可用:
+  ✅ Dispatch / DispatchWithEvents(ACQUA 已在執行時會接上現有實例,0.02s)
+  ✅ AppLoadFinished / SelectedProject / SelectedProjectLoaded
+  ✅ ProjectGroups 走訪 —— 沒有群組的專案會出現在 ACQUA 合成的
+     「(Unsorted Projects)」群組下,rProjectGroup 為 NULL 不影響列舉
+  ✅ MeasurementEngine:Mfe4~Mfe11 / Labcore / TurnTable / HardwareConfig 都拿得到
+  ✅ 變數讀寫:UsedVariables.Add() → 設 Name/Type/Value/State → Save() → 讀得回來
+  ✅ RunScript("Python", code):可執行,且腳本例外會以 COM 錯誤傳回
+
+尚未驗證(需要實際跑一次量測):
+  ⬜ ByRef 輸出參數(UserReaction / Continue)是否真的用 return 回傳
+  ⬜ StartSingleMeasurement 之後等 IsMeasuring 翻轉有沒有 race condition
+  ⬜ OnFinishedMeasurements 的 ResultOverview 結構
+  ⬜ sqlcat.read_results() 的欄位對應(撰寫時資料庫還沒有任何量測結果)
+
+已知不可用:
+  ❌ AcquaDBMask.Application.Connect() 一律回傳 False(四種參數組合都試過)
+     → 列舉 SMD 與讀數值改走 SQL,見 acqua/sqlcat.py
+  ❌ FindFirstSMD("") 回傳 0 個 —— 空字串不等於「全部」,且不回傳標題
 
 前置需求:
-  1. 32-bit Python + pywin32
+  1. 32-bit Python + pywin32(HEAD 原廠已內建)
   2. ACQUA 已安裝且 ACOPT18 授權有效
-  3. ACQUA 資料庫已建立(DBAdmin.exe),且裡面有定義好的專案與 SMD
-  4. acqua/constants.py 的 EMEResult 數值已填入(執行 tools/dump_typelib.py)
+  3. 資料庫裡有定義好的專案與 SMD
 
 執行緒約束:本類別的所有方法只能在 AcquaWorker 那一條執行緒上呼叫。
 """
@@ -87,7 +105,7 @@ class ComBackend(AcquaBackend):
         self.app = None
         self.project = None            # IProjectSelected
         self.mo = None                 # IMObject
-        self.dbmask = None             # AcquaDBMask —— 列舉 SMD 與讀數值用
+        self.sql = None                # SqlCatalog —— 列舉 SMD 與讀數值(實測後改走這條)
         self._pythoncom = None
         self._last_result = None       # (title, status)
         self._measuring_done = False
@@ -117,9 +135,11 @@ class ComBackend(AcquaBackend):
         self.state.set(acqua_ready=True)
         self.state.log("ACQUA 已就緒")
 
-        if not EMEResult.is_resolved():
-            self.state.log("⚠️ EMEResult 數值尚未填入 —— pass/fail 判定會失敗。"
-                           "請先執行 tools/dump_typelib.py", "error")
+        try:
+            self.state.log(f"ACQUA 目前:{self.app.SelectedSQLServerName} / "
+                           f"{self.app.SelectedDatabaseName}")
+        except Exception:                                   # noqa: BLE001
+            pass
 
     def pump(self):
         if self._pythoncom is not None:
@@ -129,6 +149,7 @@ class ComBackend(AcquaBackend):
         self.app = None
         self.project = None
         self.mo = None
+        self.sql = None
         if self._pythoncom is not None:
             try:
                 self._pythoncom.CoUninitialize()
@@ -218,52 +239,61 @@ class ComBackend(AcquaBackend):
             self.mo.UpdateProperty(str(k), str(v))   # 欄位不存在會自動建立
             self.state.log(f"  UpdateProperty({k!r}, {v!r})")
 
+    def _catalog(self):
+        """取得 SQL 目錄(延遲連線)。"""
+        if self.sql is None:
+            from .sqlcat import SqlCatalog
+            cat = SqlCatalog(self.state)
+            if not cat.connect(self.state.server, self.state.database):
+                raise RuntimeError("SQL 目錄連線失敗")
+            self.sql = cat
+        return self.sql
+
     def list_smds(self, search=""):
-        """列出專案內的 SMD。
+        """列出專案內的 SMD(含標題與 MMD 階層)。
 
-        主要路徑:AcquaDBMask.Subproject.GetSMDsRecursive() —— 會回傳「標題」。
-        備援路徑:Acqua3 的 FindFirstSMD/FindNextSMD —— 只回傳 RowID,沒有標題。
+        ⭐ 實機驗證後改走 SQL,原因見 acqua/sqlcat.py 的說明:
+           - AcquaDBMask.Connect() 一律回 False,連不上
+           - Acqua3 的 FindFirstSMD 是「搜尋」不是「列舉」,
+             FindFirstSMD("") 回傳 0 個,而且不給標題
+           - 已驗證 SQL 的 idTreeItem == Acqua3 的 SMDRowID(20/20 完全一致)
 
-        Acqua3 介面本身沒有純列舉的方法(FindFirstSMD 是搜尋,不是列舉),
-        所以要做「勾選清單」的 UI,DBMask 這條路幾乎是必經的。
+        備援仍保留 FindFirstSMD —— 但只在 SQL 不可用且使用者有給搜尋字串時有意義。
         """
         if self.project is None:
             raise RuntimeError("尚未開啟專案")
 
-        smds = self._list_smds_via_dbmask(search)
-        if smds is None:
+        try:
+            smds = self._catalog().list_smds(
+                project_title=self.state.open_project, search=search)
+            self.state.log(f"[SQL] 列出 {len(smds)} 個 SMD")
+
+            need = self._catalog().missing_reference_files(smds)
+            if need:
+                total = sum(len(x["smds"]) for x in need)
+                self.state.log(
+                    f"⚠️ 其中 {total} 個測項需要外部參考檔("
+                    + ", ".join(x["ref_file"] for x in need[:4])
+                    + (" …" if len(need) > 4 else "") + ")", "warn")
+        except Exception as exc:                            # noqa: BLE001
+            self.state.log(f"[SQL] 列舉失敗,改用 FindFirstSMD 備援:{exc}", "warn")
             smds = self._list_smds_via_find(search)
 
         self.state.set(smds=smds)
         return smds
 
-    def _list_smds_via_dbmask(self, search=""):
-        """走 AcquaDBMask —— 拿得到標題,這是首選。失敗時回傳 None 讓呼叫端走備援。"""
-        try:
-            if self.dbmask is None:
-                from .dbmask import DbMask
-                self.dbmask = DbMask(self.state)
-                if not self.dbmask.connect(self.state.server, self.state.database):
-                    self.dbmask = None
-                    return None
-
-            sub = self.dbmask.find_subproject(self.state.open_group, self.state.open_project)
-            if sub is None:
-                self.state.log("[DBMask] 找不到對應的 Subproject", "warn")
-                return None
-
-            smds = self.dbmask.list_smds(sub)
-            if search:
-                smds = [s for s in smds if search.lower() in s["title"].lower()]
-            self.state.log(f"[DBMask] 列出 {len(smds)} 個 SMD")
-            return smds
-        except Exception as exc:                            # noqa: BLE001
-            self.state.log(f"[DBMask] 列舉失敗,改用 FindFirstSMD 備援:{exc}", "warn")
-            self.dbmask = None
-            return None
-
     def _list_smds_via_find(self, search=""):
-        """備援:Acqua3 的搜尋式走訪。只有 RowID,沒有標題。"""
+        """備援:Acqua3 的搜尋式走訪。
+
+        ⚠️ 實測限制:
+           - `FindFirstSMD("")` 回傳 **0 個** —— 空字串不等於「全部」
+           - 只回傳 RowID,**不回傳標題**
+           所以這條路做不出勾選清單,只能在「已知關鍵字」時當退路。
+        """
+        if not search:
+            self.state.log("FindFirstSMD 備援需要搜尋字串(空字串會回傳 0 個)", "error")
+            return []
+
         smds, seen = [], set()
         row_id = self.project.FindFirstSMD(search)
         guard = 0
@@ -272,17 +302,26 @@ class ComBackend(AcquaBackend):
             if rid in seen:
                 break                                # 防禦:避免 API 循環回繞
             seen.add(rid)
-            smds.append({"row_id": rid, "title": f"SMD #{rid}"})
+            smds.append({"row_id": rid, "title": f"SMD #{rid}", "group": "",
+                         "path": "", "smd_type": -1,
+                         "needs_ref": False, "ref_file": "", "conditional": False})
             row_id = self.project.FindNextSMD()
             guard += 1
             if guard > 5000:
                 self.state.log("SMD 列舉超過 5000 筆,強制中斷", "warn")
                 break
-
-        if not smds:
-            self.state.log(f"FindFirstSMD({search!r}) 沒有找到任何 SMD —— "
-                           "若搜尋字串為空,代表空字串不等於「全部符合」", "warn")
         return smds
+
+    def read_results(self, latest_only=True, smd_row_ids=None):
+        """讀出量測的實際數值(含極限值)。走 SQL —— DBMask 連不上。"""
+        rows = self._catalog().read_results(
+            project_title=self.state.open_project,
+            mo_title=self.state.measurement_object,
+            latest_only=latest_only, smd_row_ids=smd_row_ids)
+        self.state.set(values=rows)
+        n = sum(len(r["values"]) for r in rows)
+        self.state.log(f"[SQL] 讀到 {len(rows)} 筆結果、共 {n} 個數值")
+        return rows
 
     def run_smds(self, row_ids):
         """逐一執行指定的 SMD。
@@ -381,10 +420,12 @@ class ComBackend(AcquaBackend):
         """取得 ACQUA 的變數集合(IVariables)。
 
         路徑:IProjectSelected.MeasurementEngine.UsedVariables
-        ⚠️ [未驗證] MeasurementEngine 另有 ResultVariables。兩者的差別是:
-           UsedVariables   —— 專案在用的變數(條件執行讀的應該是這組)
-           ResultVariables —— 量測產生的結果變數
-           階段 4 要實測確認條件執行到底讀哪一組。
+
+        ✅ 已驗證(2026-08-10):Add() → 設 Name/Type/Value/State → Save() → 讀得回來。
+        變數實際存放位置:
+           UsedVariables   → %TEMP%/AcquaTmp/UsedVars.ini
+           ResultVariables → %TEMP%/AcquaTmp/ResultVars.ini
+        ⚠️ [未驗證] ConditionalExecution 到底讀哪一組 —— 需要有設條件的專案才能測。
         """
         if self.project is None:
             raise RuntimeError("尚未開啟專案")

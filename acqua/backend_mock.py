@@ -211,6 +211,31 @@ class MockBackend(AcquaBackend):
         self.list_variables()
         return n
 
+    def read_results(self, latest_only=True, smd_row_ids=None):
+        """模擬數值結果 —— 依已跑過的測項編出合理的數字與極限值。"""
+        out = []
+        for r in self.state.results:
+            if smd_row_ids and r["row_id"] not in smd_row_ids:
+                continue
+            lo, hi = 3.0, 5.0
+            val = round(self._rng.uniform(lo, hi) if r["passed"]
+                        else self._rng.uniform(1.0, lo - 0.1), 2)
+            out.append({
+                "result_id": r["row_id"],
+                "smd": r["title"], "smd_row_id": r["row_id"],
+                "dut": self.state.measurement_object or "",
+                "status": 2 if r["passed"] else 3,
+                "created": "",
+                "values": [{
+                    "title": "MOS", "value": val, "unit": "", "precision": 2,
+                    "channel": "1", "lower_limit": lo, "upper_limit": hi,
+                    "status": 2 if r["passed"] else 3, "type": 16,
+                }],
+            })
+        self.state.set(values=out)
+        self.state.log(f"【模擬模式】讀到 {len(out)} 筆結果")
+        return out
+
     def _conditional_filter(self):
         """模擬 ConditionalExecution:依變數決定哪些測項會被跑。
 

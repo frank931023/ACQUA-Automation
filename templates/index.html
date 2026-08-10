@@ -78,9 +78,55 @@
   .var .vname { flex:0 0 46%; font-family:Consolas,monospace; font-size:12px; }
   .var .del { flex:none; padding:5px 9px; }
   code { background:#7f8faa22; padding:1px 5px; border-radius:4px; font-size:12px; }
+
+  /* ── 等待中的遮罩 ── */
+  #busy { position:fixed; inset:0; background:#0008; backdrop-filter:blur(2px);
+          display:none; align-items:center; justify-content:center; z-index:99; }
+  #busy.on { display:flex; }
+  .bx { background:var(--panel); border:1px solid var(--border); border-radius:12px;
+        padding:22px 26px; min-width:340px; max-width:min(560px,92vw);
+        box-shadow:0 12px 40px #0006; }
+  .bx h3 { margin:0 0 4px; font-size:15px; display:flex; align-items:center; gap:9px; }
+  .spin { width:15px; height:15px; border:2px solid var(--border); flex:none;
+          border-top-color:var(--accent); border-radius:50%; animation:sp .8s linear infinite; }
+  @keyframes sp { to { transform:rotate(360deg); } }
+  .bx .t { font-size:34px; font-variant-numeric:tabular-nums; margin:10px 0 2px;
+           font-weight:600; letter-spacing:-.02em; }
+  .bx .sub { font-size:12px; color:var(--muted); }
+  .bx .bar { height:4px; border-radius:3px; background:var(--border);
+             overflow:hidden; margin:14px 0 10px; }
+  .bx .bar i { display:block; height:100%; width:34%; background:var(--accent);
+               border-radius:3px; animation:sl 1.3s ease-in-out infinite; }
+  @keyframes sl { 0%{margin-left:-34%} 100%{margin-left:100%} }
+  .bx .tail { font:11px/1.5 Consolas,monospace; color:var(--muted); max-height:76px;
+              overflow:hidden; border-top:1px solid var(--border); padding-top:9px;
+              margin-top:4px; white-space:pre-wrap; word-break:break-word; }
+  .bx .acts { display:flex; gap:8px; margin-top:14px; }
+  #busy.slow .t   { color:var(--warn); }
+  #busy.slow .bar i { background:var(--warn); }
+  #busy.err  .spin { display:none; }
+  #busy.err  .bar  { display:none; }
+  #busy.err  .t   { color:var(--fail); font-size:15px; line-height:1.6;
+                    font-weight:500; letter-spacing:0; white-space:pre-line;
+                    text-align:left; }
+  #busy.err  .bx  { border-color:var(--fail); }
 </style>
 </head>
 <body>
+
+<div id="busy">
+  <div class="bx">
+    <h3><span class="spin"></span><span id="b-title">處理中</span></h3>
+    <div class="sub" id="b-sub"></div>
+    <div class="t" id="b-time">0.0s</div>
+    <div class="bar"><i></i></div>
+    <div class="tail" id="b-tail"></div>
+    <div class="acts">
+      <button id="b-close" style="display:none">關閉</button>
+      <button id="b-abort">停止等待</button>
+    </div>
+  </div>
+</div>
 
 <header>
   <h1>ACQUA 測試自動化</h1>
@@ -179,13 +225,109 @@
 const $ = s => document.querySelector(s);
 let S = {}, selected = new Set(), resultMap = {};
 
-async function post(url, body) {
-  const r = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'},
-                             body: JSON.stringify(body || {})});
-  const j = await r.json().catch(() => ({ok:false, error:'回應不是合法的 JSON'}));
-  if (!j.ok) addLog('✗ ' + (j.error || '未知錯誤'), 'error');
-  if (j.state) render(j.state);
-  return j;
+// 每個操作的顯示名稱與「正常大概要多久」—— 超過就轉黃警告
+const OPS = {
+  '/api/connect':        ['連線資料庫',   10, 'ACQUA 正在連 SQL Server'],
+  '/api/refresh-groups': ['讀取專案群組',  5, ''],
+  '/api/open-project':   ['開啟專案',     25, 'ACQUA 要載入整個專案樹,這步最慢'],
+  '/api/select-mo':      ['選定受測物',    8, '找不到同名的會自動建立'],
+  '/api/list-smds':      ['載入測項',     10, '查 SQL 取得測項清單'],
+  '/api/variables':      ['變數讀寫',      8, ''],
+  '/api/values':         ['讀取數值結果', 15, ''],
+  '/api/report':         ['產生報告',     90, 'ACQUA 會開 Word,可能很久'],
+};
+
+let busyT = null, busyT0 = 0, busyAbort = null, busyExpect = 0, busyUserStop = false;
+
+function showBusy(url) {
+  const [label, expect, hint] = OPS[url] || ['處理中', 20, ''];
+  busyExpect = expect;
+  busyUserStop = false;
+  busyT0 = performance.now();
+  $('#busy').className = 'on';
+  $('#b-title').textContent = label;
+  $('#b-sub').textContent = hint ? hint + `(一般約 ${expect} 秒)` : `一般約 ${expect} 秒`;
+  $('#b-time').textContent = '0.0s';
+  $('#b-tail').textContent = '';
+  $('#b-close').style.display = 'none';
+  $('#b-abort').style.display = '';
+  clearInterval(busyT);
+  busyT = setInterval(tickBusy, 100);
+}
+
+function tickBusy() {
+  const s = (performance.now() - busyT0) / 1000;
+  $('#b-time').textContent = s.toFixed(1) + 's';
+  if (s > busyExpect) {
+    $('#busy').classList.add('slow');
+    $('#b-sub').textContent = `已超過預期的 ${busyExpect} 秒 —— ACQUA 可能正忙,或彈出了對話框擋住。`;
+  }
+  // 把最近幾行日誌顯示在框裡,讓人看得到「有在動」
+  const lines = [...$('#log').childNodes].slice(-3).map(n => n.textContent);
+  $('#b-tail').textContent = lines.join('\n');
+}
+
+function hideBusy() {
+  clearInterval(busyT);
+  $('#busy').className = '';
+}
+
+function failBusy(title, msg) {
+  clearInterval(busyT);
+  $('#busy').className = 'on err';
+  $('#b-title').textContent = title;
+  $('#b-sub').textContent = '';
+  $('#b-time').textContent = msg;
+  $('#b-close').style.display = '';
+  $('#b-abort').style.display = 'none';
+}
+
+$('#b-close').onclick = hideBusy;
+$('#b-abort').onclick = () => {
+  busyUserStop = true;                 // 讓 catch 知道這是使用者主動停的,別再跳錯誤框
+  if (busyAbort) busyAbort.abort();
+  addLog('已停止等待 —— 注意:ACQUA 那邊的動作還在跑,只是瀏覽器不等了', 'warn');
+  hideBusy();
+};
+
+async function post(url, body, opts = {}) {
+  const quiet = opts.quiet === true;
+  const hardTimeout = (opts.timeout || (OPS[url]?.[1] || 20) * 6) * 1000;
+  if (!quiet) showBusy(url);
+
+  busyAbort = new AbortController();
+  const killer = setTimeout(() => busyAbort.abort('timeout'), hardTimeout);
+
+  try {
+    const r = await fetch(url, {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(body || {}), signal: busyAbort.signal,
+    });
+    clearTimeout(killer);
+    const j = await r.json().catch(() => ({ok: false, error: '回應不是合法的 JSON'}));
+    if (j.state) render(j.state);
+    if (!j.ok) {
+      addLog('✗ ' + (j.error || '未知錯誤'), 'error');
+      if (!quiet) failBusy('失敗', j.error || '未知錯誤');
+    } else if (!quiet) {
+      hideBusy();
+    }
+    return j;
+  } catch (e) {
+    clearTimeout(killer);
+    if (busyUserStop) return {ok: false, error: 'aborted by user'};
+    const timedOut = busyAbort && busyAbort.signal.reason === 'timeout';
+    const msg = timedOut
+      ? `等了 ${(hardTimeout / 1000).toFixed(0)} 秒還沒回應。\n` +
+        'ACQUA 可能彈出對話框在等人回應,或量測引擎忙碌中。\n' +
+        '請切到 ACQUA 視窗看看有沒有跳出東西。'
+      : ('連線中斷:' + (e.message || e));
+    addLog('✗ ' + msg.replace(/\n/g, ' '), 'error');
+    if (!quiet) failBusy(timedOut ? '逾時' : '錯誤', msg);
+    return {ok: false, error: msg};
+  } finally {
+    busyAbort = null;
+  }
 }
 
 function addLog(text, level) {
@@ -328,7 +470,10 @@ document.querySelectorAll('input[name=mode]').forEach(el => el.onchange = () => 
 $('#btn-var-add').onclick  = () => addVarRow();
 $('#btn-var-push').onclick = () => post('/api/variables', {values: collectVars()});
 $('#btn-var-read').onclick = async () => {
-  const r = await (await fetch('/api/variables')).json();
+  showBusy('/api/variables');
+  let r;
+  try { r = await (await fetch('/api/variables')).json(); hideBusy(); }
+  catch (e) { failBusy('錯誤', String(e)); return; }
   const vs = r.state?.variables || [];
   $('#vars').innerHTML = '';
   if (!vs.length) addLog('ACQUA 目前沒有任何變數', 'warn');
@@ -345,10 +490,9 @@ $('#btn-run').onclick = async () => {
     if (!selected.size) return addLog('✗ 沒有選擇任何測項', 'error');
     body.row_ids = [...selected];
   }
-  const r = await fetch('/api/run', {method:'POST', headers:{'Content-Type':'application/json'},
-                                     body: JSON.stringify(body)});
-  const j = await r.json();
-  if (!j.ok) addLog('✗ ' + j.error, 'error');
+  // /api/run 立刻回應(量測在背景跑),所以用 quiet 不擋畫面
+  const j = await post('/api/run', body, {quiet: true, timeout: 30});
+  if (j.ok) addLog(`已送出:${mode === 'conditional' ? '變數驅動' : '逐項'} 模式`, 'info');
 };
 $('#btn-cancel').onclick   = () => fetch('/api/cancel', {method:'POST'});
 $('#btn-report').onclick   = () => post('/api/report', {});

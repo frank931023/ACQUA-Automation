@@ -34,6 +34,9 @@ class SharedState:
         self.variables = []            # [{"name","value","type","state","state_text"}]
         self.run_mode = "selected"     # selected | conditional
 
+        # 數值結果(走 SQL 讀回來的,含極限值)
+        self.values = []               # [{smd, dut, status, values:[...]}]
+
         # 執行狀態
         self.running = False
         self.cancel_requested = False
@@ -71,6 +74,7 @@ class SharedState:
                 "smds": self.smds,
                 "variables": self.variables,
                 "run_mode": self.run_mode,
+                "values": self.values,
                 "running": self.running,
                 "cancel_requested": self.cancel_requested,
                 "current": self.current,

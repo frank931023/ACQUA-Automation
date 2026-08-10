@@ -83,6 +83,10 @@ class AcquaBackend(ABC):
         """
 
     @abstractmethod
+    def read_results(self, latest_only: bool = True, smd_row_ids=None) -> list:
+        """讀出量測的實際數值(含極限值)。Acqua3 介面做不到,走 SQL。"""
+
+    @abstractmethod
     def run_all(self) -> None:
         """跑「整個專案」(StartMeasurements)。
 

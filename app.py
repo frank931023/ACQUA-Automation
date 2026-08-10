@@ -216,6 +216,15 @@ def api_report():
                 selection_type=int(body.get("selection_type", rep.get("selection_type", 3))))
 
 
+@app.route("/api/values", methods=["POST"])
+def api_values():
+    """讀出量測的實際數值(含極限值)。走 SQL —— Acqua3 介面拿不到數字。"""
+    body = request.get_json(silent=True) or {}
+    return _cmd("read_results", timeout=300,
+                latest_only=bool(body.get("latest_only", True)),
+                smd_row_ids=body.get("row_ids"))
+
+
 @app.route("/api/results.csv")
 def api_results_csv():
     snap = state.snapshot()
