@@ -18,4 +18,14 @@ config.json
 
 # 作業系統產生的雜檔
 .DS_Store
-Thumbs.db'
+Thumbs.db
+
+# 產出檔(報告、匯出)—— 不進版控
+reports/
+*.doc
+*.docx
+*.csv
+
+# 暫存
+*.tmp
+*.bak
