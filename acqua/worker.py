@@ -127,6 +127,7 @@ class AcquaWorker(threading.Thread):
             "list_variables": lambda **kw: self.backend.list_variables(),
             "set_variables": lambda **kw: self.backend.set_variables(**kw),
             "run_all": lambda **kw: self.backend.run_all(),
+            "predict_run_set": lambda **kw: self.backend.predict_run_set(**kw),
             "read_results": lambda **kw: self.backend.read_results(**kw),
         }
         handler = handlers.get(cmd.name)

@@ -171,6 +171,14 @@ def api_variables_set():
     return _cmd("set_variables", timeout=180, values=values)
 
 
+@app.route("/api/predict", methods=["POST"])
+def api_predict():
+    """⭐ 事前預覽:這組變數會跑哪些測項?完全不啟動量測。"""
+    body = request.get_json(silent=True) or {}
+    return _cmd("predict_run_set", timeout=180,
+                variables=body.get("variables") or {})
+
+
 @app.route("/api/run", methods=["POST"])
 def api_run():
     """⭐ 整套自動化的核心入口。兩種執行模式:

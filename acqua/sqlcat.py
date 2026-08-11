@@ -220,6 +220,19 @@ class SqlCatalog:
                    if s in x["title"].lower() or s in x["path"].lower()]
         return out
 
+    def predict_run_set(self, project_title=None, variables=None) -> dict:
+        """預測「照這組變數,StartMeasurements 會跑哪些測項」。
+
+        完全不啟動量測 —— 純粹讀 TreeItems.ConditionalExecution 自己算。
+        詳見 acqua/condeval.py 的語意說明與未確定之處。
+        """
+        from .condeval import predict
+        rows = self._load_tree(project_title)
+        for r in rows:
+            r["ConditionalExecution"] = (
+                str(r["ConditionalExecution"]) if r.get("ConditionalExecution") else "")
+        return predict(rows, variables or {})
+
     def missing_reference_files(self, smds: list) -> list:
         """回傳需要參考檔、但檔案在系統上找不到的測項。
 

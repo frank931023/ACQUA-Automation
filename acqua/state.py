@@ -34,6 +34,7 @@ class SharedState:
         # ⭐ 混合模式:ACQUA 變數(條件執行的依據)
         self.variables = []            # [{"name","value","type","state","state_text"}]
         self.run_mode = "selected"     # selected | conditional
+        self.prediction = None         # 變數驅動的事前預測結果
 
         # 數值結果(走 SQL 讀回來的,含極限值)
         self.values = []               # [{smd, dut, status, values:[...]}]
@@ -76,6 +77,7 @@ class SharedState:
                 "smds": self.smds,
                 "variables": self.variables,
                 "run_mode": self.run_mode,
+                "prediction": self.prediction,
                 "values": self.values,
                 "running": self.running,
                 "cancel_requested": self.cancel_requested,

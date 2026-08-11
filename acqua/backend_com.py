@@ -541,6 +541,24 @@ class ComBackend(AcquaBackend):
         self.list_variables()
         return n
 
+    def predict_run_set(self, variables=None):
+        """預測這組變數會跑哪些測項 —— 純 SQL 計算,不碰 ACQUA。"""
+        if variables is None:
+            variables = {v["name"]: v["value"] for v in self.state.variables}
+        r = self._catalog().predict_run_set(
+            project_title=self.state.open_project, variables=variables)
+        self.state.set(prediction={
+            "will_run": len(r["will_run"]),
+            "skipped": len(r["skipped"]),
+            "uncertain": len(r["uncertain"]),
+            "total": r["total_smds"],
+            "run_ids": [x["row_id"] for x in r["will_run"]],
+            "sample_skipped": r["skipped"][:40],
+        })
+        self.state.log(f"[預測] {len(r['will_run'])}/{r['total_smds']} 個測項會執行"
+                       + (f",{len(r['uncertain'])} 個判定沒把握" if r["uncertain"] else ""))
+        return r
+
     def run_all(self):
         """⭐ 混合模式:跑整個專案,由 ConditionalExecution 依變數自動篩選。
 

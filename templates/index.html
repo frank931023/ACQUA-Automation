@@ -73,6 +73,22 @@
   .mode input { margin-top:3px; accent-color:var(--accent); flex:none; }
   .mode b { display:block; font-size:13px; color:var(--fg); }
   .mode small { display:block; font-size:11px; color:var(--muted); margin-top:2px; }
+  /* ── 變數表單 ── */
+  .fs { border:1px solid var(--border); border-radius:9px; padding:10px 12px 12px;
+        margin-top:10px; }
+  .fs.off { opacity:.4; pointer-events:none; }
+  .fs > legend { font-size:11px; font-weight:600; color:var(--muted); padding:0 6px;
+                 text-transform:uppercase; letter-spacing:.03em; }
+  .opts { display:flex; flex-wrap:wrap; gap:6px 16px; }
+  .opt { display:flex; align-items:center; gap:6px; font-size:13px; cursor:pointer;
+         color:var(--fg); margin:0; }
+  .opt input { width:15px; height:15px; accent-color:var(--accent); flex:none; margin:0; }
+  .opt.dim { opacity:.42; cursor:not-allowed; }
+  .vhint { font-size:11px; color:var(--muted); margin-left:auto; font-variant-numeric:tabular-nums; }
+  .pred { margin-top:12px; padding:11px 13px; border-radius:9px;
+          border:1px solid var(--accent); background:#4f8ef714; }
+  .pred b { font-size:19px; font-variant-numeric:tabular-nums; color:var(--accent); }
+  .pred .sub2 { font-size:12px; color:var(--muted); margin-top:3px; }
   .var { display:flex; gap:6px; align-items:center; margin-top:6px; }
   .var input[type=text] { flex:1; }
   .var .vname { flex:0 0 46%; font-family:Consolas,monospace; font-size:12px; }
@@ -208,11 +224,86 @@
 
     <!-- 變數驅動模式的面板 -->
     <div id="var-panel" style="display:none">
-      <p class="hint">這些值會寫進 ACQUA 變數,由專案樹的 <code>ConditionalExecution</code>
-         決定哪些測項要跑。變數名稱取自 HEAD 官方的 DUT 精靈。</p>
-      <div id="vars"></div>
+      <p class="hint">等同 ACQUA 的 <b>DUT &amp; Measurement Wizard</b> —— 這些值會寫進
+        ACQUA 變數,專案樹的 <code>ConditionalExecution</code> 依此決定哪些測項要跑。
+        右邊數字是該選項在目前專案影響幾個測項。</p>
+
+      <fieldset class="fs"><legend>量測範圍</legend>
+        <div class="opts">
+          <label class="opt"><input type="radio" name="v_sptype" value="Personal" checked>個人空間免持</label>
+          <label class="opt"><input type="radio" name="v_sptype" value="Shared">共享空間免持</label>
+          <label class="opt"><input type="radio" name="v_sptype" value="Both">兩者都要</label>
+          <span class="vhint" data-cnt="DUT_speakerphone_type"></span>
+        </div>
+      </fieldset>
+
+      <fieldset class="fs"><legend>DUT 連接方式</legend>
+        <div class="opts">
+          <label class="opt"><input type="radio" name="v_conn" value="USB" checked>USB</label>
+          <label class="opt"><input type="radio" name="v_conn" value="USB dongle">USB dongle</label>
+          <label class="opt"><input type="radio" name="v_conn" value="Bluetooth">Bluetooth</label>
+          <label class="opt"><input type="radio" name="v_conn" value="Android">Android</label>
+          <span class="vhint" data-cnt="DUT_connection_type"></span>
+        </div>
+      </fieldset>
+
+      <fieldset class="fs"><legend>DUT 特性</legend>
+        <div class="opts">
+          <label class="opt" id="opt-deskphone"><input type="checkbox" data-var="DUT_is_deskphone">桌上型話機</label>
+          <label class="opt"><input type="checkbox" data-var="DUT_has_cooling_fan">有散熱風扇</label>
+          <label class="opt"><input type="checkbox" data-var="DUT_is_ANC">主動降噪 ANC</label>
+          <label class="opt"><input type="checkbox" data-var="DUT_boom_mic">懸臂麥克風</label>
+        </div>
+      </fieldset>
+
+      <fieldset class="fs" id="fs-pickup"><legend>共享空間 — 收音距離</legend>
+        <div class="opts">
+          <label class="opt"><input type="checkbox" data-var="DUT_pickup_range_1.5m">1.5 m</label>
+          <label class="opt"><input type="checkbox" data-var="DUT_pickup_range_2.3m">2.3 m</label>
+          <label class="opt"><input type="checkbox" data-var="DUT_pickup_range_3.5m">3.5 m</label>
+          <label class="opt"><input type="checkbox" data-var="DUT_pickup_range_4.5m">4.5 m</label>
+        </div>
+      </fieldset>
+
+      <fieldset class="fs" id="fs-speaker"><legend>共享空間 — 播放距離</legend>
+        <div class="opts">
+          <label class="opt"><input type="checkbox" data-var="DUT_speaker_range_1.5m">1.5 m</label>
+          <label class="opt"><input type="checkbox" data-var="DUT_speaker_range_2.3m">2.3 m</label>
+          <label class="opt"><input type="checkbox" data-var="DUT_speaker_range_3.5m">3.5 m</label>
+          <label class="opt"><input type="checkbox" data-var="DUT_speaker_range_4.5m">4.5 m</label>
+          <label class="opt"><input type="checkbox" data-var="DUT_speaker_range_7.5m">7.5 m</label>
+        </div>
+      </fieldset>
+
+      <fieldset class="fs"><legend>專案樹選項</legend>
+        <div class="opts">
+          <label class="opt"><input type="checkbox" data-var="DUT_premium_reqs">Premium 需求
+            <span class="vhint" data-cnt="DUT_premium_reqs"></span></label>
+          <label class="opt" id="opt-stereo"><input type="checkbox" data-var="DUT_stereo_calling">立體聲通話</label>
+          <label class="opt" id="opt-emtr"><input type="checkbox" data-var="DUT_positional_audio_for_emtr">空間音訊 (EMTR)</label>
+          <label class="opt" id="opt-us"><input type="checkbox" data-var="DUT_ultrasound_capability">超音波能力</label>
+        </div>
+      </fieldset>
+
+      <fieldset class="fs"><legend>可用硬體</legend>
+        <div class="opts">
+          <label class="opt"><input type="checkbox" data-var="HRT_available">轉盤 HRT</label>
+          <label class="opt"><input type="checkbox" data-var="HRR_available">反射器 HRR</label>
+        </div>
+      </fieldset>
+
+      <fieldset class="fs"><legend>自訂變數</legend>
+        <div id="vars"></div>
+        <div class="row"><button id="btn-var-add">+ 新增一列</button></div>
+      </fieldset>
+
+      <div class="pred" id="pred" style="display:none">
+        <div><b id="pred-n">—</b> <span id="pred-total"></span></div>
+        <div class="sub2" id="pred-sub"></div>
+      </div>
+
       <div class="row">
-        <button id="btn-var-add">+ 自訂變數</button>
+        <button class="primary" id="btn-predict">預覽會跑哪些</button>
         <button id="btn-var-push">寫入 ACQUA</button>
         <button id="btn-var-read">讀回目前值</button>
       </div>
@@ -582,14 +673,46 @@ $('#btn-failed').onclick = () => {
   renderSmds();
 };
 // ── 執行模式與變數 ────────────────────────────
-const DEFAULT_VARS = [
-  ['DUT_speakerphone_type', 'Shared'],
-  ['DUT_connection_type',   'USB'],
-  ['DUT_premium_reqs',      'true'],
-  ['DUT_is_deskphone',      'false'],
-];
-
 function curMode() { return document.querySelector('input[name=mode]:checked').value; }
+
+// 各變數在目前專案影響幾個測項 —— 從載入的測項清單即時算
+function refreshVarHints() {
+  document.querySelectorAll('.vhint[data-cnt]').forEach(el => el.textContent = '');
+}
+
+// 連動灰化 —— 規則逐條對照官方 wizard 的
+//   GrayOutWholeFrame / GrayOutSingleRadioButtonOrCheckBox
+// (SMD/dut_meas_wizard.py 第 21、28、37、50-52 行)
+function dimOpt(sel, off) {
+  const el = $(sel);
+  if (!el) return;
+  el.classList.toggle('dim', off);
+  const cb = el.querySelector('input');
+  cb.disabled = off;
+  if (off) cb.checked = false;      // 灰掉就不該還帶著勾
+}
+
+function syncGrayOut() {
+  const sp = document.querySelector('input[name=v_sptype]:checked')?.value;
+  const conn = document.querySelector('input[name=v_conn]:checked')?.value;
+  const personal = (sp === 'Personal');
+  const shared = (sp === 'Shared');
+  // 官方規則:非 USB 的連接方式會擋掉兩個選配模組
+  const nonUsb = ['USB dongle', 'Bluetooth', 'Android'].includes(conn);
+
+  // 共享空間的距離:選 personal 時整區灰掉
+  $('#fs-pickup').classList.toggle('off', personal);
+  $('#fs-speaker').classList.toggle('off', personal);
+
+  // 桌上型話機:選 shared 時灰掉
+  dimOpt('#opt-deskphone', shared);
+  // 空間音訊 EMTR:personal 或 非USB 時灰掉
+  dimOpt('#opt-emtr', personal || nonUsb);
+  // 超音波:personal 時灰掉
+  dimOpt('#opt-us', personal);
+  // 立體聲通話:shared 或 非USB 時灰掉  ← 之前漏掉這條
+  dimOpt('#opt-stereo', shared || nonUsb);
+}
 
 function addVarRow(name = '', value = '') {
   const d = document.createElement('div');
@@ -603,11 +726,25 @@ function addVarRow(name = '', value = '') {
 
 function collectVars() {
   const out = {};
+  // 單選 → 字串變數
+  const sp = document.querySelector('input[name=v_sptype]:checked');
+  if (sp) out['DUT_speakerphone_type'] = sp.value;
+  const cn = document.querySelector('input[name=v_conn]:checked');
+  if (cn) out['DUT_connection_type'] = cn.value;
+
+  // 勾選 → 布林變數(只送有勾的,沒勾的視為未設定,跟 wizard 行為一致)
+  document.querySelectorAll('#var-panel input[data-var]').forEach(cb => {
+    const box = cb.closest('.fs');
+    if (box && box.classList.contains('off')) return;   // 灰掉的整區不送
+    if (cb.disabled) return;
+    if (cb.checked) out[cb.dataset.var] = true;
+  });
+
+  // 自訂列
   document.querySelectorAll('#vars .var').forEach(d => {
     const k = d.querySelector('.vname').value.trim();
     let v = d.querySelector('.vval').value.trim();
     if (!k) return;
-    // 讓 true/false/數字 以正確型別送出 —— ACQUA 的變數型別要對
     if (v === 'true') v = true;
     else if (v === 'false') v = false;
     else if (v !== '' && !isNaN(v)) v = Number(v);
@@ -616,28 +753,83 @@ function collectVars() {
   return out;
 }
 
+function showPrediction(p) {
+  if (!p) { $('#pred').style.display = 'none'; return; }
+  $('#pred').style.display = '';
+  $('#pred-n').textContent = p.will_run;
+  $('#pred-total').textContent = `/ ${p.total} 個測項會執行(略過 ${p.skipped} 個)`;
+  const pct = p.total ? Math.round(p.will_run / p.total * 100) : 0;
+  let s = `約佔 ${pct}%`;
+  if (p.uncertain) s += ` ・ ⚠️ ${p.uncertain} 個判定沒把握(條件用到量測產生的變數)`;
+  $('#pred-sub').textContent = s;
+}
+
+$('#btn-predict').onclick = async () => {
+  const r = await post('/api/predict', {variables: collectVars()});
+  if (r.ok) showPrediction(r.state.prediction);
+};
+
 document.querySelectorAll('input[name=mode]').forEach(el => el.onchange = () => {
   $('#var-panel').style.display = curMode() === 'conditional' ? 'block' : 'none';
 });
+document.querySelectorAll('input[name=v_sptype]').forEach(el => el.onchange = () => {
+  syncGrayOut(); $('#pred').style.display = 'none';
+});
+document.querySelectorAll('input[name=v_conn]').forEach(el => el.onchange = () => {
+  syncGrayOut(); $('#pred').style.display = 'none';
+});
+document.querySelectorAll('#var-panel input[data-var]')
+  .forEach(el => el.addEventListener('change', () => { $('#pred').style.display = 'none'; }));
+syncGrayOut();
 $('#btn-var-add').onclick  = () => addVarRow();
 $('#btn-var-push').onclick = () => post('/api/variables', {values: collectVars()});
+// 從 ACQUA 讀回變數 → 盡量回填到表單控制項,表單沒有的才放進「自訂變數」
 $('#btn-var-read').onclick = async () => {
   showBusy('/api/variables');
   let r;
   try { r = await (await fetch('/api/variables')).json(); hideBusy(); }
   catch (e) { failBusy('錯誤', String(e)); return; }
+
   const vs = r.state?.variables || [];
+  if (!vs.length) { addLog('ACQUA 目前沒有任何變數', 'warn'); return; }
+
+  const known = new Set();
+  const truthy = v => v === true || ['1', 'true', 'yes', 'on'].includes(String(v).toLowerCase());
+
+  for (const v of vs) {
+    if (v.name === 'DUT_speakerphone_type') {
+      const el = document.querySelector(`input[name=v_sptype][value="${v.value}"]`);
+      if (el) { el.checked = true; known.add(v.name); }
+    } else if (v.name === 'DUT_connection_type') {
+      const el = document.querySelector(`input[name=v_conn][value="${v.value}"]`);
+      if (el) { el.checked = true; known.add(v.name); }
+    } else {
+      const el = document.querySelector(`#var-panel input[data-var="${v.name}"]`);
+      if (el) { el.checked = truthy(v.value); known.add(v.name); }
+    }
+  }
+
+  // 表單沒對應的變數 → 自訂列
   $('#vars').innerHTML = '';
-  if (!vs.length) addLog('ACQUA 目前沒有任何變數', 'warn');
-  vs.forEach(v => addVarRow(v.name, String(v.value)));
+  const extra = vs.filter(v => !known.has(v.name));
+  extra.forEach(v => addVarRow(v.name, String(v.value)));
+
+  syncGrayOut();
+  $('#pred').style.display = 'none';
+  addLog(`已讀回 ${vs.length} 個變數(${vs.length - extra.length} 個回填表單,`
+         + `${extra.length} 個放進自訂列)`);
 };
-DEFAULT_VARS.forEach(([k, v]) => addVarRow(k, v));
+
 
 $('#btn-run').onclick = async () => {
   const mode = curMode();
   const body = {mode};
   if (mode === 'conditional') {
     body.variables = collectVars();
+    const n = $('#pred-n').textContent;
+    if ($('#pred').style.display === 'none') {
+      addLog('提示:建議先按「預覽會跑哪些」確認範圍再執行', 'warn');
+    }
   } else {
     if (!selected.size) return addLog('✗ 沒有選擇任何測項', 'error');
     body.row_ids = [...selected];

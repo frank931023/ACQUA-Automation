@@ -91,6 +91,10 @@ class AcquaBackend(ABC):
         """讀出量測的實際數值(含極限值)。Acqua3 介面做不到,走 SQL。"""
 
     @abstractmethod
+    def predict_run_set(self, variables: dict) -> dict:
+        """不啟動量測,預測這組變數會跑哪些測項。"""
+
+    @abstractmethod
     def run_all(self) -> None:
         """跑「整個專案」(StartMeasurements)。
 

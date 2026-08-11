@@ -280,6 +280,27 @@ class MockBackend(AcquaBackend):
             (skipped if reason else kept).append((s, reason))
         return [s for s, _ in kept], [(s, r) for s, r in skipped]
 
+    def predict_run_set(self, variables=None):
+        if variables:
+            self._vars.update(variables)
+        kept, skipped = self._conditional_filter()
+        r = {
+            "will_run": [{"row_id": s["row_id"], "title": s["title"], "why": "", "sure": True}
+                         for s in kept],
+            "skipped": [{"row_id": s["row_id"], "title": s["title"], "why": why, "sure": True}
+                        for s, why in skipped],
+            "uncertain": [],
+            "total_smds": len(kept) + len(skipped),
+        }
+        self.state.set(prediction={
+            "will_run": len(r["will_run"]), "skipped": len(r["skipped"]),
+            "uncertain": 0, "total": r["total_smds"],
+            "run_ids": [x["row_id"] for x in r["will_run"]],
+            "sample_skipped": r["skipped"][:40],
+        })
+        self.state.log(f"【模擬模式】預測 {len(kept)}/{r['total_smds']} 個測項會執行")
+        return r
+
     def run_all(self):
         """模擬「設變數 → 一次跑完」。ACQUA 會自己略過不符條件的項目。"""
         kept, skipped = self._conditional_filter()
