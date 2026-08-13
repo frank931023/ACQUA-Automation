@@ -159,6 +159,15 @@ class MockBackend(AcquaBackend):
         self.state.set(running=True, cancel_requested=False)
         self.state.log(f"=== 開始:共 {total} 筆測項(模擬)===")
 
+        rl = self.state.runlog
+        if rl:
+            rl.start(mode="selected", database=self.state.database,
+                     project_group=self.state.open_group,
+                     project=self.state.open_project,
+                     measurement_object=self.state.measurement_object,
+                     planned=[{"row_id": s["row_id"], "title": s["title"]}
+                              for s in targets])
+
         i = 0
         while i < total:
             if self.state.cancel_requested:
@@ -189,6 +198,8 @@ class MockBackend(AcquaBackend):
                 continue        # 不遞增 i,重跑同一筆
 
             self.state.add_result(smd["title"], smd["row_id"], status, passed, attempt)
+            if rl:
+                rl.record(smd["row_id"], smd["title"], status, passed, attempt)
             self.state.log(f"    → {'PASS' if passed else 'FAIL'}",
                            "info" if passed else "error")
 
@@ -198,10 +209,13 @@ class MockBackend(AcquaBackend):
             i += 1
 
         self.state.set(running=False, current=None, progress=None)
+        if rl:
+            rl.finish(canceled=self.state.cancel_requested)
         snap = self.state.snapshot()["summary"]
         self.state.log(f"=== 結束:{snap['passed']} PASS / {snap['failed']} FAIL ===")
 
-    def create_report(self, output_path, selection_type):
+    def create_report(self, output_path, selection_type, result_index=0,
+                      settle_timeout=600):
         time.sleep(0.5)
         self.state.log(f"【模擬模式】已「產生」報告:{output_path}(selection_type={selection_type})")
 

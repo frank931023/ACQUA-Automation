@@ -48,8 +48,13 @@ class _Events:
     def _st(self):
         return self.backend.state
 
+    def _tick(self):
+        """任何事件進來都戳一下 —— 用來判斷 ACQUA 是不是沒回應了。"""
+        self.backend._last_event_at = time.monotonic()
+
     # ── 純資訊 ──────────────────────────────────────
     def OnProgress(self, Description, ProgressCounter, TotalCount):
+        self._tick()
         if ProgressCounter != -1 and TotalCount not in (-1, 0):
             self._st().set(progress={"text": Description,
                                      "value": int(ProgressCounter),
@@ -58,6 +63,7 @@ class _Events:
             self._st().set(progress=None)
 
     def OnEvent(self, Description, EventType):
+        self._tick()
         level = {0: "info", 1: "warn", 2: "error"}.get(int(EventType), "info")
         tag = EMEEventType.NAMES.get(int(EventType), "?")
         self._st().log(f"<{tag}> {Description}", level)
@@ -66,6 +72,7 @@ class _Events:
         self._st().log(f"ACQUA 回報:即將進行 {NbrOfMeasurements} 筆量測")
 
     def OnBeginSingleMeasurement(self, SMDTitle, Progress, NbrOfMeasurements):
+        self._tick()
         self.backend._meas_started = True
         self._st().log(f"  ACQUA 開始:{SMDTitle}")
 
@@ -74,6 +81,7 @@ class _Events:
                                     Progress, NbrOfMeasurements, UserReaction):
         # ✅ 已驗證(2026-08-10,SP2 / SMD#3579):pywin32 用 return 回傳 ByRef out 參數
         #    確實生效 —— 回傳後 ACQUA 有繼續往下走到 "Measurements done"。
+        self._tick()
         self.backend._on_single_finished(SMDTitle, ResultStatus)
         if self._st().cancel_requested:
             return EUserReaction.CANCEL_ALL
@@ -82,6 +90,7 @@ class _Events:
     def OnFinishedMeasurements(self, SelectedProject, MeasurementObject,
                                NbrOfMeasurements, NbrOfMeasurementsFinished,
                                Canceled, ResultOverview):
+        self._tick()
         self.backend._measuring_done = True
         # ⭐ ResultOverview 是 Variant,CHM 沒有說明結構。
         #    這是唯一可能一次拿到整批數值的地方 —— 階段 4 務必把它 dump 出來研究。
@@ -109,8 +118,9 @@ class ComBackend(AcquaBackend):
         self.sql = None                # SqlCatalog —— 列舉 SMD 與讀數值(實測後改走這條)
         self._pythoncom = None
         self._last_result = None       # (title, status)
-        self._measuring_done = False   # 只有 StartMeasurements(整批)才會被設起來
+        self._measuring_done = False
         self._meas_started = False
+        self._last_event_at = 0.0      # 最後一次收到 ACQUA 事件的時間
 
     # ── 生命週期 ────────────────────────────────────
     def initialize(self):
@@ -129,11 +139,32 @@ class ComBackend(AcquaBackend):
         pythoncom.CoInitializeEx(pythoncom.COINIT_APARTMENTTHREADED)
 
         _Events.backend = self
+
+        # 先看 ACQUA 在不在 —— 不在的話 COM 會自己去啟動,但那要等很久
+        running = self._acqua_is_running()
+        if running:
+            self.state.log("偵測到 ACQUA 已在執行,將接上現有實例")
+        else:
+            self.state.log("⚠️ ACQUA 沒有在執行。COM 會嘗試自動啟動它,"
+                           "但這可能要 1~3 分鐘,而且不一定成功。"
+                           "建議先手動開啟 ACQUA 再啟動本程式。", "warn")
+
         self.state.log(f"建立 COM 物件:{PROGID_ACQUA} …")
-        self.app = win32com.client.DispatchWithEvents(PROGID_ACQUA, _Events)
+        try:
+            self.app = win32com.client.DispatchWithEvents(PROGID_ACQUA, _Events)
+        except Exception as exc:                            # noqa: BLE001
+            raise RuntimeError(self._explain_com_error(exc, "建立 COM 物件失敗")) from exc
 
         self.state.log("等待 ACQUA 啟動(AppLoadFinished)…")
-        self._wait_until(lambda: self.app.AppLoadFinished, timeout=300, what="AppLoadFinished")
+        try:
+            # ⚠️ Dispatch 成功 ≠ 物件可用。ACQUA 還在初始化時,
+            #    讀任何屬性都會丟 RPC 錯誤 —— 這裡要容忍並重試。
+            self._wait_until(lambda: self.app.AppLoadFinished,
+                             timeout=300, what="AppLoadFinished",
+                             tolerate_com_errors=True)
+        except Exception as exc:                            # noqa: BLE001
+            raise RuntimeError(self._explain_com_error(exc, "等待 ACQUA 就緒失敗")) from exc
+
         self.state.set(acqua_ready=True)
         self.state.log("ACQUA 已就緒")
 
@@ -159,17 +190,114 @@ class ComBackend(AcquaBackend):
                 pass
 
     # ── 內部工具 ────────────────────────────────────
-    def _wait_until(self, predicate, timeout=120.0, interval=0.05, what="condition"):
-        """等待期間必須持續打訊息幫浦,否則 COM 事件永遠不會送達。"""
+    @staticmethod
+    def _acqua_is_running() -> bool:
+        """用 WMI 看 Acqua6.exe 在不在。查不到就當作「不確定」回 False。"""
+        try:
+            import win32com.client
+            wmi = win32com.client.GetObject("winmgmts:")
+            q = ("SELECT ProcessId FROM Win32_Process "
+                 "WHERE Name LIKE 'Acqua%.exe'")
+            return len(list(wmi.ExecQuery(q))) > 0
+        except Exception:                                   # noqa: BLE001
+            return False
+
+    @staticmethod
+    def _explain_com_error(exc, prefix="") -> str:
+        """把難懂的 COM 錯誤碼換成看得懂的說明。"""
+        code = getattr(exc, "hresult", None) or getattr(exc, "args", [None])[0]
+        try:
+            code = int(code) & 0xFFFFFFFF
+        except Exception:                                   # noqa: BLE001
+            code = None
+        table = {
+            0x800706BA: ("RPC 伺服器無法使用",
+                         "ACQUA 沒有在執行,或啟動到一半失敗。"),
+            0x800706BE: ("遠端程序呼叫失敗",
+                         "ACQUA 還在初始化,或中途當掉了。"),
+            0x80080005: ("伺服器執行失敗",
+                         "COM 啟動 ACQUA 失敗 —— 常見於授權未生效或 dongle 沒插。"),
+            0x80040154: ("類別未註冊",
+                         "ACQUA 的 COM 沒註冊,或你用的是 64-bit Python(必須 32-bit)。"),
+            0x80070005: ("存取被拒",
+                         "權限問題 —— 試試看以相同使用者身分執行,或關掉以系統管理員執行。"),
+        }
+        name, hint = table.get(code, (str(exc), ""))
+        msg = f"{prefix}:{name}"
+        if hint:
+            msg += f"\n  可能原因:{hint}"
+        msg += ("\n  建議:1) 先手動開啟 ACQUA 並等它完全載入"
+                "  2) 確認 dongle 已插入、ACOPT18 授權有效"
+                "  3) 用 --backend mock 確認程式本身沒問題")
+        return msg
+
+    def _wait_until(self, predicate, timeout=120.0, interval=0.05, what="condition",
+                    tolerate_com_errors=False):
+        """等待期間必須持續打訊息幫浦,否則 COM 事件永遠不會送達。
+
+        tolerate_com_errors=True 時,會忽略等待過程中的 COM 例外 ——
+        ACQUA 啟動期間讀屬性會丟 RPC 錯誤,那是暫時的,重試就好。
+        """
         deadline = time.monotonic() + timeout
-        while not predicate():
+        last_exc = None
+        notified = False
+        while True:
+            try:
+                if predicate():
+                    return
+                last_exc = None
+            except Exception as exc:                        # noqa: BLE001
+                if not tolerate_com_errors:
+                    raise
+                last_exc = exc
+                if not notified:
+                    self.state.log("ACQUA 尚未回應(啟動中),持續重試…", "warn")
+                    notified = True
             self.pump()
-            time.sleep(interval)
+            time.sleep(max(interval, 0.2) if last_exc is not None else interval)
             if time.monotonic() > deadline:
+                if last_exc is not None:
+                    raise last_exc
                 raise TimeoutError(f"等待逾時({timeout}s):{what}")
 
     def _on_single_finished(self, title, status):
         self._last_result = (str(title), int(status))
+
+    def _wait_until_measured(self, title, timeout, stall_warn=45):
+        """等單筆量測結束,並在 ACQUA 長時間沒回應時提醒。
+
+        完成的判定(任一成立):
+          - 收到 OnFinishedSingleMeasurement
+          - 收到 OnFinishedMeasurements
+          - 已經開始過,而且 IsMeasuring 翻回 False
+        """
+        deadline = time.monotonic() + timeout
+        warned = 0
+        while True:
+            if self._last_result is not None or self._measuring_done:
+                return True
+            try:
+                if self._meas_started and not self.app.IsMeasuring:
+                    return True
+            except Exception:                               # noqa: BLE001
+                pass                                        # COM 暫時忙,下一圈再試
+
+            self.pump()
+            time.sleep(0.05)
+
+            # 停滯提醒 —— Info 型 SMD 會開文件視窗等人關閉,這時完全不會有事件
+            idle = time.monotonic() - self._last_event_at
+            if idle > stall_warn * (warned + 1):
+                warned += 1
+                self.state.log(
+                    f"    ⏳ ACQUA 已經 {int(idle)} 秒沒有任何回應 —— "
+                    "常見原因:它開了說明文件/對話框在等人關閉。"
+                    "請切到 ACQUA 視窗看看。", "warn")
+
+            if time.monotonic() > deadline:
+                self.state.log(
+                    f"    ✗ 等待 {timeout} 秒逾時:{title}(視為失敗,繼續下一項)", "error")
+                return False
 
     # ── 操作 ────────────────────────────────────────
     def connect(self, server, database, win_auth, username="", password=""):
@@ -373,6 +501,16 @@ class ComBackend(AcquaBackend):
         self.state.set(running=True, cancel_requested=False)
         self.state.log(f"=== 開始:共 {total} 筆測項 ===")
 
+        # 寫執行紀錄 —— 中途斷掉時才知道跑到哪
+        rl = self.state.runlog
+        if rl:
+            rl.start(mode="selected", database=self.state.database,
+                     project_group=self.state.open_group,
+                     project=self.state.open_project,
+                     measurement_object=self.state.measurement_object,
+                     planned=[{"row_id": s["row_id"], "title": s["title"]}
+                              for s in targets])
+
         try:
             i = 0
             while i < total:
@@ -396,11 +534,16 @@ class ComBackend(AcquaBackend):
                     self.project.StartSingleMeasurement(
                         smd["row_id"], use_mmd, self.mo.Title, result_comment)
 
-                    # ⭐ 實測(2026-08-10)修正過的等待邏輯:
-                    #    1. IsMeasuring 大約 1 秒後才翻成 True —— 不能一 start 就等它變 False,
-                    #       否則會立刻誤判成「已經跑完」。
-                    #    2. 單筆量測**不會**觸發 OnFinishedMeasurements,
-                    #       所以完成訊號要看 OnFinishedSingleMeasurement(_last_result)。
+                    # ⭐ 等待邏輯(2026-08-11 再修正)
+                    #    1. IsMeasuring 約 1 秒後才翻成 True —— 不能一 start 就等它變 False
+                    #    2. 完成訊號有**三種**,任一到達就算完成:
+                    #         _last_result     ← OnFinishedSingleMeasurement
+                    #         _measuring_done  ← OnFinishedMeasurements  ⚠️ 之前漏掉這個!
+                    #         IsMeasuring 翻回 False
+                    #       實測發現單筆量測**也會**觸發 OnFinishedMeasurements
+                    #       (先前判斷它不會,是因為測試視窗只等了 90 秒)。
+                    #       漏掉它會讓程式一路等到 timeout(預設 1800 秒)才往下走。
+                    self._last_event_at = time.monotonic()
                     try:
                         self._wait_until(
                             lambda: self._meas_started or self.app.IsMeasuring,
@@ -409,10 +552,7 @@ class ComBackend(AcquaBackend):
                         self.state.log("    → 等不到量測啟動的訊號,可能 ACQUA 拒絕了這一項",
                                        "error")
 
-                    self._wait_until(
-                        lambda: self._last_result is not None
-                        or (self._meas_started and not self.app.IsMeasuring),
-                        timeout=timeout, what=f"量測完成:{smd['title']}")
+                    self._wait_until_measured(smd["title"], timeout)
 
                     # 事件可能比 IsMeasuring 慢一點點,給它一小段時間補送
                     if self._last_result is None:
@@ -439,6 +579,9 @@ class ComBackend(AcquaBackend):
 
                 self.state.add_result(smd["title"], smd["row_id"],
                                       EMEResult.describe(status), passed, attempt)
+                if rl:
+                    rl.record(smd["row_id"], smd["title"],
+                              EMEResult.describe(status), passed, attempt)
                 self.state.log(f"    → {'PASS' if passed else 'FAIL'}"
                                f"({EMEResult.describe(status)})",
                                "info" if passed else "error")
@@ -449,15 +592,92 @@ class ComBackend(AcquaBackend):
                 i += 1
         finally:
             self.state.set(running=False, current=None, progress=None)
+            if rl:
+                rl.finish(canceled=self.state.cancel_requested)
             snap = self.state.snapshot()["summary"]
             self.state.log(f"=== 結束:{snap['passed']} PASS / {snap['failed']} FAIL ===")
 
-    def create_report(self, output_path, selection_type):
+    def create_report(self, output_path, selection_type, result_index=0,
+                      settle_timeout=600):
+        """產生 Word 報告。
+
+        ⚠️ `CreateReportForMO` 不可靠的原因(實測):
+           - 它會開 Word,而且**呼叫可能在檔案寫完之前就返回**
+           - Word 視窗會搶焦點,有時還會跳對話框卡住
+           - 沒有回傳值,失敗與成功都一樣安靜
+
+        改法:
+           1. 先把報告產生器設成隱藏,避免 Word 搶焦點
+           2. 呼叫前先確認真的有結果可以出報告
+           3. 呼叫後**輪詢檔案**,等它出現且大小不再變動才算完成
+        """
+        import os
+
         if self.project is None or self.mo is None:
             raise RuntimeError("尚未開啟專案或選定量測物件")
-        # CreateReportForMO 吃的是 RowID,不是名稱
-        self.project.CreateReportForMO(self.mo.RowID, int(selection_type), output_path, 0)
-        self.state.log(f"已產生報告:{output_path}")
+
+        # 先確認有結果 —— 沒有結果時 ACQUA 常常安靜地產出空檔或什麼都不做
+        try:
+            res = self._catalog().read_results(
+                project_title=self.state.open_project,
+                mo_title=self.state.measurement_object, latest_only=True)
+            if not res:
+                raise RuntimeError(
+                    f"量測物件「{self.state.measurement_object}」目前沒有任何結果,"
+                    "產出的報告會是空的。請先跑過量測。")
+            self.state.log(f"確認有 {len(res)} 筆結果可出報告")
+        except RuntimeError:
+            raise
+        except Exception as exc:                            # noqa: BLE001
+            self.state.log(f"結果檢查略過({exc})", "warn")
+
+        out_dir = os.path.dirname(output_path)
+        if out_dir:
+            os.makedirs(out_dir, exist_ok=True)
+        if os.path.exists(output_path):
+            try:
+                os.unlink(output_path)      # 先刪掉舊的,才能靠「檔案出現」判斷完成
+            except OSError as exc:
+                raise RuntimeError(
+                    f"舊報告檔刪不掉,可能正被 Word 開著:{output_path}") from exc
+
+        # 把報告產生器藏起來,避免 Word 跳到最前面搶走鍵盤
+        try:
+            rg = self.app.ReportGenerator
+            rg.Visible = False
+            self.state.log("已將報告產生器設為隱藏")
+        except Exception as exc:                            # noqa: BLE001
+            self.state.log(f"無法設定報告產生器可見性({exc}),繼續", "warn")
+
+        self.state.log(f"產生報告中…(selection_type={selection_type})")
+        self.project.CreateReportForMO(self.mo.RowID, int(selection_type),
+                                       output_path, int(result_index))
+
+        # ⭐ 輪詢檔案:先等它出現,再等大小連續 3 次不變(代表寫完了)
+        deadline = time.monotonic() + settle_timeout
+        last_size, stable = -1, 0
+        while time.monotonic() < deadline:
+            self.pump()
+            time.sleep(0.5)
+            if not os.path.exists(output_path):
+                continue
+            size = os.path.getsize(output_path)
+            if size > 0 and size == last_size:
+                stable += 1
+                if stable >= 3:
+                    self.state.log(f"報告完成:{output_path}({size:,} bytes)")
+                    return output_path
+            else:
+                stable = 0
+            last_size = size
+
+        if os.path.exists(output_path):
+            self.state.log(f"⚠️ 報告檔已存在但大小仍在變動,可能還沒寫完:{output_path}",
+                           "warn")
+            return output_path
+        raise TimeoutError(
+            f"等了 {settle_timeout} 秒仍沒看到報告檔。"
+            "請切到 ACQUA / Word 視窗看看有沒有跳出對話框。")
 
     # ── ⭐ 混合模式:變數驅動 ────────────────────────
     def _variables(self):

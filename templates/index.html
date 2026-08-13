@@ -21,6 +21,11 @@
   .badge { font-size:12px; padding:3px 9px; border-radius:20px; border:1px solid var(--border); }
   .badge.mock { background:#d2992222; color:var(--warn); border-color:var(--warn); }
   .badge.com  { background:#3fb95022; color:var(--ok);   border-color:var(--ok); }
+  .badge.live { display:flex; align-items:center; gap:6px; }
+  .dot { width:7px; height:7px; border-radius:50%; background:var(--muted); flex:none; }
+  .dot.ok   { background:var(--ok); box-shadow:0 0 5px var(--ok); }
+  .dot.poll { background:var(--warn); }
+  .dot.dead { background:var(--fail); }
   main { display:grid; grid-template-columns:340px 1fr 380px; gap:16px; padding:16px;
          align-items:start; }
   @media (max-width:1200px) { main { grid-template-columns:1fr; } }
@@ -158,6 +163,80 @@
                     font-weight:500; letter-spacing:0; white-space:pre-line;
                     text-align:left; }
   #busy.err  .bx  { border-color:var(--fail); }
+
+  /* ── 執行中 / 續跑 對話框 ── */
+  .ov { position:fixed; inset:0; background:#000a; backdrop-filter:blur(3px);
+        display:none; align-items:center; justify-content:center; z-index:120; }
+  .ov.on { display:flex; }
+  .rbx { background:var(--panel); border:1px solid var(--border); border-radius:14px;
+         padding:24px 28px; width:min(620px,94vw); box-shadow:0 16px 50px #0007; }
+  .rbx h3 { margin:0 0 3px; font-size:16px; display:flex; align-items:center; gap:9px; }
+  .rbx .meta { font-size:12px; color:var(--muted); }
+  .rbx .big { font-size:38px; font-weight:600; font-variant-numeric:tabular-nums;
+              letter-spacing:-.02em; margin:14px 0 2px; }
+  .rbx .big small { font-size:15px; font-weight:400; color:var(--muted);
+                    letter-spacing:0; }
+  .pbar { height:9px; border-radius:5px; background:var(--border); overflow:hidden;
+          margin:12px 0 6px; }
+  .pbar i { display:block; height:100%; background:var(--accent); border-radius:5px;
+            transition:width .3s ease; }
+  .rbx .cur { margin-top:12px; padding:11px 13px; border-radius:9px;
+              background:var(--bg); border:1px solid var(--border); }
+  .rbx .cur .path { font-size:11px; color:var(--muted); margin-bottom:3px;
+                    word-break:break-word; }
+  .rbx .cur .name { font-size:14px; font-weight:600; word-break:break-word; }
+  .rbx .cnt { display:flex; gap:8px; margin-top:12px; }
+  .rbx .cnt div { flex:1; text-align:center; padding:8px; border-radius:8px;
+                  border:1px solid var(--border); font-size:12px; color:var(--muted); }
+  .rbx .cnt b { display:block; font-size:18px; font-variant-numeric:tabular-nums;
+                color:var(--fg); }
+  .rbx .cnt .p b { color:var(--ok); }
+  .rbx .cnt .f b { color:var(--fail); }
+  .rbx .acts2 { display:flex; gap:8px; margin-top:16px; }
+  .rbx .acts2 button { flex:1; }
+  .rlog { margin-top:12px; max-height:96px; overflow:hidden; font:11px/1.5 Consolas,monospace;
+          color:var(--muted); border-top:1px solid var(--border); padding-top:9px;
+          white-space:pre-wrap; word-break:break-word; }
+  #runov.stopping .pbar i { background:var(--warn); }
+
+  /* ── 縮小到右下角的小視窗 ── */
+  #mini { position:fixed; right:18px; bottom:18px; z-index:110; display:none;
+          width:290px; background:var(--panel); border:1px solid var(--accent);
+          border-radius:12px; box-shadow:0 10px 34px #0006; overflow:hidden; }
+  #mini.on { display:block; }
+  #mini .mh { display:flex; align-items:center; gap:8px; padding:10px 12px 8px;
+              cursor:pointer; }
+  #mini .mh .spin { width:13px; height:13px; }
+  #mini .mh b { font-size:13px; flex:1; }
+  #mini .mh .x { font-size:11px; color:var(--muted); flex:none; }
+  #mini .mbody { padding:0 12px 12px; }
+  #mini .mcount { font-size:22px; font-weight:600; font-variant-numeric:tabular-nums; }
+  #mini .mcount small { font-size:12px; font-weight:400; color:var(--muted); }
+  #mini .mname { font-size:11px; color:var(--muted); margin-top:4px;
+                 white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  #mini .pbar { margin:8px 0 6px; height:6px; }
+  #mini .mstats { display:flex; gap:10px; font-size:11px; color:var(--muted); }
+  #mini .mstats b { font-variant-numeric:tabular-nums; }
+  #mini .mstats .p b { color:var(--ok); }
+  #mini .mstats .f b { color:var(--fail); }
+  #mini.stopping { border-color:var(--warn); }
+  #mini.stopping .pbar i { background:var(--warn); }
+  /* 送出中 / 啟動中:進度條改成不定量的來回跑 */
+  #runov.pending .pbar i { width:34% !important; animation:sl 1.3s ease-in-out infinite; }
+  #runov.pending .big, #runov.pending .cnt, #runov.pending .cur { display:none; }
+  #runov.pending #r-stop { display:none; }
+  #runov.pending #r-hide { display:none; }
+  /* 失敗 */
+  #runov.failed .spin, #runov.failed .pbar,
+  #runov.failed .big, #runov.failed .cnt, #runov.failed .cur,
+  #runov.failed #r-stop, #runov.failed #r-hide { display:none; }
+  #runov.failed .rbx { border-color:var(--fail); }
+  #runov.failed h3 { color:var(--fail); }
+  #r-fail-msg { display:none; white-space:pre-line; margin-top:10px; font-size:14px;
+                line-height:1.6; }
+  #runov.failed #r-fail-msg { display:block; }
+  #r-close { display:none; }
+  #runov.failed #r-close { display:block; }
 </style>
 </head>
 <body>
@@ -176,11 +255,83 @@
   </div>
 </div>
 
+<!-- 執行中:鎖住整個畫面 -->
+<div id="runov" class="ov">
+  <div class="rbx">
+    <h3><span class="spin"></span><span id="r-title">測試進行中</span></h3>
+    <div class="meta" id="r-meta"></div>
+
+    <div class="big"><span id="r-idx">0</span><small> / <span id="r-total">0</span> 項</small></div>
+    <div class="pbar"><i id="r-bar" style="width:0%"></i></div>
+    <div class="meta" id="r-eta"></div>
+
+    <div class="cur">
+      <div class="path" id="r-path"></div>
+      <div class="name" id="r-name">準備中…</div>
+    </div>
+
+    <div class="cnt">
+      <div class="p"><b id="r-pass">0</b>PASS</div>
+      <div class="f"><b id="r-fail">0</b>FAIL</div>
+      <div><b id="r-left">0</b>剩餘</div>
+    </div>
+
+    <div id="r-fail-msg"></div>
+    <div class="rlog" id="r-log"></div>
+
+    <div class="acts2">
+      <button class="danger" id="r-stop">■ 停止整批測試</button>
+      <button id="r-hide">縮小(繼續在背景跑)</button>
+      <button id="r-close">關閉</button>
+    </div>
+  </div>
+</div>
+
+<!-- 縮小後的右下角小視窗 -->
+<div id="mini">
+  <div class="mh" id="mini-head" title="點一下展開">
+    <span class="spin"></span>
+    <b id="m-title">測試進行中</b>
+    <span class="x">展開 ▲</span>
+  </div>
+  <div class="mbody">
+    <div class="mcount"><span id="m-idx">0</span><small> / <span id="m-total">0</span></small></div>
+    <div class="pbar"><i id="m-bar" style="width:0%"></i></div>
+    <div class="mstats">
+      <span class="p">PASS <b id="m-pass">0</b></span>
+      <span class="f">FAIL <b id="m-fail">0</b></span>
+      <span id="m-eta"></span>
+    </div>
+    <div class="mname" id="m-name"></div>
+  </div>
+</div>
+
+<!-- 續跑:載入時偵測到上次沒跑完 -->
+<div id="resumeov" class="ov">
+  <div class="rbx">
+    <h3>偵測到未完成的測試</h3>
+    <div class="meta" id="rs-meta"></div>
+    <div class="big"><span id="rs-done">0</span><small> / <span id="rs-total">0</span> 已完成</small></div>
+    <div class="pbar"><i id="rs-bar" style="width:0%"></i></div>
+    <div class="cnt">
+      <div class="p"><b id="rs-pass">0</b>PASS</div>
+      <div class="f"><b id="rs-fail">0</b>FAIL</div>
+      <div><b id="rs-left">0</b>還沒跑</div>
+    </div>
+    <div class="rlog" id="rs-detail"></div>
+    <div class="acts2">
+      <button class="primary" id="rs-go">接續跑剩下的</button>
+      <button id="rs-drop">不用了,清除紀錄</button>
+    </div>
+  </div>
+</div>
+
 <header>
   <h1>ACQUA 測試自動化</h1>
   <span class="badge" id="badge-backend">—</span>
   <span class="badge" id="badge-conn">未連線</span>
   <span class="badge" id="badge-proj">未開啟專案</span>
+  <span class="badge live" id="badge-live"><i class="dot" id="live-dot"></i><span id="live-txt">連線中…</span></span>
 </header>
 
 <main>
@@ -508,6 +659,7 @@ function render(s) {
   } else { p.style.display = 'none'; }
 
   renderSmds();
+  renderRunOverlay(s);
 }
 
 function syncProjects() {
@@ -824,29 +976,242 @@ $('#btn-var-read').onclick = async () => {
 $('#btn-run').onclick = async () => {
   const mode = curMode();
   const body = {mode};
+
   if (mode === 'conditional') {
     body.variables = collectVars();
-    const n = $('#pred-n').textContent;
     if ($('#pred').style.display === 'none') {
       addLog('提示:建議先按「預覽會跑哪些」確認範圍再執行', 'warn');
     }
   } else {
-    if (!selected.size) return addLog('✗ 沒有選擇任何測項', 'error');
+    if (!selected.size) {
+      addLog('✗ 沒有選擇任何測項', 'error');
+      showRunFail('沒有選擇任何測項。\n請在下方清單勾選要跑的項目,或用「全選」。');
+      return;
+    }
     body.row_ids = [...selected];
   }
-  // /api/run 立刻回應(量測在背景跑),所以用 quiet 不擋畫面
+
+  // ⭐ 先跳框再送出 —— 不讓使用者面對「按了沒反應」的空窗
+  const what = mode === 'conditional'
+    ? '變數驅動模式(由 ACQUA 依條件篩選)'
+    : `逐項模式 · 已選 ${selected.size} 項`;
+  showRunPending('正在送出…', what);
+
   const j = await post('/api/run', body, {quiet: true, timeout: 30});
-  if (j.ok) addLog(`已送出:${mode === 'conditional' ? '變數驅動' : '逐項'} 模式`, 'info');
+  if (!j.ok) { showRunFail(j.error || '送出失敗'); return; }
+
+  // 送出成功,但 ACQUA 還沒真的開始 —— 停在 pending,等 SSE 把 running 帶回來
+  $('#r-title').textContent = 'ACQUA 準備中…';
+  $('#r-meta').textContent = `已送出 ${j.queued ?? ''} 項,等待量測引擎啟動`;
+  addLog(`已送出:${mode === 'conditional' ? '變數驅動' : '逐項'} 模式`, 'info');
 };
 $('#btn-cancel').onclick   = () => fetch('/api/cancel', {method:'POST'});
 $('#btn-report').onclick   = () => post('/api/report', {});
 $('#btn-csv').onclick      = () => location.href = '/api/results.csv';
 $('#btn-clearlog').onclick = () => $('#log').innerHTML = '';
 
+// ── ① 執行中的 Modal ────────────────────────
+// 三個階段:pending(送出/啟動中)→ running(正式進度)→ failed(送出失敗)
+let runStart = 0, runHidden = false, runPending = false, runWatch = null;
+
+function showRunPending(title, sub) {
+  runPending = true; runHidden = false;
+  const ov = $('#runov');
+  ov.className = 'ov on pending';
+  $('#r-title').textContent = title;
+  $('#r-meta').textContent = sub || '';
+  $('#r-fail-msg').textContent = '';
+  $('#r-log').textContent = '';
+  clearTimeout(runWatch);
+  // 守門:超過 45 秒還沒真的開始,提醒去看 ACQUA
+  runWatch = setTimeout(() => {
+    if (runPending) {
+      $('#r-meta').textContent =
+        '已等 45 秒還沒開始 —— ACQUA 可能跳了對話框,或量測引擎忙碌中。請切到 ACQUA 視窗看看。';
+    }
+  }, 45000);
+}
+
+function showRunFail(msg) {
+  runPending = false;
+  clearTimeout(runWatch);
+  const ov = $('#runov');
+  ov.className = 'ov on failed';
+  $('#r-title').textContent = '無法開始';
+  $('#r-meta').textContent = '';
+  $('#r-fail-msg').textContent = msg || '未知原因';
+}
+
+function hideRunOverlay() {
+  runPending = false;
+  clearTimeout(runWatch);
+  $('#runov').className = 'ov';
+}
+
+function fmtDur(s) {
+  if (!isFinite(s) || s < 0) return '—';
+  const m = Math.floor(s / 60), ss = Math.round(s % 60);
+  return m ? `${m} 分 ${ss} 秒` : `${ss} 秒`;
+}
+
+function renderRunOverlay(s) {
+  const ov = $('#runov');
+  if (!s.running) {
+    // 送出後、後端還沒把 running 翻成 true 的空窗 —— 不要把框收掉
+    if (runPending || ov.classList.contains('failed')) return;
+    ov.classList.remove('on', 'stopping');
+    $('#mini').classList.remove('on');
+    runHidden = false;
+    return;
+  }
+  // 真的跑起來了 → 從 pending 切成正式進度
+  if (runPending) {
+    runPending = false;
+    clearTimeout(runWatch);
+    runStart = Date.now();
+    ov.className = 'ov on';
+  }
+  if (runHidden) return;
+  if (!ov.classList.contains('on')) { ov.classList.add('on'); runStart = Date.now(); }
+  ov.classList.toggle('stopping', !!s.cancel_requested);
+
+  const cur = s.current || {};
+  const idx = cur.index || 0, total = cur.total || 0;
+  const done = s.summary.total;
+  $('#r-idx').textContent = idx;
+  $('#r-total').textContent = total;
+  $('#r-bar').style.width = total ? `${Math.round(done / total * 100)}%` : '0%';
+
+  $('#r-title').textContent = s.cancel_requested ? '停止中(等當前這筆結束)' : '測試進行中';
+  $('#r-meta').textContent =
+    `${s.database || ''} · ${s.open_project || ''} · ${s.measurement_object || ''}`;
+
+  // 當前測項 + 它的階層
+  const smd = (s.smds || []).find(x => x.title === cur.title);
+  $('#r-path').textContent = smd?.path || '';
+  $('#r-name').textContent = cur.title || '準備中…';
+
+  $('#r-pass').textContent = s.summary.passed;
+  $('#r-fail').textContent = s.summary.failed;
+  $('#r-left').textContent = Math.max(0, total - done);
+
+  // 用「已完成的平均耗時」外推剩餘時間
+  // ⚠️ 只有 1 筆樣本時估出來的數字毫無意義(卡住的那筆會推出「還要 1031 分鐘」),
+  //    所以至少要完成 2 項才顯示預估。
+  const el = (Date.now() - runStart) / 1000;
+  let eta = '';
+  if (done >= 2 && total > done) {
+    const per = el / done;
+    eta = ` ・ 平均每項 ${fmtDur(per)} ・ 預估還要 ${fmtDur(per * (total - done))}`;
+  } else if (done > 0 && total > done) {
+    eta = ' ・ 預估時間計算中(至少要完成 2 項)';
+  }
+  $('#r-eta').textContent = `已跑 ${fmtDur(el)}${eta}`;
+  syncMini(s, done, total, eta);
+
+  $('#r-log').textContent =
+    [...$('#log').childNodes].slice(-4).map(n => n.textContent).join('\\n');
+}
+
+// ── 右下角小視窗 ────────────────────────────
+function syncMini(s, done, total, eta) {
+  const m = $('#mini');
+  m.classList.toggle('on', runHidden && s.running);
+  m.classList.toggle('stopping', !!s.cancel_requested);
+  if (!runHidden || !s.running) return;
+  const cur = s.current || {};
+  $('#m-title').textContent = s.cancel_requested ? '停止中…' : '測試進行中';
+  $('#m-idx').textContent = cur.index || 0;
+  $('#m-total').textContent = total;
+  $('#m-bar').style.width = total ? `${Math.round(done / total * 100)}%` : '0%';
+  $('#m-pass').textContent = s.summary.passed;
+  $('#m-fail').textContent = s.summary.failed;
+  $('#m-eta').textContent = eta ? eta.replace(/^ ・ /, '') : '';
+  $('#m-name').textContent = cur.title || '';
+}
+
+$('#r-stop').onclick = async () => {
+  $('#r-title').textContent = '停止中(等當前這筆結束)';
+  $('#runov').classList.add('stopping');
+  addLog('已要求停止 —— ACQUA 會在當前這筆測項結束後中止', 'warn');
+  await fetch('/api/cancel', {method: 'POST'});
+};
+$('#r-hide').onclick = () => {
+  runHidden = true;
+  $('#runov').classList.remove('on');
+  $('#mini').classList.add('on');
+  refreshStatus();
+};
+// 點小視窗任一處就展開回大框
+$('#mini-head').onclick = () => {
+  runHidden = false;
+  $('#mini').classList.remove('on');
+  $('#runov').classList.add('on');
+  refreshStatus();
+};
+$('#r-close').onclick = hideRunOverlay;
+
+// ── ④ 續跑偵測 ──────────────────────────────
+async function checkLastRun() {
+  let d;
+  try { d = await (await fetch('/api/last-run')).json(); } catch { return; }
+  if (!d) return;
+
+  $('#rs-meta').textContent =
+    `${d.database || ''} · ${d.project || ''} · ${d.measurement_object || ''}`
+    + `  (${new Date((d.updated_at || 0) * 1000).toLocaleString()})`;
+  $('#rs-done').textContent = d.done_count;
+  $('#rs-total').textContent = d.total;
+  $('#rs-bar').style.width = d.total ? `${Math.round(d.done_count / d.total * 100)}%` : '0%';
+  $('#rs-pass').textContent = d.done_count - d.failed_count;
+  $('#rs-fail').textContent = d.failed_count;
+  $('#rs-left').textContent = d.remaining_count;
+  $('#rs-detail').textContent =
+    (d.state === 'running' ? '狀態:上次執行沒有正常結束(伺服器被關掉或當機)\\n'
+                           : '狀態:上次被使用者中止\\n')
+    + '接下來要跑:' + d.remaining.slice(0, 3).map(x => x.title).join('、')
+    + (d.remaining_count > 3 ? ` …等 ${d.remaining_count} 項` : '');
+  $('#resumeov').classList.add('on');
+}
+
+$('#rs-go').onclick = async () => {
+  $('#resumeov').classList.remove('on');
+  const j = await post('/api/run', {resume: true}, {quiet: true, timeout: 30});
+  if (j.ok) addLog(`已接續執行剩下的 ${j.queued} 項`, 'info');
+};
+$('#rs-drop').onclick = async () => {
+  $('#resumeov').classList.remove('on');
+  await fetch('/api/last-run/dismiss', {method: 'POST'});
+  addLog('已清除上次的執行紀錄');
+};
+
 // ── SSE:即時日誌與狀態 ────────────────────────
-// 狀態拉取做節流 —— 一次量測會噴出大量日誌事件,
-// 每一則都去 fetch /api/status 會把伺服器打爆。
+// ── 資料更新:輪詢為主,SSE 為輔 ──────────────────
+//
+// 教訓:原本只靠 SSE,結果 /api/stream 一出錯(500)整個畫面就永遠不動,
+// 而且完全沒有備援。現在改成:
+//   ・輪詢 —— 固定每 2 秒(執行中 1 秒)抓一次,這是**保證**會更新的路徑
+//   ・SSE  —— 有連上就即時推,只是讓延遲更低;斷了也不影響正確性
+let lastSeq = 0;             // 已經處理到第幾號事件
 let statusPending = false;
+let liveMode = 'poll';       // sse | poll | dead
+let sse = null, sseRetry = 0, sseTimer = null;
+
+function setLive(mode, text) {
+  liveMode = mode;
+  $('#live-dot').className = 'dot ' + ({sse: 'ok', poll: 'poll', dead: 'dead'}[mode] || '');
+  $('#live-txt').textContent = text;
+}
+
+// 把新事件補進日誌(輪詢與 SSE 共用,靠 seq 去重)
+function applyEvents(evs) {
+  for (const d of evs || []) {
+    if (d.seq <= lastSeq) continue;
+    lastSeq = d.seq;
+    if (d.kind === 'log') addLog(d.text, d.level);
+  }
+}
+
 function refreshStatus() {
   if (statusPending) return;
   statusPending = true;
@@ -856,15 +1221,67 @@ function refreshStatus() {
   }, 200);
 }
 
-const es = new EventSource('/api/stream');
-es.onmessage = ev => {
-  const d = JSON.parse(ev.data);
-  if (d.kind === 'log') addLog(d.text, d.level);
-  refreshStatus();
-};
-es.onerror = () => addLog('(事件串流中斷,重新整理頁面可恢復)', 'warn');
+// ⭐ 固定輪詢 —— 不管 SSE 死活都會跑
+async function poll() {
+  try {
+    const [ev, st] = await Promise.all([
+      fetch('/api/events?since=' + lastSeq).then(r => r.json()),
+      fetch('/api/status').then(r => r.json()),
+    ]);
+    applyEvents(ev.events);
+    render(st);
+    if (liveMode === 'dead') setLive('poll', '輪詢中(SSE 斷線)');
+    return st;
+  } catch (e) {
+    setLive('dead', '連不上伺服器');
+    return null;
+  }
+}
 
-fetch('/api/status').then(r => r.json()).then(render);
+let pollTimer = null;
+function schedulePoll() {
+  clearTimeout(pollTimer);
+  // 執行中抓密一點,閒置時 2 秒
+  const gap = (S && S.running) ? 1000 : 2000;
+  pollTimer = setTimeout(async () => { await poll(); schedulePoll(); }, gap);
+}
+
+// ── SSE:有就用,沒有也不影響 ──────────────────────
+function connectSSE() {
+  try { if (sse) sse.close(); } catch {}
+  sse = new EventSource('/api/stream?since=' + lastSeq);
+
+  sse.onopen = () => { sseRetry = 0; setLive('sse', '即時連線'); };
+
+  sse.onmessage = ev => {
+    let d;
+    try { d = JSON.parse(ev.data); } catch { return; }
+    applyEvents([d]);
+    refreshStatus();
+  };
+
+  sse.onerror = () => {
+    try { sse.close(); } catch {}
+    setLive('poll', '輪詢中(SSE 斷線)');
+    // 指數退避重連,最多 30 秒一次
+    sseRetry = Math.min(sseRetry + 1, 6);
+    clearTimeout(sseTimer);
+    sseTimer = setTimeout(connectSSE, Math.min(1000 * 2 ** sseRetry, 30000));
+  };
+}
+
+// 分頁切回前景時立刻抓一次,不用等下一輪
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) poll();
+});
+
+(async () => {
+  setLive('poll', '連線中…');
+  await poll();
+  schedulePoll();
+  connectSSE();
+  await checkLastRun();
+})();
 </script>
 </body>
 </html>

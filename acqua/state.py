@@ -39,6 +39,9 @@ class SharedState:
         # 數值結果(走 SQL 讀回來的,含極限值)
         self.values = []               # [{smd, dut, status, values:[...]}]
 
+        #: 執行紀錄(持久化)—— 由 app.py 在啟動時注入
+        self.runlog = None
+
         # 執行狀態
         self.running = False
         self.cancel_requested = False
