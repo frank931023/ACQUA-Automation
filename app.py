@@ -15,7 +15,8 @@ import os
 import sys
 import time
 
-from flask import Flask, Response, jsonify, render_template, request
+from flask import (Blueprint, Flask, Response, jsonify, render_template,
+                   request, send_from_directory)
 
 from acqua.runlog import RunLog
 from acqua.state import SharedState
@@ -35,6 +36,10 @@ app = Flask(__name__)
 state = SharedState()
 worker = None
 config = {}
+
+# ACQUA 測試自動化整組掛在 /acqua 底下 —— 頁面與 API 都是。
+# 好處:網址一看就知道屬於哪個子系統,以後要再加別的模組也不會打架。
+acqua_bp = Blueprint("acqua", __name__, url_prefix="/acqua")
 
 
 # ── 設定 ────────────────────────────────────────────
@@ -63,19 +68,63 @@ def _cmd(name, timeout=600, **kwargs):
         return jsonify(ok=False, error=str(exc), state=state.snapshot()), 400
 
 
-# ── 頁面 ────────────────────────────────────────────
+# ── 首頁 ────────────────────────────────────────────
 @app.route("/")
+def home():
+    """入口頁 —— 只放兩個按鈕,分別進到兩個子系統。"""
+    return render_template("home.html")
+
+
+# ── ACQUA 測試自動化(全部在 /acqua 底下)──────────────
+@acqua_bp.route("/")
 def index():
     return render_template("index.html", config=config)
 
 
+# ── 聲學測試室 3D 視覺化 ─────────────────────────────
+#
+# 兩種模式,路由會自動選:
+#   1. 有 build 過 → 直接送 static/soundproofroom/ 底下的成品(離線可用)
+#   2. 沒 build    → 送 templates/soundproofroom.html,用 importmap 從 CDN 取 three.js
+#
+# 不管哪種模式,原始碼都是同一份 soundproofroom/src/。
+ROOM_DIR = os.path.join(BASE_DIR, "soundproofroom")
+ROOM_DIST = os.path.join(BASE_DIR, "static", "soundproofroom")
+
+
+def _room_is_built():
+    return os.path.isfile(os.path.join(ROOM_DIST, "index.html"))
+
+
+@app.route("/soundproofroom")
+@app.route("/soundproofroom/")
+def soundproofroom():
+    if _room_is_built():
+        return send_from_directory(ROOM_DIST, "index.html")
+    return render_template("soundproofroom.html")
+
+
+@app.route("/soundproofroom/src/<path:filename>")
+def soundproofroom_src(filename):
+    """免 build 模式下,直接把原始碼當靜態檔送出去。"""
+    return send_from_directory(os.path.join(ROOM_DIR, "src"), filename)
+
+
+@app.route("/soundproofroom/<path:filename>")
+def soundproofroom_asset(filename):
+    """build 過之後的 assets(js/css/map)。"""
+    if _room_is_built():
+        return send_from_directory(ROOM_DIST, filename)
+    return ("Not built yet", 404)
+
+
 # ── 狀態與事件串流 ───────────────────────────────────
-@app.route("/api/status")
+@acqua_bp.route("/api/status")
 def api_status():
     return jsonify(state.snapshot())
 
 
-@app.route("/api/events")
+@acqua_bp.route("/api/events")
 def api_events():
     """[*] 非串流版的事件查詢 —— 給輪詢用。
 
@@ -87,7 +136,7 @@ def api_events():
     return jsonify(events=evs, seq=(evs[-1]["seq"] if evs else since))
 
 
-@app.route("/api/stream")
+@acqua_bp.route("/api/stream")
 def api_stream():
     """Server-Sent Events —— 低延遲推播。
 
@@ -120,7 +169,7 @@ def api_stream():
 
 
 # ── 操作 ────────────────────────────────────────────
-@app.route("/api/connect", methods=["POST"])
+@acqua_bp.route("/api/connect", methods=["POST"])
 def api_connect():
     body = request.get_json(silent=True) or {}
     db = config.get("database", {})
@@ -132,7 +181,7 @@ def api_connect():
                 password=body.get("password") or db.get("password", ""))
 
 
-@app.route("/api/databases", methods=["POST"])
+@acqua_bp.route("/api/databases", methods=["POST"])
 def api_databases():
     """列出 SQL Server 上的資料庫,讓 UI 做成下拉選單。"""
     body = request.get_json(silent=True) or {}
@@ -140,19 +189,19 @@ def api_databases():
                 server=body.get("server") or config.get("database", {}).get("server", ""))
 
 
-@app.route("/api/refresh-groups", methods=["POST"])
+@acqua_bp.route("/api/refresh-groups", methods=["POST"])
 def api_refresh_groups():
     return _cmd("refresh_groups", timeout=120)
 
 
-@app.route("/api/open-project", methods=["POST"])
+@acqua_bp.route("/api/open-project", methods=["POST"])
 def api_open_project():
     body = request.get_json(silent=True) or {}
     return _cmd("open_project", timeout=300,
                 group=body.get("group", ""), project=body.get("project", ""))
 
 
-@app.route("/api/select-mo", methods=["POST"])
+@acqua_bp.route("/api/select-mo", methods=["POST"])
 def api_select_mo():
     body = request.get_json(silent=True) or {}
     target = config.get("target", {})
@@ -175,18 +224,18 @@ def api_select_mo():
     return resp
 
 
-@app.route("/api/list-smds", methods=["POST"])
+@acqua_bp.route("/api/list-smds", methods=["POST"])
 def api_list_smds():
     body = request.get_json(silent=True) or {}
     return _cmd("list_smds", timeout=180, search=body.get("search", ""))
 
 
-@app.route("/api/variables", methods=["GET"])
+@acqua_bp.route("/api/variables", methods=["GET"])
 def api_variables_get():
     return _cmd("list_variables", timeout=120)
 
 
-@app.route("/api/variables", methods=["POST"])
+@acqua_bp.route("/api/variables", methods=["POST"])
 def api_variables_set():
     """[*] 混合模式的第一步:把 DUT 屬性寫成 ACQUA 變數。
 
@@ -200,7 +249,7 @@ def api_variables_set():
     return _cmd("set_variables", timeout=180, values=values)
 
 
-@app.route("/api/last-run")
+@acqua_bp.route("/api/last-run")
 def api_last_run():
     """[*] 上次有沒有跑到一半?頁面載入時會問這個。
 
@@ -211,7 +260,7 @@ def api_last_run():
     return jsonify(state.runlog.unfinished())
 
 
-@app.route("/api/last-run/dismiss", methods=["POST"])
+@acqua_bp.route("/api/last-run/dismiss", methods=["POST"])
 def api_last_run_dismiss():
     """使用者選擇不續跑 —— 把紀錄清掉,下次不要再問。"""
     if state.runlog:
@@ -219,7 +268,7 @@ def api_last_run_dismiss():
     return jsonify(ok=True)
 
 
-@app.route("/api/predict", methods=["POST"])
+@acqua_bp.route("/api/predict", methods=["POST"])
 def api_predict():
     """[*] 事前預覽:這組變數會跑哪些測項?完全不啟動量測。"""
     body = request.get_json(silent=True) or {}
@@ -227,7 +276,7 @@ def api_predict():
                 variables=body.get("variables") or {})
 
 
-@app.route("/api/run", methods=["POST"])
+@acqua_bp.route("/api/run", methods=["POST"])
 def api_run():
     """[*] 整套自動化的核心入口。兩種執行模式:
 
@@ -272,13 +321,13 @@ def api_run():
     return jsonify(ok=True, mode="selected", queued=len(row_ids))
 
 
-@app.route("/api/cancel", methods=["POST"])
+@acqua_bp.route("/api/cancel", methods=["POST"])
 def api_cancel():
     worker.request_cancel()
     return jsonify(ok=True)
 
 
-@app.route("/api/report", methods=["POST"])
+@acqua_bp.route("/api/report", methods=["POST"])
 def api_report():
     body = request.get_json(silent=True) or {}
     rep = config.get("report", {})
@@ -291,7 +340,7 @@ def api_report():
                 result_index=int(body.get("result_index", 0)))
 
 
-@app.route("/api/values", methods=["POST"])
+@acqua_bp.route("/api/values", methods=["POST"])
 def api_values():
     """讀出量測的實際數值(含極限值)。走 SQL —— Acqua3 介面拿不到數字。"""
     body = request.get_json(silent=True) or {}
@@ -300,7 +349,7 @@ def api_values():
                 smd_row_ids=body.get("row_ids"))
 
 
-@app.route("/api/results.csv")
+@acqua_bp.route("/api/results.csv")
 def api_results_csv():
     snap = state.snapshot()
     buf = io.StringIO()
@@ -320,6 +369,8 @@ def api_results_csv():
 # ── 進入點 ──────────────────────────────────────────
 def main():
     global worker, config
+
+    app.register_blueprint(acqua_bp)
 
     ap = argparse.ArgumentParser()
     ap.add_argument("--config")
@@ -368,7 +419,9 @@ def main():
             f"  請先關掉舊的,或用 --port 換一個埠號。\n"
             f"  找出是誰:  Get-NetTCPConnection -LocalPort {port} -State Listen\n")
 
-    print(f"\n開啟瀏覽器:http://{host}:{port}\n")
+    print(f"\n開啟瀏覽器:http://{host}:{port}")
+    print(f"   ACQUA 測試自動化   http://{host}:{port}/acqua")
+    print(f"   聲學測試室 3D      http://{host}:{port}/soundproofroom\n")
 
     # use_reloader=False —— 重載器會 fork 出第二個行程,COM 執行緒會被開兩份
     app.run(host=host, port=port, threaded=True, use_reloader=False, debug=False)

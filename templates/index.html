@@ -331,6 +331,7 @@
   <span class="badge" id="badge-backend">—</span>
   <span class="badge" id="badge-conn">未連線</span>
   <span class="badge" id="badge-proj">未開啟專案</span>
+  <a href="/" style="font-size:12px;color:var(--muted);text-decoration:none">← 首頁</a>
   <span class="badge live" id="badge-live"><i class="dot" id="live-dot"></i><span id="live-txt">連線中…</span></span>
 </header>
 
@@ -509,14 +510,14 @@ let S = {}, selected = new Set(), resultMap = {};
 
 // 每個操作的顯示名稱與「正常大概要多久」—— 超過就轉黃警告
 const OPS = {
-  '/api/connect':        ['連線資料庫',   10, 'ACQUA 正在連 SQL Server'],
-  '/api/refresh-groups': ['讀取專案群組',  5, ''],
-  '/api/open-project':   ['開啟專案',     25, 'ACQUA 要載入整個專案樹,這步最慢'],
-  '/api/select-mo':      ['選定受測物',    8, '找不到同名的會自動建立'],
-  '/api/list-smds':      ['載入測項',     10, '查 SQL 取得測項清單'],
-  '/api/variables':      ['變數讀寫',      8, ''],
-  '/api/values':         ['讀取數值結果', 15, ''],
-  '/api/report':         ['產生報告',     90, 'ACQUA 會開 Word,可能很久'],
+  '/acqua/api/connect':        ['連線資料庫',   10, 'ACQUA 正在連 SQL Server'],
+  '/acqua/api/refresh-groups': ['讀取專案群組',  5, ''],
+  '/acqua/api/open-project':   ['開啟專案',     25, 'ACQUA 要載入整個專案樹,這步最慢'],
+  '/acqua/api/select-mo':      ['選定受測物',    8, '找不到同名的會自動建立'],
+  '/acqua/api/list-smds':      ['載入測項',     10, '查 SQL 取得測項清單'],
+  '/acqua/api/variables':      ['變數讀寫',      8, ''],
+  '/acqua/api/values':         ['讀取數值結果', 15, ''],
+  '/acqua/api/report':         ['產生報告',     90, 'ACQUA 會開 Word,可能很久'],
 };
 
 let busyT = null, busyT0 = 0, busyAbort = null, busyExpect = 0, busyUserStop = false;
@@ -793,21 +794,21 @@ function fillDatabases(list) {
 }
 
 $('#btn-scan').onclick = async () => {
-  const r = await post('/api/databases', {server: $('#server').value});
+  const r = await post('/acqua/api/databases', {server: $('#server').value});
   if (r.ok) fillDatabases(r.state.databases || []);
 };
 
 $('#btn-connect').onclick = async () => {
-  const r = await post('/api/connect',
+  const r = await post('/acqua/api/connect',
                        {server: $('#server').value, database: $('#database').value});
-  if (r.ok) await post('/api/refresh-groups');
+  if (r.ok) await post('/acqua/api/refresh-groups');
 };
 $('#btn-open').onclick = () =>
-  post('/api/open-project', {group: $('#group').value, project: $('#project').value});
-$('#btn-mo').onclick   = () => post('/api/select-mo', {title: $('#mo').value});
+  post('/acqua/api/open-project', {group: $('#group').value, project: $('#project').value});
+$('#btn-mo').onclick   = () => post('/acqua/api/select-mo', {title: $('#mo').value});
 $('#btn-list').onclick = async () => {
   selected.clear();
-  const r = await post('/api/list-smds', {search: $('#search').value});
+  const r = await post('/acqua/api/list-smds', {search: $('#search').value});
   // 測項多的時候(例如 MS Teams 那 4300 項)預設全部收起來,不然畫面爆掉
   if (r.ok && (r.state.smds || []).length > 150) {
     collapsed = allGroupPaths();
@@ -917,7 +918,7 @@ function showPrediction(p) {
 }
 
 $('#btn-predict').onclick = async () => {
-  const r = await post('/api/predict', {variables: collectVars()});
+  const r = await post('/acqua/api/predict', {variables: collectVars()});
   if (r.ok) showPrediction(r.state.prediction);
 };
 
@@ -934,12 +935,12 @@ document.querySelectorAll('#var-panel input[data-var]')
   .forEach(el => el.addEventListener('change', () => { $('#pred').style.display = 'none'; }));
 syncGrayOut();
 $('#btn-var-add').onclick  = () => addVarRow();
-$('#btn-var-push').onclick = () => post('/api/variables', {values: collectVars()});
+$('#btn-var-push').onclick = () => post('/acqua/api/variables', {values: collectVars()});
 // 從 ACQUA 讀回變數 → 盡量回填到表單控制項,表單沒有的才放進「自訂變數」
 $('#btn-var-read').onclick = async () => {
-  showBusy('/api/variables');
+  showBusy('/acqua/api/variables');
   let r;
-  try { r = await (await fetch('/api/variables')).json(); hideBusy(); }
+  try { r = await (await fetch('/acqua/api/variables')).json(); hideBusy(); }
   catch (e) { failBusy('錯誤', String(e)); return; }
 
   const vs = r.state?.variables || [];
@@ -997,7 +998,7 @@ $('#btn-run').onclick = async () => {
     : `逐項模式 · 已選 ${selected.size} 項`;
   showRunPending('正在送出…', what);
 
-  const j = await post('/api/run', body, {quiet: true, timeout: 30});
+  const j = await post('/acqua/api/run', body, {quiet: true, timeout: 30});
   if (!j.ok) { showRunFail(j.error || '送出失敗'); return; }
 
   // 送出成功,但 ACQUA 還沒真的開始 —— 停在 pending,等 SSE 把 running 帶回來
@@ -1005,9 +1006,9 @@ $('#btn-run').onclick = async () => {
   $('#r-meta').textContent = `已送出 ${j.queued ?? ''} 項,等待量測引擎啟動`;
   addLog(`已送出:${mode === 'conditional' ? '變數驅動' : '逐項'} 模式`, 'info');
 };
-$('#btn-cancel').onclick   = () => fetch('/api/cancel', {method:'POST'});
-$('#btn-report').onclick   = () => post('/api/report', {});
-$('#btn-csv').onclick      = () => location.href = '/api/results.csv';
+$('#btn-cancel').onclick   = () => fetch('/acqua/api/cancel', {method:'POST'});
+$('#btn-report').onclick   = () => post('/acqua/api/report', {});
+$('#btn-csv').onclick      = () => location.href = '/acqua/api/results.csv';
 $('#btn-clearlog').onclick = () => $('#log').innerHTML = '';
 
 // ── ① 執行中的 Modal ────────────────────────
@@ -1134,7 +1135,7 @@ $('#r-stop').onclick = async () => {
   $('#r-title').textContent = '停止中(等當前這筆結束)';
   $('#runov').classList.add('stopping');
   addLog('已要求停止 —— ACQUA 會在當前這筆測項結束後中止', 'warn');
-  await fetch('/api/cancel', {method: 'POST'});
+  await fetch('/acqua/api/cancel', {method: 'POST'});
 };
 $('#r-hide').onclick = () => {
   runHidden = true;
@@ -1154,7 +1155,7 @@ $('#r-close').onclick = hideRunOverlay;
 // ── ④ 續跑偵測 ──────────────────────────────
 async function checkLastRun() {
   let d;
-  try { d = await (await fetch('/api/last-run')).json(); } catch { return; }
+  try { d = await (await fetch('/acqua/api/last-run')).json(); } catch { return; }
   if (!d) return;
 
   $('#rs-meta').textContent =
@@ -1176,12 +1177,12 @@ async function checkLastRun() {
 
 $('#rs-go').onclick = async () => {
   $('#resumeov').classList.remove('on');
-  const j = await post('/api/run', {resume: true}, {quiet: true, timeout: 30});
+  const j = await post('/acqua/api/run', {resume: true}, {quiet: true, timeout: 30});
   if (j.ok) addLog(`已接續執行剩下的 ${j.queued} 項`, 'info');
 };
 $('#rs-drop').onclick = async () => {
   $('#resumeov').classList.remove('on');
-  await fetch('/api/last-run/dismiss', {method: 'POST'});
+  await fetch('/acqua/api/last-run/dismiss', {method: 'POST'});
   addLog('已清除上次的執行紀錄');
 };
 
@@ -1217,7 +1218,7 @@ function refreshStatus() {
   statusPending = true;
   setTimeout(async () => {
     statusPending = false;
-    try { render(await (await fetch('/api/status')).json()); } catch {}
+    try { render(await (await fetch('/acqua/api/status')).json()); } catch {}
   }, 200);
 }
 
@@ -1225,8 +1226,8 @@ function refreshStatus() {
 async function poll() {
   try {
     const [ev, st] = await Promise.all([
-      fetch('/api/events?since=' + lastSeq).then(r => r.json()),
-      fetch('/api/status').then(r => r.json()),
+      fetch('/acqua/api/events?since=' + lastSeq).then(r => r.json()),
+      fetch('/acqua/api/status').then(r => r.json()),
     ]);
     applyEvents(ev.events);
     render(st);
@@ -1249,7 +1250,7 @@ function schedulePoll() {
 // ── SSE:有就用,沒有也不影響 ──────────────────────
 function connectSSE() {
   try { if (sse) sse.close(); } catch {}
-  sse = new EventSource('/api/stream?since=' + lastSeq);
+  sse = new EventSource('/acqua/api/stream?since=' + lastSeq);
 
   sse.onopen = () => { sseRetry = 0; setLive('sse', '即時連線'); };
 

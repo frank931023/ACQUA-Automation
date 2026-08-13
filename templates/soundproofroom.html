@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>聲學測試室 3D</title>
+<link rel="stylesheet" href="/soundproofroom/src/style.css">
+
+<!--
+  免 build 模式:用瀏覽器原生的 importmap 把 `three` 這個裸模組名對應到 CDN。
+  這樣 src/*.js 裡的 `import * as THREE from 'three'` 不用打包就能直接跑,
+  而且同一份原始碼在 Vite 底下也照樣可用(Vite 會自己從 node_modules 解析)。
+
+  ⚠️ 需要連得到網路。要離線使用請改用 Vite build(見 soundproofroom/README.md)。
+-->
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.169.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.169.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+
+<div id="app">
+  <div id="viewport">
+    <div id="hint">
+      <b>左鍵拖曳物件</b>:移動喇叭陣列 / HATS 平台(各自限制在滑軌範圍內)<br>
+      <b>左鍵拖曳空白處</b>:旋轉視角 ・ <b>滾輪</b>:縮放 ・ <b>右鍵</b>:平移
+    </div>
+  </div>
+
+  <aside id="panel">
+    <h1>聲學測試室</h1>
+    <div class="sub">房間 <span id="dims"></span></div>
+
+    <div class="group">
+      <h2>喇叭陣列(2 × 4)</h2>
+
+      <div class="ctl">
+        <div class="row"><span class="name">沿主滑軌位置 X</span><span class="val" id="sp-x-val">—</span></div>
+        <input type="range" id="sp-x">
+        <div class="lim">主滑軌長 2.00 m ・ 位於房間寬度中央</div>
+      </div>
+
+      <div class="ctl">
+        <div class="row"><span class="name">支架下降量</span><span class="val" id="sp-drop-val">—</span></div>
+        <input type="range" id="sp-drop">
+        <div class="lim">支架滑軌長 0.80 m ・ 可調節 0.50 ~ 0.80 m</div>
+      </div>
+    </div>
+
+    <div class="group">
+      <h2>HATS 量測頭</h2>
+
+      <div class="ctl">
+        <div class="row"><span class="name">沿地面滑軌位置 Z</span><span class="val" id="hats-z-val">—</span></div>
+        <input type="range" id="hats-z">
+        <div class="lim">地面滑軌長 4.61 m</div>
+      </div>
+
+      <div class="ctl">
+        <div class="row"><span class="name">轉盤角度</span><span class="val" id="hats-rot-val">—</span></div>
+        <input type="range" id="hats-rot">
+        <div class="lim">-180° ~ +180°</div>
+      </div>
+    </div>
+
+    <div class="group">
+      <h2>視角</h2>
+      <div class="views">
+        <button data-view="iso">等角</button>
+        <button data-view="top">俯視</button>
+        <button data-view="front">正視</button>
+        <button data-view="side">側視</button>
+      </div>
+      <button id="reset" class="wide">重設全部</button>
+    </div>
+
+    <div class="meta">
+      模式:<code>免 build(CDN)</code><br>
+      尺寸常數在 <code>soundproofroom/src/config.js</code><br>
+      <a href="/" style="color:var(--accent)">← 回測試自動化</a>
+    </div>
+  </aside>
+</div>
+
+<div id="err" style="display:none;position:fixed;inset:0;background:#0d1116;color:#f85149;
+     padding:40px;font:14px/1.8 Consolas,monospace;white-space:pre-wrap;z-index:999"></div>
+
+<script>
+// 模組載入失敗(例如沒網路連不到 CDN)時給個看得懂的訊息,而不是白畫面
+window.addEventListener('error', (e) => {
+  if (e.target && e.target.tagName === 'SCRIPT') showErr('腳本載入失敗:' + e.target.src);
+}, true);
+window.addEventListener('unhandledrejection', (e) => showErr('模組載入失敗:' + (e.reason?.message || e.reason)));
+function showErr(msg) {
+  const el = document.getElementById('err');
+  el.style.display = 'block';
+  el.textContent =
+    '無法載入 three.js\n\n' + msg +
+    '\n\n這個頁面是「免 build 模式」,需要連得到 unpkg.com 取得 three.js。\n' +
+    '離線環境請改用 Vite 打包:\n\n' +
+    '  cd soundproofroom\n  npm install\n  npm run build\n\n' +
+    'build 完重新整理這頁就會自動改用本機檔案。';
+}
+</script>
+<script type="module" src="/soundproofroom/src/main.js"></script>
+</body>
+</html>

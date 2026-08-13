@@ -1,0 +1,18 @@
+{
+  "name": "soundproofroom",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "聲學測試室 3D 視覺化(three.js + Vite)",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "three": "^0.169.0"
+  },
+  "devDependencies": {
+    "vite": "^5.4.10"
+  }
+}

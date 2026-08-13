@@ -1,0 +1,50 @@
+{
+  "state": "finished",
+  "mode": "selected",
+  "database": "61_Demo_SMDs_Rev07",
+  "project_group": "Standards",
+  "project": "Speakerphone Certification",
+  "measurement_object": "DUT_001",
+  "started_at": 1786599201.7933035,
+  "updated_at": 1786599205.5322177,
+  "planned": [
+    {
+      "row_id": 1000,
+      "title": "Sending Loudness Rating"
+    },
+    {
+      "row_id": 1001,
+      "title": "Receiving Loudness Rating"
+    },
+    {
+      "row_id": 1002,
+      "title": "POLQA MOS Sending"
+    }
+  ],
+  "done": [
+    {
+      "row_id": 1000,
+      "title": "Sending Loudness Rating",
+      "status": "MEAS_DONE_OK",
+      "passed": true,
+      "retries": 0,
+      "ts": 1786599203.4135396
+    },
+    {
+      "row_id": 1001,
+      "title": "Receiving Loudness Rating",
+      "status": "MEAS_DONE_OK",
+      "passed": true,
+      "retries": 0,
+      "ts": 1786599204.4127479
+    },
+    {
+      "row_id": 1002,
+      "title": "POLQA MOS Sending",
+      "status": "MEAS_DONE_OK",
+      "passed": true,
+      "retries": 0,
+      "ts": 1786599205.5312145
+    }
+  ]
+}
