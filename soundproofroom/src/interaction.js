@@ -1,32 +1,49 @@
 /**
- * 互動 —— 滑鼠拖曳 + 側邊欄 slider,兩邊雙向同步。
+ * 互動 —— 滑鼠拖曳 + 側邊欄 slider,雙向同步。
+ *
+ * 支援單軸與雙軸拖曳:
+ *   axes: { x: {min,max} }              → 只能左右
+ *   axes: { z: {min,max} }              → 只能前後
+ *   axes: { x: {...}, z: {...} }        → 兩軸自由移動,各自夾範圍
  *
  * 拖曳的作法:
- *   1. mousedown 時用 raycaster 找出點到哪個可拖曳的 Group
- *   2. 建立一個**通過該物件、面向相機**的虛擬平面
- *   3. mousemove 時把射線打到平面上,取交點
- *   4. 只取該物件被允許的那一軸(X 或 Z),並夾在滑軌範圍內
+ *   1. mousedown 用 raycaster 找出點到哪個可拖曳 Group
+ *   2. 建立一個**水平**平面(通過物件、法線朝上)
+ *      —— 對地面上的東西最直覺;純垂直軸的物件則改用面向相機的平面
+ *   3. mousemove 把射線打到平面取交點,只取允許的軸並夾住範圍
  *
- * 為什麼要用虛擬平面:直接拿滑鼠 delta 換算會因為透視而失真,
- * 打到平面上再取交點,不管相機怎麼轉都會跟著滑鼠走。
+ * 為什麼用平面而不是滑鼠 delta:透視投影下 delta 換算會失真,
+ * 打平面取交點不管相機怎麼轉都會精準跟著游標。
  */
 import * as THREE from 'three';
-import { CONFIG as C, clamp } from './config.js';
+import { clamp, CONFIG as C } from './config.js';
 
 export function createInteraction({ renderer, camera, controls, targets, onChange }) {
   const raycaster = new THREE.Raycaster();
   const pointer = new THREE.Vector2();
-  const dragPlane = new THREE.Plane();
-  const hitPoint = new THREE.Vector3();
-  const grabOffset = new THREE.Vector3();
+  const plane = new THREE.Plane();
+  const hit = new THREE.Vector3();
+  const offset = new THREE.Vector3();
 
-  let dragging = null;      // 目前被拖的 target
+  let dragging = null;
   let hovered = null;
 
-  /** targets: [{ key, group, axis, range }] */
   const byKey = Object.fromEntries(targets.map((t) => [t.key, t]));
 
-  // 滑鼠位置換算成 NDC(-1..1)
+  /** 目前每個目標的邏輯位置(不一定等於 group.position,例如 HATS 的 X 是子層) */
+  const values = {};
+  for (const t of targets) {
+    values[t.key] = {};
+    for (const ax of Object.keys(t.axes)) values[t.key][ax] = t.axes[ax].default ?? 0;
+  }
+
+  function applyValue(t, axis, v) {
+    values[t.key][axis] = v;
+    // 有些目標的某一軸要套用到子物件(例如 HATS 的橫移是上層滑塊)
+    if (t.apply?.[axis]) t.apply[axis](t.group, v);
+    else t.group.position[axis] = v;
+  }
+
   function updatePointer(ev) {
     const r = renderer.domElement.getBoundingClientRect();
     pointer.x = ((ev.clientX - r.left) / r.width) * 2 - 1;
@@ -37,59 +54,62 @@ export function createInteraction({ renderer, camera, controls, targets, onChang
     raycaster.setFromCamera(pointer, camera);
     const hits = raycaster.intersectObjects(targets.map((t) => t.group), true);
     if (!hits.length) return null;
-    // 往上找到掛著 draggable 標記的那一層 Group
     let o = hits[0].object;
     while (o && !o.userData?.draggable) o = o.parent;
     return o ? byKey[o.userData.draggable] : null;
   }
 
-  function setHighlight(target, on) {
-    if (!target) return;
-    target.group.traverse((o) => {
-      if (!o.isMesh) return;
+  function setHighlight(t, on) {
+    if (!t) return;
+    t.group.traverse((o) => {
+      if (!o.isMesh || !o.material?.emissive) return;
       if (on) {
-        if (!o.userData._origEmissive) {
-          o.userData._origEmissive = o.material.emissive?.getHex() ?? 0x000000;
-        }
-        o.material.emissive?.setHex(C.highlight);
-        if (o.material.emissiveIntensity !== undefined) o.material.emissiveIntensity = 0.28;
-      } else if (o.userData._origEmissive !== undefined) {
-        o.material.emissive?.setHex(o.userData._origEmissive);
-        if (o.material.emissiveIntensity !== undefined) o.material.emissiveIntensity = 1;
+        if (o.userData._emi === undefined) o.userData._emi = o.material.emissive.getHex();
+        o.material.emissive.setHex(C.highlight);
+      } else if (o.userData._emi !== undefined) {
+        o.material.emissive.setHex(o.userData._emi);
       }
     });
   }
 
-  function onPointerDown(ev) {
+  /** 建立拖曳平面:地面物件用水平面,只有 Y 軸的用面向相機的平面 */
+  function makePlane(t) {
+    const anchor = new THREE.Vector3(
+      values[t.key].x ?? t.group.position.x,
+      t.planeY ?? t.group.position.y,
+      values[t.key].z ?? t.group.position.z
+    );
+    plane.setFromNormalAndCoplanarPoint(new THREE.Vector3(0, 1, 0), anchor);
+  }
+
+  function onDown(ev) {
     if (ev.button !== 0) return;
     updatePointer(ev);
     const t = pick();
     if (!t) return;
 
     dragging = t;
-    controls.enabled = false;              // 拖物件時停用 OrbitControls,不然會同時轉鏡頭
+    controls.enabled = false;                 // 拖物件時不要同時轉鏡頭
     renderer.domElement.style.cursor = 'grabbing';
 
-    // 建立一個通過物件、法線朝向相機的平面
-    const camDir = new THREE.Vector3();
-    camera.getWorldDirection(camDir);
-    dragPlane.setFromNormalAndCoplanarPoint(camDir, t.group.position);
-
-    // 記住「滑鼠打到的點」跟「物件原點」的差,拖曳才不會跳一下
+    makePlane(t);
     raycaster.setFromCamera(pointer, camera);
-    if (raycaster.ray.intersectPlane(dragPlane, hitPoint)) {
-      grabOffset.copy(t.group.position).sub(hitPoint);
+    if (raycaster.ray.intersectPlane(plane, hit)) {
+      offset.set(
+        (values[t.key].x ?? 0) - hit.x,
+        0,
+        (values[t.key].z ?? 0) - hit.z
+      );
     } else {
-      grabOffset.set(0, 0, 0);
+      offset.set(0, 0, 0);
     }
     ev.preventDefault();
   }
 
-  function onPointerMove(ev) {
+  function onMove(ev) {
     updatePointer(ev);
 
     if (!dragging) {
-      // 只做 hover 游標提示
       const t = pick();
       if (t !== hovered) {
         setHighlight(hovered, false);
@@ -101,44 +121,51 @@ export function createInteraction({ renderer, camera, controls, targets, onChang
     }
 
     raycaster.setFromCamera(pointer, camera);
-    if (!raycaster.ray.intersectPlane(dragPlane, hitPoint)) return;
+    if (!raycaster.ray.intersectPlane(plane, hit)) return;
 
-    const want = hitPoint.add(grabOffset);
-    const axis = dragging.axis;                     // 'x' | 'z'
-    const v = clamp(want[axis], dragging.range.min, dragging.range.max);
-    dragging.group.position[axis] = v;
-    onChange?.(dragging.key, v, 'drag');
-  }
-
-  function onPointerUp() {
-    if (dragging) {
-      controls.enabled = true;
-      renderer.domElement.style.cursor = hovered ? 'grab' : 'default';
-      dragging = null;
+    for (const axis of Object.keys(dragging.axes)) {
+      if (axis !== 'x' && axis !== 'z') continue;      // Y 不用拖,由 slider 控
+      const range = dragging.axes[axis];
+      const raw = hit[axis] + offset[axis];
+      const v = clamp(raw, range.min, range.max);
+      applyValue(dragging, axis, v);
+      onChange?.(dragging.key, axis, v, 'drag');
     }
   }
 
+  function onUp() {
+    if (!dragging) return;
+    controls.enabled = true;
+    renderer.domElement.style.cursor = hovered ? 'grab' : 'default';
+    dragging = null;
+  }
+
   const el = renderer.domElement;
-  el.addEventListener('pointerdown', onPointerDown);
-  window.addEventListener('pointermove', onPointerMove);
-  window.addEventListener('pointerup', onPointerUp);
-  // 滑出視窗也要收尾,不然放開後還黏著
-  window.addEventListener('pointercancel', onPointerUp);
+  el.addEventListener('pointerdown', onDown);
+  window.addEventListener('pointermove', onMove);
+  window.addEventListener('pointerup', onUp);
+  window.addEventListener('pointercancel', onUp);
+
+  // 初始化到預設值
+  for (const t of targets) {
+    for (const ax of Object.keys(t.axes)) applyValue(t, ax, values[t.key][ax]);
+  }
 
   return {
-    /** 從外部(slider)設定位置 */
-    setPosition(key, value) {
+    /** 由 slider 設定 */
+    set(key, axis, value) {
       const t = byKey[key];
-      if (!t) return;
-      const v = clamp(value, t.range.min, t.range.max);
-      t.group.position[t.axis] = v;
-      onChange?.(key, v, 'slider');
+      if (!t || !t.axes[axis]) return;
+      const v = clamp(value, t.axes[axis].min, t.axes[axis].max);
+      applyValue(t, axis, v);
+      onChange?.(key, axis, v, 'slider');
     },
+    get(key, axis) { return values[key]?.[axis]; },
     dispose() {
-      el.removeEventListener('pointerdown', onPointerDown);
-      window.removeEventListener('pointermove', onPointerMove);
-      window.removeEventListener('pointerup', onPointerUp);
-      window.removeEventListener('pointercancel', onPointerUp);
+      el.removeEventListener('pointerdown', onDown);
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
     },
   };
 }

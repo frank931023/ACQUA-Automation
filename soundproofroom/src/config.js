@@ -1,142 +1,141 @@
 /**
  * 聲學測試室 —— 場景常數
  *
- * ⚠️ 所有尺寸單位都是「公尺」,跟現場圖面一致。
- *    要改尺寸只要動這個檔案,其他程式碼都是從這裡讀。
+ * 單位一律「公尺」。要改尺寸只動這個檔案。
  *
- * 座標系(three.js 慣例:Y 朝上):
- *    X = 房間寬度  (3.41)  —— 主滑軌沿這個方向
- *    Y = 房間高度  (2.50)
- *    Z = 房間深度  (5.20)  —— 地面滑軌沿這個方向
+ * 座標系(three.js 慣例,Y 朝上),原點在房間正中央的地板:
+ *    X = 寬 3.41  ・  Y = 高 2.35  ・  Z = 深 5.20
+ *    喇叭陣列在 -Z 端,大螢幕在 +Z 端(兩者相對)
  *
- * 原點在房間正中央的地板上,所以:
- *    X ∈ [-1.705, +1.705]
- *    Y ∈ [0, 2.5]
- *    Z ∈ [-2.60, +2.60]
+ * ⚠️ 標「推估」的是圖面沒標、依比例抓的,對照現場再調。
  */
 
 export const CONFIG = {
-  /** 房間外框 */
   room: {
-    width: 3.41,          // X
-    depth: 5.20,          // Z
-    height: 2.50,         // Y
-    wallThickness: 0.06,
-    color: 0x9aa3ad,
-    opacity: 0.18,        // 半透明,才看得到裡面
-    floorColor: 0x7d858e,
-    floorOpacity: 0.55,
+    width: 3.41, depth: 5.20, height: 2.35,
+    color: 0x9aa3ad, opacity: 0.16,
+    floorColor: 0x7d858e, floorOpacity: 0.55,
   },
 
-  /** 天花板主滑軌 —— 喇叭陣列掛在上面,沿 X 移動 */
+  // ── 天花板:喇叭主滑軌 ──────────────────────────
   mainRail: {
-    length: 2.00,         // 滑軌本身長度
-    z: -1.55,             // 靠近房間一端(圖面上喇叭那側)
-    y: 2.34,              // 離地高度
-    barSize: 0.055,       // 軌道方管邊長
-    color: 0xd8dde3,
-    /** 掛車可移動的範圍(沿 X)。以滑軌中心為 0,兩端各留一點餘裕 */
+    length: 2.00, z: -1.75, y: 2.20, barSize: 0.055, color: 0xd8dde3,
     travel: { min: -0.85, max: 0.85, default: 0.0 },
   },
-
-  /** 喇叭支架滑軌 —— 控制喇叭陣列吊掛的下降量 */
   bracketRail: {
-    length: 0.80,         // 支架滑軌長度
-    min: 0.50,            // 可調節下限
-    max: 0.80,            // 可調節上限
-    default: 0.65,
-    barSize: 0.04,
-    color: 0xc3c9d1,
+    length: 0.80, min: 0.50, max: 0.80, default: 0.65,
+    barSize: 0.04, color: 0xc3c9d1,
   },
-
-  /** 喇叭陣列:2 欄 × 4 列 = 8 顆 */
   speakerArray: {
-    cols: 2,
-    rows: 4,
-    spacingX: 0.30,       // 欄距
-    spacingY: 0.42,       // 列距(對應圖面的 0.42 m)
-    /** 單顆喇叭(圓柱體,朝 +Z 方向也就是房間內側) */
-    speaker: {
-      radius: 0.085,
-      depth: 0.26,
-      color: 0x24282e,
-      coneColor: 0x15181c,
-    },
-    frame: {
-      width: 0.72,
-      thickness: 0.05,
-      color: 0x3a4048,
-    },
+    cols: 2, rows: 4, spacingX: 0.30, spacingY: 0.42,
+    speaker: { radius: 0.085, depth: 0.26, color: 0x24282e, coneColor: 0x15181c },
+    frame: { width: 0.72, thickness: 0.05, color: 0x3a4048 },
   },
 
-  /** 地面滑軌 —— HATS 平台沿 Z 前後移動 */
-  floorRail: {
-    length: 4.61,         // 圖面標註 4.61 m
-    gauge: 0.54,          // 兩條軌道的間距(圖面 0.54 m)
-    barSize: 0.05,
-    y: 0.05,
-    color: 0xd8dde3,
-    /** 平台可移動範圍(沿 Z) */
-    travel: { min: -1.90, max: 1.90, default: -0.30 },
+  // ── 大螢幕(喇叭陣列的對面)可上下 + 前後 ────────
+  screen: {
+    width: 1.22,          // 推估:約 55 吋
+    height: 0.71,
+    thickness: 0.055,
+    bezel: 0.022,
+    panelColor: 0x14171b,
+    frameColor: 0x3a4048,
+    standColor: 0xc0c6cd,
+    /** 螢幕中心離地高度 */
+    lift: { min: 0.70, max: 1.90, default: 1.25 },
+    /** 前後行程 */
+    travelZ: { min: 1.20, max: 2.35, default: 2.05 },
   },
 
-  /** HATS 人形量測頭 + 可旋轉平台 */
+  // ── 地面:HATS 雙層滑軌 ────────────────────────
+  floorRailZ: {
+    length: 4.61, gauge: 0.54, barSize: 0.05, y: 0.05, color: 0xd8dde3,
+    travel: { min: -1.85, max: 1.85, default: -0.30 },
+  },
+  floorRailX: {
+    length: 1.60,         // 推估
+    barSize: 0.045, y: 0.115, color: 0xc8ced5,
+    travel: { min: -0.55, max: 0.55, default: 0.0 },
+  },
+
+  // ── HATS:B&K 4128 + HMS II.3 立架 ──────────────
   hats: {
-    /** 旋轉平台(圖面 0.80 × 0.80) */
-    platform: {
-      size: 0.80,
-      height: 0.12,
-      color: 0xe4e8ec,
+    totalHeight: 0.695,
+    torso: { width: 0.410, height: 0.460, depth: 0.183, color: 0xe8e4de },
+    neck: { diameter: 0.112 },
+    head: { radius: 0.098, color: 0xf0ece6 },
+    /** 頭部前傾角:規格標「垂直 或 17°」,但這裡做成連續可調 */
+    headAngle: { min: -15, max: 35, default: 0, presets: [0, 17] },
+    stand: {
+      test: 1.20, min: 0.75, max: 1.50,
+      columnRadius: 0.055, baseSize: 0.42, color: 0xd0d6dc,
     },
-    /** 轉盤 */
-    turntable: {
-      radius: 0.30,
-      height: 0.06,
-      color: 0xb9c0c8,
-      defaultAngleDeg: 0,
-    },
-    /** 軀幹 */
-    torso: {
-      width: 0.42,
-      height: 0.52,
-      depth: 0.24,
-      color: 0xe8e4de,
-    },
-    /** 頭部 */
-    head: {
-      radius: 0.105,
-      color: 0xf0ece6,
-    },
-    /** 座柱高度(平台上方到軀幹底部) */
-    pedestalHeight: 0.30,
+    mrpOffset: 0.225,     // HMS II.3 托座 → MRP
+    platform: { size: 0.80, height: 0.10, color: 0xe4e8ec },
+    turntable: { radius: 0.30, height: 0.05, color: 0xb9c0c8, defaultAngleDeg: 0 },
+    mouth: { radius: 0.032, depth: 0.05, color: 0x8a9099 },
   },
 
-  /** 天花板吊掛麥克風(圖面上那兩支) */
-  ceilingMics: [
-    { x: -0.45, z: 0.55 },
-    { x: 0.45, z: 0.15 },
-  ],
-  mic: {
-    bodyRadiusTop: 0.055,
-    bodyRadiusBottom: 0.085,
-    bodyHeight: 0.46,
-    capsuleRadius: 0.05,
-    color: 0xdfe4e9,
-    capsuleColor: 0x2a2f36,
+  // ── 桌台(升降 + 前後可移動)────────────────────
+  tables: {
+    size: 0.80, thickness: 0.05,
+    color: 0xeceff2, columnColor: 0xc0c6cd,
+    items: [
+      {
+        key: 'tableFront', label: '前方 DUT 升降台',
+        lift: { test: 0.90, min: 0.40, max: 2.30 },
+        travelZ: { min: 0.55, max: 2.00, default: 1.35 },
+      },
+      {
+        key: 'tableBack', label: '後方 Dixie 升降台',
+        lift: { test: 1.20, min: 0.40, max: 2.30 },
+        travelZ: { min: -2.00, max: -0.55, default: -0.95 },
+      },
+    ],
   },
 
-  /** 拖曳時的高亮顏色 */
+  // ── 天花板麥克風吊架 × 2 組 ─────────────────────
+  micRig: {
+    bridge: { length: 2.60, barSize: 0.05, y: 2.28, color: 0xd8dde3 },
+    /** 高度規格:測試 0.95 / 1.25 m,範圍 0.70 ~ 1.50 m */
+    height: { min: 0.70, max: 1.50, presets: [0.95, 1.25] },
+    mic: {
+      bodyRadius: 0.0135, bodyLength: 0.10,
+      preampRadius: 0.0125, preampLength: 0.12,
+      color: 0xd8dde0, capsuleColor: 0x2f343b,
+    },
+    rod: { radius: 0.014, color: 0xbfc6cd },
+    /** 兩組吊架各自的行程與預設 */
+    items: [
+      {
+        key: 'micRig1', label: '麥克風吊架 1',
+        travelX: { min: -1.10, max: 1.10, default: -0.35 },
+        travelZ: { min: -1.30, max: 1.70, default: 0.55 },
+        heightDefault: 0.95,
+      },
+      {
+        key: 'micRig2', label: '麥克風吊架 2',
+        travelX: { min: -1.10, max: 1.10, default: 0.40 },
+        travelZ: { min: -1.30, max: 1.70, default: -0.35 },
+        heightDefault: 1.25,
+      },
+    ],
+  },
+
+  /** KEF LS50 Meta 主喇叭(靜態擺放) */
+  kef: {
+    width: 0.200, height: 0.302, depth: 0.281,
+    color: 0x2b3036, coneRadius: 0.062, standHeight: 0.30,
+    x: 1.30, z: 0.90,     // 推估
+  },
+
   highlight: 0x4f8ef7,
 
-  /** 相機 */
   camera: {
-    fov: 50,
-    near: 0.05,
-    far: 100,
-    position: [4.2, 3.0, 5.2],
+    fov: 50, near: 0.05, far: 100,
+    position: [4.2, 3.0, 5.4],
     target: [0, 1.0, 0],
   },
 };
 
-/** 把數值夾在區間內 —— 拖曳與 slider 都會用到 */
 export const clamp = (v, min, max) => Math.min(max, Math.max(min, v));
