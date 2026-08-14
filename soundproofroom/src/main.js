@@ -21,7 +21,7 @@ const $ = (s) => document.querySelector(s);
 // ── 三件套 ──────────────────────────────────────
 const container = $('#viewport');
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x11151a);
+scene.background = new THREE.Color(C.background);
 
 const camera = new THREE.PerspectiveCamera(
   C.camera.fov, container.clientWidth / container.clientHeight, C.camera.near, C.camera.far);
@@ -39,8 +39,8 @@ controls.enableDamping = true;
 controls.dampingFactor = 0.08;
 controls.target.set(...C.camera.target);
 controls.maxPolarAngle = Math.PI * 0.495;
-controls.minDistance = 1.0;
-controls.maxDistance = 24;
+controls.minDistance = C.camera.minDistance;
+controls.maxDistance = C.camera.maxDistance;
 
 // ── 場景 ────────────────────────────────────────
 scene.add(buildLights(), buildRoom(), buildMainRail(), buildFloorRails(), buildKefSpeaker());
@@ -67,10 +67,11 @@ const micRigs = C.micRig.items.map((item) => {
   return { item, group: g };
 });
 
-const grid = new THREE.GridHelper(Math.max(C.room.width, C.room.depth), 20, 0x3a424c, 0x252b32);
+const grid = new THREE.GridHelper(
+  Math.max(C.room.width, C.room.depth), C.grid.divisions, C.grid.color1, C.grid.color2);
 grid.position.y = 0.002;
 grid.material.transparent = true;
-grid.material.opacity = 0.42;
+grid.material.opacity = C.grid.opacity;
 scene.add(grid);
 
 // ── 互動:所有可拖曳目標 ────────────────────────

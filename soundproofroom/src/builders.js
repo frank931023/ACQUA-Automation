@@ -106,7 +106,8 @@ export function buildSpeakerArray() {
   const S = C.speakerArray;
 
   const carriage = new THREE.Mesh(
-    new THREE.BoxGeometry(0.26, 0.10, 0.16), metal(0x8f979f, 0.4, 0.75));
+    new THREE.BoxGeometry(S.carriage.width, S.carriage.height, S.carriage.depth),
+    metal(S.carriage.color, 0.4, 0.75));
   g.add(carriage);
 
   const drop = bar(C.bracketRail.length, C.bracketRail.barSize, C.bracketRail.color, 'y');
@@ -121,14 +122,14 @@ export function buildSpeakerArray() {
   const totalW = (S.cols - 1) * S.spacingX;
 
   const back = new THREE.Mesh(
-    new THREE.BoxGeometry(S.frame.width, totalH + 0.36, S.frame.thickness),
+    new THREE.BoxGeometry(S.frame.width, totalH + S.frame.margin, S.frame.thickness),
     metal(S.frame.color, 0.6, 0.35));
-  back.position.set(0, -totalH / 2, -S.speaker.depth / 2 - 0.03);
+  back.position.set(0, -totalH / 2, -S.speaker.depth / 2 - S.frame.backOffset);
   arrayGroup.add(back);
 
   const spkGeo = new THREE.CylinderGeometry(S.speaker.radius, S.speaker.radius, S.speaker.depth, 24);
   const spkMat = metal(S.speaker.color, 0.7, 0.2);
-  const coneGeo = new THREE.CircleGeometry(S.speaker.radius * 0.72, 24);
+  const coneGeo = new THREE.CircleGeometry(S.speaker.radius * S.speaker.coneRatio, 24);
   const coneMat = matte(S.speaker.coneColor, 0.95);
 
   for (let r = 0; r < S.rows; r++) {
@@ -162,12 +163,14 @@ export function buildKefSpeaker() {
 
   // 立架
   const pole = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.03, 0.03, K.standHeight, 16), metal(0x9aa1a9));
+    new THREE.CylinderGeometry(K.pole.radius, K.pole.radius, K.standHeight, 16),
+    metal(K.poleColor));
   pole.position.y = K.standHeight / 2;
   g.add(pole);
   const base = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.16, 0.18, 0.025, 24), metal(0x8a9199));
-  base.position.y = 0.012;
+    new THREE.CylinderGeometry(K.base.topRadius, K.base.bottomRadius, K.base.thickness, 24),
+    metal(K.baseColor));
+  base.position.y = K.base.thickness / 2;
   g.add(base);
 
   // 箱體
@@ -180,18 +183,18 @@ export function buildKefSpeaker() {
   // 同軸單體(Uni-Q)
   const cone = new THREE.Mesh(
     new THREE.CircleGeometry(K.coneRadius, 28),
-    matte(0xb9a271, 0.7));            // LS50 Meta 的金色錐盆
+    matte(K.coneColor, 0.7));         // LS50 Meta 的金色錐盆
   cone.position.set(0, box.position.y + 0.02, K.depth / 2 + 0.002);
   g.add(cone);
 
   const dome = new THREE.Mesh(
-    new THREE.SphereGeometry(K.coneRadius * 0.32, 16, 12), matte(0x8d7c56, 0.5));
+    new THREE.SphereGeometry(K.coneRadius * 0.32, 16, 12), matte(K.domeColor, 0.5));
   dome.position.set(0, cone.position.y, K.depth / 2 + 0.012);
   g.add(dome);
 
   // 低音反射孔
   const port = new THREE.Mesh(
-    new THREE.CircleGeometry(0.022, 16), matte(0x111417, 0.9));
+    new THREE.CircleGeometry(K.port.radius, 16), matte(K.portColor, 0.9));
   port.position.set(0, box.position.y - K.height * 0.34, K.depth / 2 + 0.002);
   g.add(port);
 
@@ -214,9 +217,9 @@ export function buildFloorRails() {
     r.position.set(sx * Z.gauge / 2, Z.y, 0);
     g.add(r);
   }
-  const ties = 9;
+  const ties = Z.ties;
   for (let i = 0; i < ties; i++) {
-    const t = bar(Z.gauge + Z.barSize, Z.barSize * 0.7, 0xc8ced5, 'x');
+    const t = bar(Z.gauge + Z.barSize, Z.barSize * 0.7, Z.tieColor, 'x');
     t.position.set(0, Z.y - Z.barSize * 0.35, -Z.length / 2 + (i + 0.5) * (Z.length / ties));
     g.add(t);
   }
@@ -240,8 +243,9 @@ export function buildHats() {
 
   // ── 下層台車(在縱向軌上跑)+ 上層橫移軌 ──
   const bogie = new THREE.Mesh(
-    new THREE.BoxGeometry(C.floorRailZ.gauge + 0.14, 0.06, 0.34), metal(0x9aa1a9, 0.4, 0.7));
-  bogie.position.y = C.floorRailZ.y + 0.05;
+    new THREE.BoxGeometry(C.floorRailZ.gauge + H.bogie.overhang, H.bogie.height, H.bogie.depth),
+    metal(H.bogie.color, 0.4, 0.7));
+  bogie.position.y = C.floorRailZ.y + H.bogie.height - 0.01;
   g.add(bogie);
 
   // 橫移滑軌(上層)—— 這一段會跟著台車前後跑
@@ -250,7 +254,7 @@ export function buildHats() {
   g.add(xr);
   for (const sx of [-1, 1]) {
     const cap = new THREE.Mesh(
-      new THREE.BoxGeometry(X.barSize * 1.4, X.barSize * 1.8, X.barSize * 1.8), metal(0xaeb5bd));
+      new THREE.BoxGeometry(X.barSize * 1.4, X.barSize * 1.8, X.barSize * 1.8), metal(X.capColor));
     cap.position.set(sx * X.length / 2, X.y, 0);
     g.add(cap);
   }
@@ -265,7 +269,7 @@ export function buildHats() {
   const plat = new THREE.Mesh(
     new THREE.BoxGeometry(H.platform.size, H.platform.height, H.platform.size),
     matte(H.platform.color, 0.75));
-  plat.position.y = X.y + H.platform.height / 2 + 0.03;
+  plat.position.y = X.y + H.platform.height / 2 + H.platform.lift;
   plat.castShadow = true;
   carriage.add(plat);
 
@@ -287,8 +291,9 @@ export function buildHats() {
   turn.add(stand);
 
   const sbase = new THREE.Mesh(
-    new THREE.BoxGeometry(H.stand.baseSize, 0.03, H.stand.baseSize), metal(H.stand.color, 0.6, 0.3));
-  sbase.position.y = 0.015;
+    new THREE.BoxGeometry(H.stand.baseSize, H.stand.baseThickness, H.stand.baseSize),
+    metal(H.stand.color, 0.6, 0.3));
+  sbase.position.y = H.stand.baseThickness / 2;
   stand.add(sbase);
 
   // 立柱 —— scale.y 會被 setHatsHeight() 調整
@@ -304,7 +309,8 @@ export function buildHats() {
   stand.add(body);
 
   const holder = new THREE.Mesh(
-    new THREE.BoxGeometry(0.20, 0.05, 0.16), metal(0xb6bdc4, 0.5, 0.4));
+    new THREE.BoxGeometry(H.holder.width, H.holder.height, H.holder.depth),
+    metal(H.holder.color, 0.5, 0.4));
   body.add(holder);
 
   const skin = matte(H.torso.color, 0.85);
@@ -312,7 +318,7 @@ export function buildHats() {
   // 軀幹 460(H) × 410(W) × 183(D) mm
   const torso = new THREE.Mesh(
     new THREE.BoxGeometry(H.torso.width, H.torso.height, H.torso.depth), skin);
-  torso.position.y = 0.025 + H.torso.height / 2;
+  torso.position.y = H.torso.gap + H.torso.height / 2;
   torso.castShadow = true;
   body.add(torso);
 
@@ -324,30 +330,31 @@ export function buildHats() {
 
   // 脖子 Ø112 mm
   const neck = new THREE.Mesh(
-    new THREE.CylinderGeometry(H.neck.diameter / 2, H.neck.diameter / 2, 0.07, 18),
+    new THREE.CylinderGeometry(H.neck.diameter / 2, H.neck.diameter / 2, H.neck.length, 18),
     matte(H.head.color, 0.85));
-  neck.position.y = shoulder.position.y + 0.035;
+  neck.position.y = shoulder.position.y + H.neck.length / 2;
   body.add(neck);
 
   // ── 頭部(可 0° / 17° 前傾)──
   // 樞紐放在脖子頂端,旋轉才會像真的點頭
   const headPivot = new THREE.Group();
   headPivot.name = 'headPivot';
-  headPivot.position.y = neck.position.y + 0.035;
+  headPivot.position.y = neck.position.y + H.neck.length / 2;
   body.add(headPivot);
 
   const head = new THREE.Mesh(
     new THREE.SphereGeometry(H.head.radius, 24, 18), matte(H.head.color, 0.8));
-  head.scale.set(1, 1.14, 1.08);
+  head.scale.set(1, H.head.scaleY, H.head.scaleZ);
   head.position.y = H.head.radius * 1.05;
   head.castShadow = true;
   headPivot.add(head);
 
-  const dark = matte(0x3a3f46, 0.6);
+  const dark = matte(H.ear.color, 0.6);
 
   // 兩耳(量測麥克風位置)
   for (const sx of [-1, 1]) {
-    const ear = new THREE.Mesh(new THREE.CylinderGeometry(0.024, 0.024, 0.018, 16), dark);
+    const ear = new THREE.Mesh(
+      new THREE.CylinderGeometry(H.ear.radius, H.ear.radius, H.ear.thickness, 16), dark);
     ear.rotation.z = Math.PI / 2;
     ear.position.set(sx * H.head.radius * 1.0, head.position.y, 0);
     headPivot.add(ear);
@@ -365,8 +372,8 @@ export function buildHats() {
 
   // MRP 標記點(小紅點,方便對位)
   const mrp = new THREE.Mesh(
-    new THREE.SphereGeometry(0.012, 12, 8),
-    new THREE.MeshBasicMaterial({ color: 0xf85149 }));
+    new THREE.SphereGeometry(H.mrpMarker.radius, 12, 8),
+    new THREE.MeshBasicMaterial({ color: H.mrpMarker.color }));
   mrp.name = 'mrp';
   mrp.position.set(0, mouth.position.y, mouth.position.z + H.mouth.depth / 2);
   headPivot.add(mrp);
@@ -417,13 +424,15 @@ export function buildTable(spec) {
   const T = C.tables;
 
   const col = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.075, 0.095, 1, 18), metal(T.columnColor, 0.5, 0.35));
+    new THREE.CylinderGeometry(T.column.topRadius, T.column.bottomRadius, 1, 18),
+    metal(T.columnColor, 0.5, 0.35));
   col.name = 'column';
   g.add(col);
 
   const base = new THREE.Mesh(
-    new THREE.BoxGeometry(0.46, 0.035, 0.46), metal(0xb0b7be, 0.6, 0.3));
-  base.position.y = 0.017;
+    new THREE.BoxGeometry(T.base.size, T.base.thickness, T.base.size),
+    metal(T.baseColor, 0.6, 0.3));
+  base.position.y = T.base.thickness / 2;
   g.add(base);
 
   const top = new THREE.Mesh(
@@ -465,7 +474,7 @@ export function buildMicRig(item) {
   for (const sx of [-1, 1]) {
     const cap = new THREE.Mesh(
       new THREE.BoxGeometry(R.bridge.barSize * 1.5, R.bridge.barSize * 2, R.bridge.barSize * 2),
-      metal(0xaeb5bd));
+      metal(R.bridge.capColor));
     cap.position.set(sx * R.bridge.length / 2, R.bridge.y, 0);
     g.add(cap);
   }
@@ -476,8 +485,9 @@ export function buildMicRig(item) {
   g.add(trolley);
 
   const tBody = new THREE.Mesh(
-    new THREE.BoxGeometry(0.16, 0.08, 0.13), metal(0x8f979f, 0.4, 0.75));
-  tBody.position.y = R.bridge.y - 0.055;
+    new THREE.BoxGeometry(R.trolley.width, R.trolley.height, R.trolley.depth),
+    metal(R.trolley.color, 0.4, 0.75));
+  tBody.position.y = R.bridge.y - R.trolley.drop;
   trolley.add(tBody);
 
   // 伸縮吊桿 —— scale.y 由 setMicHeight() 調
@@ -528,7 +538,7 @@ export function setMicHeight(group, h) {
   if (!trolley || !rod || !mic) return;
 
   const micLen = R.mic.preampLength + R.mic.bodyLength + 0.008;
-  const rodTop = R.bridge.y - 0.095;
+  const rodTop = R.bridge.y - R.rod.topOffset;
   const rodLen = Math.max(0.05, rodTop - h - micLen);
 
   rod.scale.y = rodLen;
@@ -555,19 +565,21 @@ export function buildScreen() {
 
   // 底座 + 立柱(立柱高度由 setScreenLift 調整)
   const base = new THREE.Mesh(
-    new THREE.BoxGeometry(0.62, 0.04, 0.42), metal(0x9aa1a9, 0.6, 0.35));
-  base.position.y = 0.02;
+    new THREE.BoxGeometry(S.base.width, S.base.height, S.base.depth),
+    metal(S.baseColor, 0.6, 0.35));
+  base.position.y = S.base.height / 2;
   g.add(base);
 
   for (const sx of [-1, 1]) {
     const foot = new THREE.Mesh(
-      new THREE.BoxGeometry(0.07, 0.05, 0.40), metal(0x8a9199, 0.6, 0.3));
-    foot.position.set(sx * 0.24, 0.025, 0);
+      new THREE.BoxGeometry(S.foot.width, S.foot.height, S.foot.depth),
+      metal(S.footColor, 0.6, 0.3));
+    foot.position.set(sx * S.foot.spacing, S.foot.height / 2, 0);
     g.add(foot);
   }
 
   const col = new THREE.Mesh(
-    new THREE.BoxGeometry(0.10, 1, 0.10), metal(S.standColor, 0.5, 0.35));
+    new THREE.BoxGeometry(S.column.size, 1, S.column.size), metal(S.standColor, 0.5, 0.35));
   col.name = 'screenColumn';
   g.add(col);
 
@@ -588,7 +600,7 @@ export function buildScreen() {
     new THREE.PlaneGeometry(S.width, S.height),
     new THREE.MeshStandardMaterial({
       color: S.panelColor, roughness: 0.28, metalness: 0.1,
-      emissive: 0x0a1622, emissiveIntensity: 0.55,   // 一點自發光,看起來像開著
+      emissive: S.emissive, emissiveIntensity: S.emissiveIntensity,
     }));
   panel.position.z = -S.thickness / 2 - 0.002;
   panel.rotation.y = Math.PI;
@@ -596,8 +608,9 @@ export function buildScreen() {
 
   // 背面支架
   const mount = new THREE.Mesh(
-    new THREE.BoxGeometry(0.22, 0.22, 0.05), metal(0x6f767e, 0.6, 0.4));
-  mount.position.z = S.thickness / 2 + 0.024;
+    new THREE.BoxGeometry(S.mount.size, S.mount.size, S.mount.thickness),
+    metal(S.mountColor, 0.6, 0.4));
+  mount.position.z = S.thickness / 2 + S.mount.offset;
   panelGroup.add(mount);
 
   g.position.z = S.travelZ.default;
@@ -621,20 +634,22 @@ export function setScreenLift(group, h) {
 // ════════════════════════════════════════════════
 export function buildLights() {
   const g = new THREE.Group();
-  g.add(new THREE.HemisphereLight(0xffffff, 0x60666e, 0.85));
+  const L = C.lights;
 
-  const key = new THREE.DirectionalLight(0xffffff, 1.1);
-  key.position.set(3.5, 4.5, 3.0);
+  g.add(new THREE.HemisphereLight(L.hemi.sky, L.hemi.ground, L.hemi.intensity));
+
+  const key = new THREE.DirectionalLight(L.key.color, L.key.intensity);
+  key.position.set(...L.key.position);
   key.castShadow = true;
-  key.shadow.mapSize.set(1024, 1024);
+  key.shadow.mapSize.set(L.key.shadowMapSize, L.key.shadowMapSize);
   key.shadow.camera.near = 0.5;
   key.shadow.camera.far = 20;
-  const s = 4;
+  const s = L.key.shadowSpan;
   Object.assign(key.shadow.camera, { left: -s, right: s, top: s, bottom: -s });
   g.add(key);
 
-  const fill = new THREE.DirectionalLight(0xffffff, 0.35);
-  fill.position.set(-3, 2.5, -2.5);
+  const fill = new THREE.DirectionalLight(L.fill.color, L.fill.intensity);
+  fill.position.set(...L.fill.position);
   g.add(fill);
   return g;
 }
