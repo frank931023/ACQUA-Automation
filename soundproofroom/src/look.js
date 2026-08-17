@@ -13,11 +13,13 @@ export const LOOK = {
     floorColor: 0x7d858e, floorOpacity: 0.55,
   },
 
-  mainRail: { color: 0xd8dde3, endColor: 0xaeb5bd, bracketColor: 0xc8ced5 },
-  bracketRail: { color: 0xc3c9d1 },
+  speakerRail: { color: 0xd8dde3, endColor: 0xaeb5bd },
+  speakerStand: {
+    base: { color: 0x9aa1a9 },
+    post: { color: 0xc0c6cd },
+  },
 
   speakerArray: {
-    carriage: { color: 0x8f979f },
     speaker: { color: 0x24282e, coneColor: 0x15181c },
     frame: { color: 0x3a4048 },
   },
@@ -58,14 +60,6 @@ export const LOOK = {
     mic: { color: 0xd8dde0, capsuleColor: 0x2f343b },
   },
 
-  kef: {
-    color: 0x2b3036,
-    coneColor: 0xb9a271,          // LS50 Meta 的金色錐盆
-    domeColor: 0x8d7c56,
-    portColor: 0x111417,
-    poleColor: 0x9aa1a9,
-    baseColor: 0x8a9199,
-  },
 
   /** 滑鼠移過去時的高亮色 */
   highlight: 0x4f8ef7,

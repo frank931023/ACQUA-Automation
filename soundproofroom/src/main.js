@@ -9,7 +9,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
 import { CONFIG as C } from './config.js';
 import {
-  buildRoom, buildMainRail, buildSpeakerArray, setBracketDrop, buildKefSpeaker,
+  buildRoom, buildSpeakerRail, buildSpeakerArray, setArrayLift,
   buildFloorRails, buildHats, setHatsAngle, setHatsHeight, setHeadAngle, setHatsCross,
   buildTable, setTableHeight, buildMicRig, setMicHeight, setMicCross,
   buildScreen, setScreenLift, buildLights,
@@ -43,10 +43,9 @@ controls.minDistance = C.camera.minDistance;
 controls.maxDistance = C.camera.maxDistance;
 
 // ── 場景 ────────────────────────────────────────
-scene.add(buildLights(), buildRoom(), buildMainRail(), buildFloorRails(), buildKefSpeaker());
+scene.add(buildLights(), buildRoom(), buildSpeakerRail(), buildFloorRails());
 
-const speakers = buildSpeakerArray();
-speakers.position.set(C.mainRail.travel.default, C.mainRail.y, C.mainRail.z);
+const speakers = buildSpeakerArray();   // 位置由 builder 與 interaction 決定
 scene.add(speakers);
 
 const hats = buildHats();
@@ -76,8 +75,8 @@ scene.add(grid);
 
 // ── 互動:所有可拖曳目標 ────────────────────────
 const dragTargets = [
-  { key: 'speakers', group: speakers, planeY: C.mainRail.y,
-    axes: { x: { ...C.mainRail.travel } } },
+  { key: 'speakers', group: speakers, planeY: C.speakerStand.lift.default,
+    axes: { x: { ...C.speakerRail.travel } } },
 
   // HATS:Z 走下層軌(整組),X 走上層橫移軌(只動子層)
   { key: 'hats', group: hats, planeY: C.floorRailX.y,
@@ -124,15 +123,15 @@ const sliders = {};    // 'key.axis' 或自訂 id → { el, out, format }
  */
 const PANEL = [
   {
-    title: '喇叭陣列(2 × 4)',
+    title: '喇叭陣列(2 × 4,落地式)',
     items: [
-      { type: 'drag', key: 'speakers', axis: 'x', label: '主滑軌位置 X',
-        range: C.mainRail.travel, format: fmtPos,
-        hint: '主滑軌長 2.00 m ・ 房間寬度中央' },
-      { type: 'value', id: 'sp-drop', label: '支架下降量',
-        range: { min: C.bracketRail.min, max: C.bracketRail.max, default: C.bracketRail.default },
-        onInput: (v) => setBracketDrop(speakers, v),
-        hint: '支架滑軌長 0.80 m ・ 可調 0.50 ~ 0.80 m' },
+      { type: 'drag', key: 'speakers', axis: 'x', label: '地面橫移軌位置 X',
+        range: C.speakerRail.travel, format: fmtPos,
+        hint: '橫移軌長 2.00 m ・ 站在地面,不是吊在天花板' },
+      { type: 'value', id: 'sp-lift', label: '陣列中心高度',
+        range: C.speakerStand.lift,
+        onInput: (v) => setArrayLift(speakers, v),
+        hint: `立柱伸縮 ${C.speakerStand.lift.min} ~ ${C.speakerStand.lift.max} m` },
     ],
   },
   {

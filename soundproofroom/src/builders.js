@@ -71,49 +71,75 @@ export function buildRoom() {
 }
 
 // ════════════════════════════════════════════════
-// 天花板主滑軌(靜態)
+// 地面:喇叭陣列橫移軌(靜態)
+//
+// 喇叭陣列是落地的,不是吊在天花板 —— 兩條平行軌鋪在地上,
+// 台車騎在上面沿 X 左右跑。
 // ════════════════════════════════════════════════
-export function buildMainRail() {
+export function buildSpeakerRail() {
   const g = new THREE.Group();
-  const { length, z, y, barSize, color } = C.mainRail;
+  const R = C.speakerRail;
 
-  const rail = bar(length, barSize, color, 'x');
-  rail.position.set(0, y, z);
-  g.add(rail);
+  // 兩條平行軌
+  for (const sz of [-1, 1]) {
+    const rail = bar(R.length, R.barSize, R.color, 'x');
+    rail.position.set(0, R.y, R.z + sz * R.gauge / 2);
+    g.add(rail);
+  }
 
+  // 中間的枕條
+  const ties = 5;
+  for (let i = 0; i < ties; i++) {
+    const t = bar(R.gauge + R.barSize, R.barSize * 0.7, R.color, 'z');
+    t.position.set(-R.length / 2 + (i + 0.5) * (R.length / ties),
+                   R.y - R.barSize * 0.35, R.z);
+    g.add(t);
+  }
+
+  // 兩端端塊
   for (const sx of [-1, 1]) {
     const end = new THREE.Mesh(
-      new THREE.BoxGeometry(barSize * 1.6, barSize * 2.2, barSize * 2.2), metal(0xaeb5bd));
-    end.position.set(sx * length / 2, y, z);
+      new THREE.BoxGeometry(R.barSize * 1.4, R.barSize * 1.6, R.gauge + R.barSize * 2),
+      metal(R.endColor));
+    end.position.set(sx * R.length / 2, R.y, R.z);
     g.add(end);
-
-    // 接到左右牆的橫撐
-    const span = (C.room.width - length) / 2;
-    const sup = bar(span, barSize * 0.8, 0xc8ced5, 'x');
-    sup.position.set(sx * (length / 2 + span / 2), y, z);
-    g.add(sup);
   }
   return g;
 }
 
 // ════════════════════════════════════════════════
-// 喇叭陣列(可拖曳:X)
+// 喇叭陣列 2 × 4(落地式,可拖曳:X)
+//
+// 底盤騎在地面橫移軌上 → 立柱 → 陣列。整組沿 X 左右移動,
+// 陣列高度由立柱伸縮控制。
+//
+// 每一顆單體是「左右比較長」的長條狀:圓柱軸轉成水平指向 X,
+// 再壓 Z 讓前後深度獨立於上下高度,所以正面看是橫躺的膠囊。
 // ════════════════════════════════════════════════
 export function buildSpeakerArray() {
   const g = new THREE.Group();
   g.userData.draggable = 'speakers';
 
   const S = C.speakerArray;
+  const T = C.speakerStand;
+  const R = C.speakerRail;
 
-  const carriage = new THREE.Mesh(
-    new THREE.BoxGeometry(S.carriage.width, S.carriage.height, S.carriage.depth),
-    metal(S.carriage.color, 0.4, 0.75));
-  g.add(carriage);
+  // ── 台車底盤(騎在軌道上)──
+  const base = new THREE.Mesh(
+    new THREE.BoxGeometry(T.base.width, T.base.height, T.base.depth),
+    metal(T.base.color, 0.5, 0.5));
+  base.position.y = R.y + T.base.height / 2;
+  base.castShadow = true;
+  g.add(base);
 
-  const drop = bar(C.bracketRail.length, C.bracketRail.barSize, C.bracketRail.color, 'y');
-  drop.position.y = -C.bracketRail.length / 2;
-  g.add(drop);
+  // ── 立柱 —— 高度由 setArrayLift() 伸縮 ──
+  const post = new THREE.Mesh(
+    new THREE.BoxGeometry(T.post.size, 1, T.post.size), metal(T.post.color, 0.5, 0.4));
+  post.name = 'speakerPost';
+  post.position.z = -(S.speaker.depth / 2 + S.frame.backOffset + S.frame.thickness);
+  g.add(post);
 
+  // ── 陣列本體(整層隨立柱升降)──
   const arrayGroup = new THREE.Group();
   arrayGroup.name = 'arrayGroup';
   g.add(arrayGroup);
@@ -121,86 +147,58 @@ export function buildSpeakerArray() {
   const totalH = (S.rows - 1) * S.spacingY;
   const totalW = (S.cols - 1) * S.spacingX;
 
+  // 背板 —— 尺寸由單體陣列外框推得,調間距不用再手動配背板
   const back = new THREE.Mesh(
-    new THREE.BoxGeometry(S.frame.width, totalH + S.frame.margin, S.frame.thickness),
+    new THREE.BoxGeometry(
+      totalW + S.speaker.width + S.frame.marginX * 2,
+      totalH + S.speaker.height + S.frame.marginY * 2,
+      S.frame.thickness),
     metal(S.frame.color, 0.6, 0.35));
-  back.position.set(0, -totalH / 2, -S.speaker.depth / 2 - S.frame.backOffset);
+  back.position.set(0, 0, -S.speaker.depth / 2 - S.frame.backOffset);
   arrayGroup.add(back);
 
-  const spkGeo = new THREE.CylinderGeometry(S.speaker.radius, S.speaker.radius, S.speaker.depth, 24);
+  // 單體:圓柱軸轉成 X 向 → 左右長;scale.z 讓前後深度獨立
+  const spkGeo = new THREE.CylinderGeometry(
+    S.speaker.height / 2, S.speaker.height / 2, S.speaker.width, 24);
   const spkMat = metal(S.speaker.color, 0.7, 0.2);
-  const coneGeo = new THREE.CircleGeometry(S.speaker.radius * S.speaker.coneRatio, 24);
+  const coneGeo = new THREE.CircleGeometry(0.5, 28);   // 單位圓,靠 scale 變橢圓
   const coneMat = matte(S.speaker.coneColor, 0.95);
 
   for (let r = 0; r < S.rows; r++) {
     for (let c = 0; c < S.cols; c++) {
       const x = -totalW / 2 + c * S.spacingX;
-      const y = -r * S.spacingY;
+      const y = totalH / 2 - r * S.spacingY;
+
       const spk = new THREE.Mesh(spkGeo, spkMat);
-      spk.rotation.x = Math.PI / 2;
+      spk.rotation.z = Math.PI / 2;                       // 軸 Y → X,變成橫躺
+      spk.scale.z = S.speaker.depth / S.speaker.height;   // 前後深度獨立於高度
       spk.position.set(x, y, 0);
       spk.castShadow = true;
       arrayGroup.add(spk);
+
+      // 前面板單體:跟著長條比例變成橢圓
       const cone = new THREE.Mesh(coneGeo, coneMat);
+      cone.scale.set(S.speaker.width * S.speaker.coneRatio,
+                     S.speaker.height * S.speaker.coneRatio, 1);
       cone.position.set(x, y, S.speaker.depth / 2 + 0.002);
       arrayGroup.add(cone);
     }
   }
+
+  g.position.z = R.z;
+  setArrayLift(g, T.lift.default);
   return g;
 }
 
-export function setBracketDrop(group, drop) {
+/** 陣列中心離地高度 —— 立柱跟著伸縮 */
+export function setArrayLift(group, h) {
+  const post = group.getObjectByName('speakerPost');
   const arr = group.getObjectByName('arrayGroup');
-  if (arr) arr.position.y = -drop;
-}
-
-// ════════════════════════════════════════════════
-// KEF LS50 Meta 主喇叭(靜態)
-// ════════════════════════════════════════════════
-export function buildKefSpeaker() {
-  const g = new THREE.Group();
-  const K = C.kef;
-
-  // 立架
-  const pole = new THREE.Mesh(
-    new THREE.CylinderGeometry(K.pole.radius, K.pole.radius, K.standHeight, 16),
-    metal(K.poleColor));
-  pole.position.y = K.standHeight / 2;
-  g.add(pole);
-  const base = new THREE.Mesh(
-    new THREE.CylinderGeometry(K.base.topRadius, K.base.bottomRadius, K.base.thickness, 24),
-    metal(K.baseColor));
-  base.position.y = K.base.thickness / 2;
-  g.add(base);
-
-  // 箱體
-  const box = new THREE.Mesh(
-    new THREE.BoxGeometry(K.width, K.height, K.depth), matte(K.color, 0.6));
-  box.position.y = K.standHeight + K.height / 2;
-  box.castShadow = true;
-  g.add(box);
-
-  // 同軸單體(Uni-Q)
-  const cone = new THREE.Mesh(
-    new THREE.CircleGeometry(K.coneRadius, 28),
-    matte(K.coneColor, 0.7));         // LS50 Meta 的金色錐盆
-  cone.position.set(0, box.position.y + 0.02, K.depth / 2 + 0.002);
-  g.add(cone);
-
-  const dome = new THREE.Mesh(
-    new THREE.SphereGeometry(K.coneRadius * 0.32, 16, 12), matte(K.domeColor, 0.5));
-  dome.position.set(0, cone.position.y, K.depth / 2 + 0.012);
-  g.add(dome);
-
-  // 低音反射孔
-  const port = new THREE.Mesh(
-    new THREE.CircleGeometry(K.port.radius, 16), matte(K.portColor, 0.9));
-  port.position.set(0, box.position.y - K.height * 0.34, K.depth / 2 + 0.002);
-  g.add(port);
-
-  g.position.set(K.x, 0, K.z);
-  g.rotation.y = -Math.PI / 2;        // 面朝房間中央
-  return g;
+  if (!post || !arr) return;
+  const postH = Math.max(0.1, h);
+  post.scale.y = postH;
+  post.position.y = postH / 2;
+  arr.position.y = h;
 }
 
 // ════════════════════════════════════════════════
