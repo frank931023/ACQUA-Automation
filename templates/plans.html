@@ -1,0 +1,423 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>測試計畫 — ACQUA 自動化</title>
+<style>
+  :root {
+    --bg:#f6f7f9; --panel:#fff; --border:#e3e6ea; --fg:#1f2328; --muted:#6b7480;
+    --accent:#2f6fed; --ok:#1a7f37; --fail:#cf222e; --warn:#bc4c00;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg);
+         font:14px/1.6 "Segoe UI","Microsoft JhengHei",system-ui,sans-serif; }
+  header { display:flex; align-items:center; gap:12px; padding:14px 22px;
+           background:var(--panel); border-bottom:1px solid var(--border); }
+  header h1 { font-size:16px; margin:0; }
+  header a { font-size:12px; color:var(--accent); text-decoration:none; }
+  .badge { font-size:11px; color:var(--muted); border:1px solid var(--border);
+           border-radius:20px; padding:2px 10px; }
+  main { max-width:900px; margin:20px auto; padding:0 20px; }
+  .panel { background:var(--panel); border:1px solid var(--border);
+           border-radius:12px; padding:18px 20px; margin-bottom:16px; }
+  h2 { font-size:14px; margin:0 0 4px; }
+  .hint { font-size:12px; color:var(--muted); margin:0 0 14px; }
+  .row { display:flex; gap:8px; align-items:center; margin-bottom:10px; }
+  button { font:inherit; font-size:13px; padding:7px 14px; border-radius:8px;
+           border:1px solid var(--border); background:var(--panel);
+           color:var(--fg); cursor:pointer; }
+  button:hover:not(:disabled) { border-color:var(--accent); }
+  button:disabled { opacity:.45; cursor:default; }
+  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+  button.danger  { background:var(--fail); border-color:var(--fail); color:#fff; }
+
+  .pl { display:flex; align-items:center; gap:12px; padding:11px 12px;
+        border:1px solid var(--border); border-radius:9px; margin-bottom:8px; }
+  .pl:hover { border-color:#c9ced6; }
+  /* 別的專案建立的計畫 —— 它的 row_id 在這個專案沒有意義 */
+  .pl.mismatch { opacity:.55; background:#f6f6f8; }
+  .pl.mismatch:hover { border-color:var(--border); }
+  .pl .t .mm { display:block; color:#c2410c; font-weight:600; margin-top:2px; }
+  .pl.on { border-color:var(--accent); background:#2f6fed0d; }
+  .pl input[type=checkbox] { width:16px; height:16px; flex:none; }
+  .pl .t { flex:1; min-width:0; }
+  .pl .t b { display:block; font-size:13px; }
+  .pl .t small { color:var(--muted); font-size:11px; }
+  .pl .n { flex:none; font-variant-numeric:tabular-nums; color:var(--muted); font-size:12px; }
+  .pl .x { flex:none; font-size:11px; padding:3px 9px; }
+  .empty { color:var(--muted); font-size:13px; padding:18px; text-align:center; }
+
+  .ov { position:fixed; inset:0; background:#0006; backdrop-filter:blur(2px);
+        display:none; align-items:center; justify-content:center; z-index:100; }
+  .ov.on { display:flex; }
+  .bx { background:var(--panel); border-radius:14px; padding:24px 28px;
+        width:min(560px,94vw); box-shadow:0 16px 50px #0003; }
+  .bx h3 { margin:0 0 8px; font-size:16px; }
+  .big { font-size:34px; font-weight:600; font-variant-numeric:tabular-nums; margin:10px 0 2px; }
+  .big small { font-size:14px; font-weight:400; color:var(--muted); }
+  .pbar { height:8px; border-radius:5px; background:var(--border); overflow:hidden; margin:10px 0; }
+  .pbar i { display:block; height:100%; background:var(--accent); transition:width .3s; }
+  .cur { padding:10px 12px; border:1px solid var(--border); border-radius:8px;
+         background:var(--bg); margin-top:10px; }
+  .cur .p { font-size:11px; color:var(--muted); }
+  .cur .n2 { font-size:13px; font-weight:600; word-break:break-word; }
+  .cnt { display:flex; gap:8px; margin-top:12px; }
+  .cnt div { flex:1; text-align:center; padding:8px; border:1px solid var(--border);
+             border-radius:8px; font-size:11px; color:var(--muted); }
+  .cnt b { display:block; font-size:17px; color:var(--fg); }
+  .cnt .p b { color:var(--ok); } .cnt .f b { color:var(--fail); }
+  .acts { display:flex; gap:8px; margin-top:16px; }
+  .acts button { flex:1; }
+  .blk { margin-top:12px; padding:11px 13px; border-radius:9px;
+         border:1px solid var(--warn); background:#bc4c000f; }
+  .blk .h { font-size:12px; font-weight:600; color:var(--warn); margin-bottom:5px; }
+  .blk .bs { display:flex; gap:7px; flex-wrap:wrap; margin-top:9px; }
+  .log { margin-top:12px; max-height:110px; overflow-y:auto;
+         font:11px/1.6 Consolas,monospace; color:var(--muted);
+         border-top:1px solid var(--border); padding-top:9px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>測試計畫</h1>
+  <span class="badge" id="b-backend">—</span>
+  <span class="badge" id="b-proj">未開啟專案</span>
+  <span style="flex:1"></span>
+  <a href="/acqua">← 回測項選擇</a>
+  <a href="/">首頁</a>
+</header>
+
+<main>
+  <section class="panel">
+    <h2>勾選要跑的計畫</h2>
+    <p class="hint">勾起來的會<b>由上到下依序執行</b>。每個計畫之間會停下來,
+      讓你移動治具或更換待測物 —— 之後這一步會改成自動(發 HTTP 給 Raspberry Pi)。<br>
+      計畫是在 <a href="/acqua">測項選擇</a> 那一頁勾好測項後存出來的。</p>
+
+    <div class="row">
+      <button id="btn-all">全選</button>
+      <button id="btn-none">全不選</button>
+      <button id="btn-reload">重新讀取</button>
+      <span style="flex:1"></span>
+      <span class="hint" id="sel-n" style="margin:0">已選 0 個</span>
+    </div>
+
+    <div id="list"><div class="empty">載入中…</div></div>
+
+    <div class="row" style="margin-top:14px">
+      <button class="primary" id="btn-run" disabled>▶ 依序執行</button>
+      <button id="btn-pause" disabled>⏸ 暫停</button>
+      <button class="danger" id="btn-stop" disabled>■ 中止</button>
+    </div>
+  </section>
+</main>
+
+<!-- 執行中 -->
+<div class="ov" id="runov">
+  <div class="bx">
+    <h3 id="r-title">執行中</h3>
+    <div class="hint" id="r-meta" style="margin:0"></div>
+    <div class="big"><span id="r-idx">0</span><small> / <span id="r-total">0</span> 項</small></div>
+    <div class="pbar"><i id="r-bar" style="width:0%"></i></div>
+    <div class="cur"><div class="p" id="r-plan">—</div><div class="n2" id="r-name">準備中…</div></div>
+    <div class="cnt">
+      <div class="p"><b id="r-pass">0</b>PASS</div>
+      <div class="f"><b id="r-fail">0</b>FAIL</div>
+      <div><b id="r-left">0</b>剩餘</div>
+    </div>
+    <div class="blk" id="r-blk" style="display:none">
+      <div class="h">⏸ ACQUA 開了視窗在等你</div>
+      <div id="blk-t"></div>
+      <div class="bs" id="blk-b"></div>
+    </div>
+    <div class="log" id="r-log"></div>
+    <div class="acts">
+      <button id="r-pause">⏸ 暫停</button>
+      <button class="danger" id="r-stop">■ 中止整個佇列</button>
+      <button id="r-hide">縮小</button>
+    </div>
+  </div>
+</div>
+
+<!-- 計畫之間 -->
+<div class="ov" id="btwov">
+  <div class="bx">
+    <h3>下一個計畫開始前</h3>
+    <div class="hint" id="bt-meta" style="margin:0"></div>
+    <div class="cur"><div class="p">接下來要跑</div><div class="n2" id="bt-next">—</div></div>
+    <p class="hint">需要移動治具或更換待測物的話,現在做。完成後按繼續。<br>
+      (之後這一步會改成自動 —— 發 HTTP 給 Raspberry Pi 控制馬達)</p>
+    <div class="acts">
+      <button class="primary" id="bt-go">完成了,繼續</button>
+      <button class="danger" id="bt-stop">停止佇列</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"]/g, c =>
+  ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+let plans = [], picked = new Set(), S = {}, running = false, abort = false;
+
+function log(m) {
+  const d = document.createElement('div');
+  d.textContent = new Date().toLocaleTimeString() + '  ' + m;
+  $('#r-log').appendChild(d);
+  $('#r-log').scrollTop = 1e9;
+}
+
+// ── 清單 ──────────────────────────────────────
+async function loadPlans() {
+  try {
+    const r = await (await fetch('/acqua/api/plans')).json();
+    plans = r.plans || [];
+  } catch (e) { plans = []; }
+  render();
+}
+
+/** 這個計畫是不是別的專案建立的?ctx = server|database|idProject */
+function plansMismatch(p) {
+  if (!p.ctx || !S.ctx) return false;     // 舊計畫沒存 ctx,不擋(後端仍會驗)
+  return p.ctx !== S.ctx;
+}
+
+function render() {
+  const box = $('#list');
+  if (!plans.length) {
+    box.innerHTML = '<div class="empty">還沒有任何計畫 —— '
+                  + '請先到<a href="/acqua">測項選擇</a>頁勾好測項後「存成計畫」</div>';
+  } else {
+    box.innerHTML = plans.map(p => {
+      // 計畫裡的 row_id 只在它被建立的那個專案有意義。ctx 對不上就不給跑 ——
+      // 後端 run 也會再擋一次,這裡只是讓人早點看到原因。
+      const bad = plansMismatch(p);
+      return `
+      <label class="pl${picked.has(p.id) ? ' on' : ''}${bad ? ' mismatch' : ''}">
+        <input type="checkbox" data-id="${esc(p.id)}" ${picked.has(p.id) ? 'checked' : ''}
+               ${bad ? 'disabled' : ''}>
+        <span class="t"><b>${esc(p.title)}</b>
+          <small>${esc(p.description || '')}${p.description ? ' ・ ' : ''}
+            ${esc((p.created || '').replace('T', ' '))}
+            ${p.project ? ' ・ ' + esc(p.project) : ''}
+            ${bad ? '<b class="mm">⚠ 屬於 ' + esc(p.database || '?') + ' / '
+                    + esc(p.project || '?') + ',不能在目前專案跑</b>' : ''}</small></span>
+        <span class="n">${p.count} 項</span>
+        <button class="x" data-del="${esc(p.id)}">刪除</button>
+      </label>`;
+    }).join('');
+  }
+  // 換了專案之後,原本勾的可能已經不能跑了 —— 直接取消勾選,不要留著誤導
+  plans.forEach(p => { if (plansMismatch(p)) picked.delete(p.id); });
+  $('#sel-n').textContent = `已選 ${picked.size} 個`;
+  $('#btn-run').disabled = !picked.size || running;
+  $('#btn-stop').disabled = !running;
+  $('#btn-pause').disabled = !running;
+  const label = S.paused ? '▶ 繼續' : '⏸ 暫停';
+  $('#btn-pause').textContent = label;
+  $('#r-pause').textContent = label;
+}
+
+$('#list').addEventListener('click', async (e) => {
+  const del = e.target.closest('button[data-del]');
+  if (del) {
+    e.preventDefault();
+    const id = del.dataset.del;
+    const r = await (await fetch('/acqua/api/plans/' + encodeURIComponent(id),
+                                 {method: 'DELETE'})).json();
+    plans = r.plans || [];
+    picked.delete(id);
+    render();
+    return;
+  }
+  const cb = e.target.closest('input[type=checkbox]');
+  if (cb) {
+    cb.checked ? picked.add(cb.dataset.id) : picked.delete(cb.dataset.id);
+    render();
+  }
+});
+
+$('#btn-all').onclick    = () => {
+  plans.forEach(p => { if (!plansMismatch(p)) picked.add(p.id); });
+  render();
+};
+$('#btn-none').onclick   = () => { picked.clear(); render(); };
+$('#btn-reload').onclick = loadPlans;
+
+// ── 狀態輪詢 ──────────────────────────────────
+async function poll() {
+  try {
+    S = await (await fetch('/acqua/api/status')).json();
+    $('#b-backend').textContent = S.backend === 'com' ? 'COM(真實 ACQUA)' : '模擬模式';
+    $('#b-proj').textContent = S.open_project || '未開啟專案';
+    paintRun();
+  } catch (e) { /* 伺服器還沒起來 */ }
+  setTimeout(poll, running ? 700 : 2500);
+}
+
+function paintRun() {
+  const cur = S.current, sm = S.summary || {};
+  if (cur) {
+    $('#r-idx').textContent = cur.index;
+    $('#r-total').textContent = cur.total;
+    $('#r-name').textContent = cur.title;
+    $('#r-bar').style.width = (cur.total ? cur.index / cur.total * 100 : 0) + '%';
+    $('#r-left').textContent = Math.max(0, (cur.total || 0) - (sm.total || 0));
+  }
+  $('#r-pass').textContent = sm.passed || 0;
+  $('#r-fail').textContent = sm.failed || 0;
+  paintBlocking(S.blocking_window);
+}
+
+let lastBlk = null;
+function paintBlocking(b) {
+  const box = $('#r-blk');
+  if (!b) { box.style.display = 'none'; lastBlk = null; return; }
+  box.style.display = '';
+  $('#blk-t').textContent = `[${b.cls}] ${b.title}`;
+  if (b.hwnd === lastBlk) return;
+  lastBlk = b.hwnd;
+  beep();
+  const bs = $('#blk-b');
+  bs.innerHTML = '';
+  for (const label of (b.buttons || [])) {
+    const el = document.createElement('button');
+    el.textContent = label;
+    el.onclick = () => answerBlk(b.hwnd, 'click:' + label);
+    bs.appendChild(el);
+  }
+  const c = document.createElement('button');
+  c.textContent = '直接關閉視窗';
+  c.onclick = () => answerBlk(b.hwnd, 'close');
+  bs.appendChild(c);
+}
+async function answerBlk(hwnd, action) {
+  await fetch('/acqua/api/blocking', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({hwnd, action}),
+  });
+  $('#r-blk').style.display = 'none';
+}
+
+let actx = null;
+function beep() {
+  try {
+    actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+    const o = actx.createOscillator(), g = actx.createGain();
+    o.frequency.value = 880; g.gain.value = .2;
+    o.connect(g); g.connect(actx.destination);
+    o.start(); o.stop(actx.currentTime + .18);
+  } catch (e) {}
+}
+
+// ── 依序執行 ──────────────────────────────────
+$('#btn-run').onclick = runQueue;
+$('#btn-stop').onclick = $('#r-stop').onclick = async () => {
+  abort = true;
+  await fetch('/acqua/api/cancel', {method: 'POST'});
+  log('已要求中止');
+};
+$('#r-hide').onclick = () => $('#runov').classList.remove('on');
+
+// 暫停/繼續 —— 停在兩筆之間,在途那筆會跑完。
+// 佇列本身也會停:當前計畫沒結束就不會進到下一個。
+$('#btn-pause').onclick = $('#r-pause').onclick = async () => {
+  const to = S.paused ? 'resume' : 'pause';
+  await fetch('/acqua/api/' + to, {method: 'POST'});
+  log(to === 'pause' ? '已暫停 —— 目前這筆跑完就停住' : '已繼續');
+};
+
+async function runQueue() {
+  if (running) return;
+  const ids = plans.filter(p => picked.has(p.id)).map(p => p.id);   // 照畫面順序
+  if (!ids.length) return;
+  running = true; abort = false;
+  $('#r-log').innerHTML = '';
+  $('#runov').classList.add('on');
+  render();
+
+  try {
+    for (let i = 0; i < ids.length; i++) {
+      if (abort) { log('佇列已中止'); break; }
+      const r = await (await fetch('/acqua/api/plans/' + encodeURIComponent(ids[i]))).json();
+      if (!r.ok) { log('計畫載入失敗,中止'); break; }
+      const plan = r.plan;
+
+      if (i > 0 && !(await waitBetween(plan, i + 1, ids.length))) {
+        log('使用者停止佇列'); break;
+      }
+
+      const row_ids = (plan.items || []).map(x => x.row_id);
+      if (!row_ids.length) { log(`「${plan.title}」沒有項目,跳過`); continue; }
+
+      $('#r-title').textContent = `執行中 — ${plan.title}`;
+      $('#r-meta').textContent = `佇列 ${i + 1} / ${ids.length}`;
+      $('#r-plan').textContent = plan.title;
+      log(`[${i + 1}/${ids.length}] 開始「${plan.title}」(${row_ids.length} 項)`);
+
+      const j = await (await fetch('/acqua/api/run', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        // 計畫自己的 ctx —— 它是在哪個專案建立的就只能在哪裡跑
+        body: JSON.stringify({row_ids, ctx: plan.ctx || S.ctx}),
+      })).json();
+      if (!j.ok) { log('送出失敗:' + (j.error || '')); break; }
+
+      await waitDone();
+      const sm = S.summary || {};
+      log(`[${i + 1}/${ids.length}]「${plan.title}」結束 — `
+        + `${sm.passed || 0} PASS / ${sm.failed || 0} FAIL`);
+    }
+  } finally {
+    running = false;
+    render();
+    $('#r-title').textContent = '佇列結束';
+    beep();
+  }
+}
+
+function waitDone() {
+  return new Promise(res => {
+    const t = setInterval(() => {
+      if (!S.running) { clearInterval(t); res(); }
+    }, 700);
+  });
+}
+
+function waitBetween(plan, idx, total) {
+  return new Promise(res => {
+    $('#bt-meta').textContent = `佇列 ${idx} / ${total}`;
+    $('#bt-next').textContent = `${plan.title}(${plan.count} 項)`;
+    $('#btwov').classList.add('on');
+    beep();
+    const done = v => { $('#btwov').classList.remove('on'); res(v); };
+    $('#bt-go').onclick = () => done(true);
+    $('#bt-stop').onclick = () => done(false);
+  });
+}
+
+// 量測跑在伺服器的工作執行緒裡 —— 換頁、關頁都不會讓它停,右下角的進度
+// 視窗會跟著你到別的頁面。所以站內換頁完全不攔;只有真的要離開站台時才
+// 提醒一聲,因為那之後沒人看得到「需要回答的視窗」。
+let leavingInternally = false;
+document.addEventListener('click', (e) => {
+  const a = e.target.closest ? e.target.closest('a[href]') : null;
+  if (a && a.origin === location.origin) leavingInternally = true;
+}, true);
+window.addEventListener('beforeunload', e => {
+  if (leavingInternally) return;            // 站內換頁,進度跟著走
+  if (running || S.running) {
+    e.preventDefault();
+    e.returnValue = '測試會繼續在背景執行。但關掉頁面後,遇到需要回答的視窗就沒人處理了。';
+    return e.returnValue;
+  }
+});
+
+loadPlans();
+poll();
+</script>
+{% include '_runmini.html' %}
+</body>
+</html>

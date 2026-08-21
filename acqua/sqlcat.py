@@ -160,13 +160,24 @@ class SqlCatalog:
         return raw_query(self.server, self.database, sql)
 
     # ── 測項樹 ──────────────────────────────────────
-    def _load_tree(self, project_title=None):
-        """一次把整棵 TreeItems 撈回來,在 Python 端組樹(193 筆,很輕)。
+    def _load_tree(self, project_title=None, project_id=None):
+        """一次把整棵 TreeItems 撈回來,在 Python 端組樹。
 
         ACQUA 用 nested set 存樹:某節點的祖先 = LeftNode 更小且 RightNode 更大的節點。
+
+        ⚠️ **優先用 project_id,不要用標題。**
+           資料庫裡會有同名專案 —— Standards 群組的「標準範本」跟實際執行的
+           專案標題一模一樣(實測 idProject 3 與 6 都叫
+           "MS Teams v5 Rev05 SP2 - Speakerphone",各 1151 個 SMD)。
+           用標題篩會兩個都撈到,測項數量直接變兩倍。
+
+           project_id 來自 COM 的 IProjectSelected.RowID,那是 ACQUA
+           當下真正在用的那一個,不會有歧義。
         """
         where = ""
-        if project_title:
+        if project_id is not None:
+            where = f"WHERE ti.rProject = {int(project_id)}"
+        elif project_title:
             safe = str(project_title).replace("'", "''")
             where = f"WHERE p.Title = N'{safe}'"
         rows = self.query(f"""
@@ -185,13 +196,13 @@ class SqlCatalog:
             r["Title"] = (r.get("Title") or "").strip()
         return rows
 
-    def list_smds(self, project_title=None, search="") -> list:
+    def list_smds(self, project_title=None, search="", project_id=None) -> list:
         """列出測項。回傳 [{row_id, title, smd_type, group, path,
                             needs_ref, ref_file, conditional}]
 
         `row_id` 可直接用於 `IProjectSelected.StartSingleMeasurement()`。
         """
-        rows = self._load_tree(project_title)
+        rows = self._load_tree(project_title, project_id)
         self._tree_cache = rows
         mmds = [r for r in rows if r["ItemType"] == "IType_MMD"]
 
@@ -220,14 +231,14 @@ class SqlCatalog:
                    if s in x["title"].lower() or s in x["path"].lower()]
         return out
 
-    def predict_run_set(self, project_title=None, variables=None) -> dict:
+    def predict_run_set(self, project_title=None, variables=None, project_id=None) -> dict:
         """預測「照這組變數,StartMeasurements 會跑哪些測項」。
 
         完全不啟動量測 —— 純粹讀 TreeItems.ConditionalExecution 自己算。
         詳見 acqua/condeval.py 的語意說明與未確定之處。
         """
         from .condeval import predict
-        rows = self._load_tree(project_title)
+        rows = self._load_tree(project_title, project_id)
         for r in rows:
             r["ConditionalExecution"] = (
                 str(r["ConditionalExecution"]) if r.get("ConditionalExecution") else "")

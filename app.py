@@ -20,6 +20,7 @@ from flask import (Blueprint, Flask, Response, jsonify, render_template,
 
 from acqua.runlog import RunLog
 from acqua.state import SharedState
+from acqua.testplans import TestPlans
 from acqua.worker import make_worker
 
 # 主控台預設是 cp950,印到非 CJK 符號會丟 UnicodeEncodeError 把程式打掛。
@@ -36,6 +37,8 @@ app = Flask(__name__)
 state = SharedState()
 worker = None
 config = {}
+# 測試計畫存在本地 plans/ 資料夾,不寫回 ACQUA 資料庫
+plans = TestPlans(BASE_DIR)
 
 # ACQUA 測試自動化整組掛在 /acqua 底下 —— 頁面與 API 都是。
 # 好處:網址一看就知道屬於哪個子系統,以後要再加別的模組也不會打架。
@@ -55,14 +58,18 @@ def load_config(path=None):
     raise SystemExit("找不到 config.json 或 config.example.json")
 
 
-def _cmd(name, timeout=600, **kwargs):
-    """下命令並等待結果,統一轉成 JSON 回應。"""
+def _cmd(_cmd_name, timeout=600, **kwargs):
+    """下命令並等待結果,統一轉成 JSON 回應。
+
+    第一個參數刻意加底線前綴 —— 指令的 kwargs 裡本來就可能有 name
+    (例如切換硬體設定),同名會撞成 TypeError。
+    """
     if worker is None or not worker.ready.is_set():
         return jsonify(ok=False, error="工作執行緒尚未就緒"), 503
     if worker.init_error:
         return jsonify(ok=False, error=f"後端初始化失敗:{worker.init_error}"), 500
     try:
-        result = worker.submit(name, **kwargs).wait(timeout=timeout)
+        result = worker.submit(_cmd_name, **kwargs).wait(timeout=timeout)
         return jsonify(ok=True, result=result, state=state.snapshot())
     except Exception as exc:                            # noqa: BLE001
         return jsonify(ok=False, error=str(exc), state=state.snapshot()), 400
@@ -119,6 +126,16 @@ def soundproofroom_asset(filename):
 
 
 # ── 狀態與事件串流 ───────────────────────────────────
+@acqua_bp.route("/plans")
+def plans_page():
+    """[*] 測試計畫頁 —— 勾選幾個已建立的計畫,依序執行。
+
+    刻意跟 /acqua 分開:那一頁是「挑測項馬上跑」,這一頁是
+    「把存好的幾批排成佇列」。兩件事的節奏差很多,混在一頁會互相干擾。
+    """
+    return render_template("plans.html")
+
+
 @acqua_bp.route("/api/status")
 def api_status():
     return jsonify(state.snapshot())
@@ -278,53 +295,208 @@ def api_predict():
 
 @acqua_bp.route("/api/run", methods=["POST"])
 def api_run():
-    """[*] 整套自動化的核心入口。兩種執行模式:
+    """[*] 唯一的執行入口:逐項送出勾選的測項。
 
-    selected    —— 逐項跑勾選的 SMD(StartSingleMeasurement)
-    conditional —— 先設變數,再一次跑完整個專案(StartMeasurements),
-                   由 ACQUA 依 ConditionalExecution 自動篩選
+    為什麼只有這一種
+    ────────────────
+    另一條路(StartMeasurements 整批)**沒辦法排除任何項目** —— ACQUA
+    自己決定跑什麼,所以「DUT & Measurement Wizard」這類互動精靈一定會
+    跳出來等人操作,使用者就得守在旁邊。
+
+    逐項模式可以事前排除那些項目,才有辦法「按下開始就走人」。
+    附帶好處:中止是真的能停(不送下一筆就結束了)。
     """
     body = request.get_json(silent=True) or {}
-    mode = str(body.get("mode") or config.get("run", {}).get("mode", "selected"))
 
     if state.running:
         return jsonify(ok=False, error="已經有一批測試在執行中"), 409
 
-    if mode == "conditional":
-        # 先寫變數(如果有給),再整批跑
-        values = body.get("variables") or {}
-        if values:
-            try:
-                worker.submit("set_variables", values=values).wait(timeout=180)
-            except Exception as exc:                        # noqa: BLE001
-                return jsonify(ok=False, error=f"設定變數失敗:{exc}"), 400
-        state.set(run_mode="conditional")
-        worker.submit("run_all")
-        return jsonify(ok=True, mode="conditional", variables=len(values))
-
-    # 續跑:直接沿用上次紀錄裡「還沒跑的」
-    if body.get("resume"):
-        pending = state.runlog.unfinished() if state.runlog else None
-        if not pending:
-            return jsonify(ok=False, error="沒有可續跑的紀錄"), 400
-        row_ids = [p["row_id"] for p in pending["remaining"]]
-        state.set(run_mode="selected")
-        worker.submit("run_smds", row_ids=row_ids)
-        return jsonify(ok=True, mode="resume", queued=len(row_ids))
-
     row_ids = [int(r) for r in (body.get("row_ids") or [])]
     if not row_ids:
-        return jsonify(ok=False, error="沒有選擇任何測項"), 400
-    state.set(run_mode="selected")
-    # 不等它跑完 —— 讓 HTTP 立刻回應,進度透過 SSE 推播
-    worker.submit("run_smds", row_ids=row_ids)
-    return jsonify(ok=True, mode="selected", queued=len(row_ids))
+        return jsonify(ok=False, error="沒有勾選任何測項"), 400
+
+    # ⭐ 呼叫端要聲明「我是在哪個上下文挑的」,不一致就拒絕。
+    #
+    #    為什麼不能只靠「這些 id 存在於目前專案」:實測 2026-08-21,
+    #    51_MS_Teams_Rev05_SP2 的 2443 是 Info 類測項,
+    #    ACQUA_auto_v2026Aug 的 2443 是 3QUEST 分析 —— 兩邊都存在,
+    #    存在性檢查完全擋不住,但跑起來是完全不同的東西。
+    #    ctx 比對是唯一能抓到這種重疊的方法。
+    want_ctx = body.get("ctx")
+    cur_ctx = state.snapshot().get("ctx")
+    if want_ctx and cur_ctx and want_ctx != cur_ctx:
+        return jsonify(
+            ok=False,
+            error=("這批測項是在別的專案/資料庫挑的(%s),"
+                   "目前是 %s。請重新載入測項再勾選。" % (want_ctx, cur_ctx))), 409
+
+    # ⚠️ 前置條件要在這裡擋掉。
+    #    worker.submit 是射後不理 —— 不先檢查的話,run_smds 就算第一行
+    #    就丟「尚未選定量測物件」,這支 API 還是會回 ok,前端就永遠停在
+    #    「ACQUA 準備中…」,錯誤只進 log 沒人看到。
+    s = state.snapshot()
+    if not s.get("open_project"):
+        return jsonify(ok=False, error="還沒開啟專案 —— 請先完成上面的「開啟專案」"), 400
+    if not s.get("measurement_object"):
+        return jsonify(ok=False,
+                       error="還沒選定量測物件 —— 請先按「選定 / 建立」"), 400
+
+    # ⭐ 歸屬驗證要同步做完再送 —— 這批 row_id 真的屬於目前這個專案嗎?
+    #    跨資料庫的 idTreeItem 必然重疊,送錯不會報錯,只會安靜地跑到
+    #    別的測項。詳見 acqua/context.py。
+    try:
+        worker.submit("check_rows", row_ids=row_ids).wait(timeout=60)
+    except Exception as exc:                                # noqa: BLE001
+        return jsonify(ok=False, error=str(exc)), 409
+
+    state.set(run_mode="selected", blocking_window=None)
+    cmd = worker.submit("run_smds", row_ids=row_ids)
+
+    # 給它一下下,萬一一送出就失敗,直接把錯誤回給前端而不是讓它空等
+    try:
+        cmd.wait(timeout=1.5)
+    except TimeoutError:
+        pass                                                # 還在跑 = 正常
+    except Exception as exc:                                # noqa: BLE001
+        return jsonify(ok=False, error=str(exc)), 400
+
+    return jsonify(ok=True, queued=len(row_ids))
 
 
 @acqua_bp.route("/api/cancel", methods=["POST"])
 def api_cancel():
+    """[*] 中止。
+
+    逐項模式  ✅ 真的中止 —— Python 迴圈不送下一筆就停了
+    整批模式  ⚠️ 做不到 —— ACQUA 自己排隊而且不理會 UserReaction,
+              這裡只能停掉視窗監看器,讓它停在下一個對話框
+    """
     worker.request_cancel()
+    per_item = state.snapshot().get("run_mode") == "selected"
+    return jsonify(ok=True, per_item=per_item,
+                   note=("目前這筆跑完就停" if per_item else
+                         "整批模式只能停在下一個對話框;完全中止請到 ACQUA 視窗操作"))
+
+
+@acqua_bp.route("/api/pause", methods=["POST"])
+def api_pause():
+    """[*] 暫停(可恢復)。逐項模式停在兩筆之間;整批模式停止關對話框。"""
+    if worker is None:
+        return jsonify(ok=False, error="工作執行緒尚未就緒"), 503
+    worker.request_pause()
     return jsonify(ok=True)
+
+
+@acqua_bp.route("/api/resume", methods=["POST"])
+def api_resume():
+    """[*] 從暫停接回去繼續跑。
+
+    暫停 = 停掉視窗監看器,量測停在對話框前面;
+    繼續 = 監看器開回來,那些對話框又會被處理,量測自然往下走。
+    """
+    if worker is None:
+        return jsonify(ok=False, error="工作執行緒尚未就緒"), 503
+    worker.request_resume()
+    return jsonify(ok=True)
+
+
+@acqua_bp.route("/api/blocking", methods=["GET", "POST"])
+def api_blocking():
+    """[*] ACQUA 開了對話框在等人時,用這支查詢與回覆。
+
+    GET  → 目前擋著的視窗(含訊息與按鈕文字)
+    POST → {hwnd, action}  action = "close" 或 "click:<按鈕文字>"
+    """
+    if request.method == "GET":
+        return jsonify(ok=True, blocking=state.snapshot().get("blocking_window"))
+    body = request.get_json(silent=True) or {}
+    hwnd, action = body.get("hwnd"), body.get("action")
+    if not hwnd or not action:
+        return jsonify(ok=False, error="需要 hwnd 與 action"), 400
+
+    # ⚠️ 不能走 _cmd()/命令佇列 —— run_smds 正阻塞著工作執行緒,
+    #    排進去的命令要等整批跑完才會被處理。而阻塞視窗只在量測進行中
+    #    才出現,排隊等於永遠不會被回答。
+    if worker is None:
+        return jsonify(ok=False, error="工作執行緒尚未就緒"), 503
+    try:
+        ok = worker.answer_blocking(hwnd, action)
+    except Exception as exc:                                # noqa: BLE001
+        return jsonify(ok=False, error=str(exc)), 400
+    return jsonify(ok=bool(ok), state=state.snapshot())
+
+
+@acqua_bp.route("/api/wizard-options")
+def api_wizard_options():
+    """[*] 精靈選項 —— 從專案樹的 ConditionalExecution 反推出來。
+
+    ACQUA 自己的 DUT & Measurement Wizard 是 Tcl/Tk 的,內容讀不到;
+    但它的選項最後都變成變數,而變數的可能值都寫在條件式裡。
+    """
+    return _cmd("wizard_options", timeout=180)
+
+
+@acqua_bp.route("/api/plans", methods=["GET", "POST"])
+def api_plans():
+    """[*] 測試計畫(一批要跑的測項 + 當時的 DUT 設定)。
+
+    GET  → 清單(最新的在前)
+    POST → 新增/更新。給 id 就是更新,沒給就新增。
+    """
+    if request.method == "GET":
+        return jsonify(ok=True, plans=plans.list())
+
+    body = request.get_json(silent=True) or {}
+    items = body.get("items") or []
+    if not items:
+        return jsonify(ok=False, error="沒有任何測項,不能存成計畫"), 400
+    s = state.snapshot()
+    d = plans.save(
+        plan_id=body.get("id"),
+        title=body.get("title", ""),
+        description=body.get("description", ""),
+        items=items,
+        variables=body.get("variables") or {},
+        database=s.get("database"),
+        project=s.get("open_project"),
+        # 計畫存的是裸 row_id —— 沒有這個就無法判斷它屬於哪個專案。
+        # 拿去別的專案跑會安靜地跑到別的測項(見 acqua/context.py)。
+        ctx=s.get("ctx"),
+        measurement_object=s.get("measurement_object"),
+        hardware_setting=s.get("hardware_active"),
+        manual_excluded=body.get("manual_excluded") or [],
+    )
+    state.log(f"已儲存測試計畫「{d['title']}」({d['count']} 項)")
+    return jsonify(ok=True, plan=d, plans=plans.list())
+
+
+@acqua_bp.route("/api/plans/<plan_id>", methods=["GET", "DELETE"])
+def api_plan_one(plan_id):
+    if request.method == "DELETE":
+        ok = plans.delete(plan_id)
+        return jsonify(ok=ok, plans=plans.list())
+    d = plans.load(plan_id)
+    if d is None:
+        return jsonify(ok=False, error="找不到這個計畫"), 404
+    return jsonify(ok=True, plan=d)
+
+
+@acqua_bp.route("/api/hardware", methods=["GET", "POST"])
+def api_hardware():
+    """[*] 硬體連接設定。
+
+    GET  → 全部設定,標出目前選用的
+    POST → {name}  切換
+
+    跑之前把目前設定記進 log,事後才查得到那批數據是用什麼跑的。
+    """
+    if request.method == "GET":
+        return _cmd("list_hardware", timeout=60)
+    body = request.get_json(silent=True) or {}
+    name = body.get("name")
+    if not name:
+        return jsonify(ok=False, error="需要 name"), 400
+    return _cmd("set_hardware", timeout=60, name=name)
 
 
 @acqua_bp.route("/api/report", methods=["POST"])

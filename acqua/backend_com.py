@@ -69,29 +69,55 @@ class _Events:
         self._st().log(f"<{tag}> {Description}", level)
 
     def OnBeginMeasurements(self, SelectedProject, MeasurementObject, NbrOfMeasurements):
+        # ACQUA 已經算完這批要跑幾筆(依 ConditionalExecution 篩過)。
+        # 這是唯一能拿到總數的地方。
+        self.backend._batch_total = int(NbrOfMeasurements or 0)
+        self.backend._batch_index = 0
         self._st().log(f"ACQUA 回報:即將進行 {NbrOfMeasurements} 筆量測")
 
     def OnBeginSingleMeasurement(self, SMDTitle, Progress, NbrOfMeasurements):
+        # ⚠️ Progress 參數實測永遠回 1,不能用 —— 自己數。
         self._tick()
-        self.backend._meas_started = True
-        self._st().log(f"  ACQUA 開始:{SMDTitle}")
+        b = self.backend
+        b._meas_started = True
+
+        # 逐項模式的進度由 run_smds 的迴圈自己維護 —— 這裡不能插手。
+        # 實測:ACQUA 對單筆量測也會發 OnBeginSingleMeasurement(而且
+        # NbrOfMeasurements 回 1),照著加會把 20 筆的進度打成 1/1。
+        if b._per_item:
+            return
+
+        b._batch_index += 1
+        if not b._batch_total:
+            b._batch_total = int(NbrOfMeasurements or 0)
+        self._st().set(current={"title": str(SMDTitle),
+                                "index": b._batch_index,
+                                "total": b._batch_total})
+        self._st().log(f"[{b._batch_index}/{b._batch_total}] {SMDTitle}")
 
     # ── 決策點:ByRef 輸出用「回傳值」給回 ACQUA ────────
     def OnFinishedSingleMeasurement(self, SMDTitle, ResultStatus,
                                     Progress, NbrOfMeasurements, UserReaction):
-        # ✅ 已驗證(2026-08-10,SP2 / SMD#3579):pywin32 用 return 回傳 ByRef out 參數
-        #    確實生效 —— 回傳後 ACQUA 有繼續往下走到 "Measurements done"。
+        # ⚠️ 這裡**不能**用回傳值控制流程。
+        #
+        # 實測(2026-08-20,MS Teams SP2 Speakerphone / 1151 筆):
+        #     回 REDO_THIS(2)  → 沒有任何一筆重跑
+        #     回 CANCEL_ALL(3) → 照樣跑下一筆
+        # pywin32 的 ByRef 回傳沒有送達 ACQUA。
+        #
+        # 舊註解宣稱「已驗證 DO_NEXT 生效」是假陽性 —— DO_NEXT 就是預設行為,
+        # 回不回傳結果一樣,那個測試分辨不出任何事。
+        #
+        # 流程控制改由 acqua/winwatch.py 負責(關不關阻塞視窗)。
         self._tick()
         self.backend._on_single_finished(SMDTitle, ResultStatus)
-        if self._st().cancel_requested:
-            return EUserReaction.CANCEL_ALL
-        return EUserReaction.DO_NEXT
 
     def OnFinishedMeasurements(self, SelectedProject, MeasurementObject,
                                NbrOfMeasurements, NbrOfMeasurementsFinished,
                                Canceled, ResultOverview):
         self._tick()
         self.backend._measuring_done = True
+        self.backend._batch_canceled = bool(Canceled)
         # ⭐ ResultOverview 是 Variant,CHM 沒有說明結構。
         #    這是唯一可能一次拿到整批數值的地方 —— 階段 4 務必把它 dump 出來研究。
         self._st().log(f"ACQUA 回報:完成 {NbrOfMeasurementsFinished}/{NbrOfMeasurements}"
@@ -103,9 +129,11 @@ class _Events:
             pass
 
     def OnCallbackEvent(self, EventDescription, Continue):
-        # ACQUA 詢問使用者決策(例如「請接上治具後繼續」)。
-        # 無人值守一律回 True;要人工介入的話,這裡要改成推到 UI 等待回應。
-        self._st().log(f"[CALLBACK] {EventDescription} → 自動繼續", "warn")
+        # ACQUA 詢問使用者決策。回傳值同樣走 ByRef,
+        # 依 2026-08-20 的實測**很可能也沒送達** —— 所以只當成情報記錄,
+        # 真正會擋住流程的是視窗,由 winwatch 處理。
+        self._tick()
+        self._st().log(f"[CALLBACK] {EventDescription}", "warn")
         return True
 
 
@@ -113,6 +141,12 @@ class ComBackend(AcquaBackend):
     def __init__(self, state, config):
         super().__init__(state, config)
         self.app = None
+        # 整批進度:Progress 參數不可信(永遠回 1),自己數
+        self._batch_total = 0
+        self._batch_index = 0
+        self._batch_canceled = False
+        self._per_item = False
+        self._watcher = None
         self.project = None            # IProjectSelected
         self.mo = None                 # IMObject
         self.sql = None                # SqlCatalog —— 列舉 SMD 與讀數值(實測後改走這條)
@@ -179,6 +213,14 @@ class ComBackend(AcquaBackend):
             self._pythoncom.PumpWaitingMessages()
 
     def shutdown(self):
+        # 先把視窗監看器收掉 —— 不然它會繼續關 ACQUA 的對話框
+        w = getattr(self, "_watcher", None)
+        if w:
+            try:
+                w.stop()
+            except Exception:                               # noqa: BLE001
+                pass
+            self._watcher = None
         self.app = None
         self.project = None
         self.mo = None
@@ -261,51 +303,43 @@ class ComBackend(AcquaBackend):
                 raise TimeoutError(f"等待逾時({timeout}s):{what}")
 
     def _on_single_finished(self, title, status):
-        self._last_result = (str(title), int(status))
+        """記下一筆結果。
 
-    def _wait_until_measured(self, title, timeout, stall_warn=45):
-        """等單筆量測結束,並在 ACQUA 長時間沒回應時提醒。
-
-        完成的判定(任一成立):
-          - 收到 OnFinishedSingleMeasurement
-          - 收到 OnFinishedMeasurements
-          - 已經開始過,而且 IsMeasuring 翻回 False
+        ⚠️ 整批模式下**只有這裡**會寫結果 —— 舊版是 run_smds 的 Python 迴圈
+           在每一輪自己呼叫 add_result,那個迴圈已經沒有了。
+           漏掉的話 summary 會一直是 0(2026-08-20 真機實測踩到過)。
         """
-        deadline = time.monotonic() + timeout
-        warned = 0
-        while True:
-            if self._last_result is not None or self._measuring_done:
-                return True
+        title, status = str(title), int(status)
+        self._last_result = (title, status)
+        passed = EMEResult.is_pass(status)
+        desc = EMEResult.describe(status)
+
+        rid = getattr(self, "_current_row_id", None) or self._batch_index
+        self.state.add_result(title, rid, desc, passed)
+        rl = self.state.runlog
+        if rl:
             try:
-                if self._meas_started and not self.app.IsMeasuring:
-                    return True
+                rl.record(rid, title, desc, passed)
             except Exception:                               # noqa: BLE001
-                pass                                        # COM 暫時忙,下一圈再試
-
-            self.pump()
-            time.sleep(0.05)
-
-            # 停滯提醒 —— Info 型 SMD 會開文件視窗等人關閉,這時完全不會有事件
-            idle = time.monotonic() - self._last_event_at
-            if idle > stall_warn * (warned + 1):
-                warned += 1
-                self.state.log(
-                    f"    ⏳ ACQUA 已經 {int(idle)} 秒沒有任何回應 —— "
-                    "常見原因:它開了說明文件/對話框在等人關閉。"
-                    "請切到 ACQUA 視窗看看。", "warn")
-
-            if time.monotonic() > deadline:
-                self.state.log(
-                    f"    ✗ 等待 {timeout} 秒逾時:{title}(視為失敗,繼續下一項)", "error")
-                return False
+                pass
+        self.state.log(f"    → {'PASS' if passed else 'FAIL'}({desc})",
+                       "info" if passed else "error")
 
     # ── 操作 ────────────────────────────────────────
     def connect(self, server, database, win_auth, username="", password=""):
+        prev = self.state.database
         ok = bool(self.app.SelectDatabase(server, database, win_auth, username, password))
         if ok:
             self.state.set(connected=True,
                            server=str(self.app.SelectedSQLServerName),
                            database=str(self.app.SelectedDatabaseName))
+            # SelectDatabase 一定會讓舊庫的專案物件失效,所以無條件作廢 ——
+            # 不去判斷「有沒有換」,因為那個判斷本身就是先前 bug 的來源。
+            self._reset_context(
+                "database",
+                ("資料庫由 %s 換成 %s" % (prev, self.state.database)) if prev
+                else ("連線至 %s" % self.state.database))
+            self._update_context()
             self.state.log(f"已連線 {self.state.server} / {self.state.database}")
         else:
             self.state.log("資料庫連線失敗(SelectDatabase 回傳 False)", "error")
@@ -347,12 +381,14 @@ class ComBackend(AcquaBackend):
         if target is None:
             raise RuntimeError(f"找不到專案:{group} / {project}")
 
+        # 開新專案前先作廢舊專案的一切(含 COM 的 MO 物件)
+        self._reset_context("project", "切換專案至 %s" % project)
         target.SelectAsActive()                     # 這裡拿到的是 IProject,只能做這件事
         self._wait_until(lambda: self.app.SelectedProjectLoaded,
                          timeout=300, what="SelectedProjectLoaded")
         self.project = self.app.SelectedProject     # ⭐ 現在才是 IProjectSelected
-        self.state.set(open_group=group, open_project=str(self.project.Title),
-                       measurement_object=None, smds=[])
+        self.state.set(open_group=group, open_project=str(self.project.Title))
+        self._update_context()
         self.state.log(f"已開啟專案:{group} / {self.project.Title}")
 
     def select_measurement_object(self, title, create_if_missing=True):
@@ -393,12 +429,140 @@ class ComBackend(AcquaBackend):
             self.mo.UpdateProperty(str(k), str(v))   # 欄位不存在會自動建立
             self.state.log(f"  UpdateProperty({k!r}, {v!r})")
 
+    def wizard_options(self):
+        """從專案樹的條件式反推「精靈」該有哪些選項。
+
+        ACQUA 的 DUT & Measurement Wizard 是 Tcl/Tk 的,內容讀不到 ——
+        但它的選項最後都會變成變數,而每個變數的可能值都寫在
+        ConditionalExecution 裡。掃一遍就能自己生出等效的精靈。
+        """
+        from .wizard import scan_variables, group_variables
+        rows = self._catalog()._load_tree(
+            project_title=self.state.open_project, project_id=self._project_id())
+        for r in rows:
+            r["ConditionalExecution"] = (str(r["ConditionalExecution"])
+                                         if r.get("ConditionalExecution") else "")
+        items = scan_variables(rows)
+        groups = group_variables(items)
+        self.state.set(wizard_groups=groups,
+                       wizard_scopes=self.config.get("wizard_scopes") or {})
+        self.state.log(f"[精靈] 從條件式反推出 {len(items)} 個變數,分成 {len(groups)} 組")
+        return groups
+
+    def _manual_matcher(self):
+        """回傳一個判斷式:這個標題是不是「需要人工操作」的測項。
+
+        這類項目跑到就會開視窗等人(例如 DUT & Measurement Wizard),
+        自動勾選時要排除掉,否則整批就沒辦法無人值守。
+        """
+        import fnmatch
+        m = self.config.get("manual_items") or {}
+        titles = {str(x).strip() for x in (m.get("titles") or [])}
+        pats = [str(x) for x in (m.get("title_patterns") or [])]
+
+        def is_manual(title):
+            t = (title or "").strip()
+            if t in titles:
+                return True
+            return any(fnmatch.fnmatch(t, p) for p in pats)
+        return is_manual
+
+    def _project_id(self):
+        """目前作用中專案的 idProject。
+
+        資料庫裡有同名專案(標準範本 vs 實際專案),只能靠 ID 分辨。
+        COM 的 IProjectSelected.RowID 就是權威答案。
+        """
+        try:
+            return int(self.project.RowID)
+        except Exception:                                   # noqa: BLE001
+            return None
+
+    def _reset_context(self, scope, reason):
+        """上下文變了 —— 把繫於舊上下文的所有東西一次作廢。
+
+        這是唯一該做這件事的地方。以前是各個函式各自記得清誰,結果每加一個
+        狀態欄位就多一個漏網的機會(2026-08-21 就是這樣載到舊庫的測項)。
+        名單在 acqua/context.py,那裡有檢查程式看守。
+
+        scope: "database" 換資料庫 / "project" 換專案
+        """
+        from . import context as _ctx
+        fields = (_ctx.DATABASE_SCOPED if scope == "database"
+                  else _ctx.PROJECT_SCOPED)
+        if scope == "database":
+            self.project = None      # 舊庫的 COM 專案物件已無意義
+            self.sql = None          # SQL 目錄綁在舊庫,絕不能留
+        self.mo = None
+        self.state.set(ctx=None, **_ctx.clear_values(fields))
+        self.state.log("[上下文] %s —— 已作廢 %d 項衍生資料"
+                       % (reason, len(fields)), "warn")
+
+    def _update_context(self):
+        """重算並公布目前的上下文 key。"""
+        from . import context as _ctx
+        key = _ctx.context_key(self.state.server, self.state.database,
+                               self._project_id())
+        self.state.set(ctx=key)
+        return key
+
+    def check_rows(self, row_ids):
+        """公開版的歸屬驗證,給 /api/run 在送出前同步呼叫。
+
+        run_smds 裡面也有一份 —— 這不是重複,是兩個不同的目的:
+        這裡是為了「早點把錯誤回給使用者」,那裡是「不管誰呼叫都擋得住」。
+        """
+        self._assert_rows_in_project(row_ids)
+        return True
+
+    def _assert_rows_in_project(self, row_ids):
+        """最後一道閘:這批 row_id 真的屬於目前這個專案嗎?
+
+        跨資料庫的 idTreeItem 必然重疊 —— 送錯不會報錯,只會安靜地跑到
+        別的測項。就算前面每一層作廢都漏了,這裡會擋下來。
+        """
+        from .sqlcat import _SCHEMA
+        want = [int(r) for r in row_ids]
+        if not want:
+            raise RuntimeError("沒有指定要跑的測項")
+        pid = self._project_id()
+        if pid is None:
+            raise RuntimeError("讀不到目前專案的 idProject,無法驗證測項歸屬")
+        rows = self._catalog().query(
+            "SELECT idTreeItem FROM %s.TreeItems WHERE rProject = %d "
+            "AND idTreeItem IN (%s)"
+            % (_SCHEMA, int(pid), ",".join(str(x) for x in want)))
+        have = {int(r["idTreeItem"]) for r in rows}
+        bad = [x for x in want if x not in have]
+        if bad:
+            raise RuntimeError(
+                "有 %d 筆測項不屬於目前的專案「%s」(%s)。前幾筆:%s。"
+                "請重新載入測項後再跑。"
+                % (len(bad), self.state.open_project, self.state.database,
+                   ", ".join(str(x) for x in bad[:5])))
+
     def _catalog(self):
-        """取得 SQL 目錄(延遲連線)。"""
+        """取得 SQL 目錄(延遲連線,且會跟著目前的資料庫走)。
+
+        ⚠️ 2026-08-21 實機抓到的坑:原本只判斷 `self.sql is None`,
+           所以使用者在網頁上換了資料庫之後,目錄還連在舊的那一顆。
+           症狀是「載入測項」看起來有成功、也真的回了 309 筆 ——
+           但那 309 筆是舊庫 51_MS_Teams_Rev05_SP2 的 idProject=1
+           (MS Teams Handset),而 ACQUA 當下開的是
+           ACQUA_auto_v2026Aug 的 ZoomRooms(1477 筆)。
+
+           兩個庫的 idTreeItem 各自從小編號開始、必然重疊,
+           所以這些 row_id 送進 StartSingleMeasurement 不會報錯,
+           只會安靜地跑到別的測項 —— 比直接失敗還糟。
+        """
+        from .sqlcat import SqlCatalog
+        srv, db = self.state.server, self.state.database
+        if self.sql is not None and (self.sql.server, self.sql.database) != (srv, db):
+            self.state.log(f"[SQL] 資料庫已換成 {db},目錄重新連線", "warn")
+            self.sql = None
         if self.sql is None:
-            from .sqlcat import SqlCatalog
             cat = SqlCatalog(self.state)
-            if not cat.connect(self.state.server, self.state.database):
+            if not cat.connect(srv, db):
                 raise RuntimeError("SQL 目錄連線失敗")
             self.sql = cat
         return self.sql
@@ -419,7 +583,11 @@ class ComBackend(AcquaBackend):
 
         try:
             smds = self._catalog().list_smds(
-                project_title=self.state.open_project, search=search)
+                project_title=self.state.open_project, search=search,
+                project_id=self._project_id())
+            is_manual = self._manual_matcher()
+            for s in smds:
+                s["manual"] = is_manual(s.get("title"))
             self.state.log(f"[SQL] 列出 {len(smds)} 個 SMD")
 
             need = self._catalog().missing_reference_files(smds)
@@ -476,126 +644,6 @@ class ComBackend(AcquaBackend):
         n = sum(len(r["values"]) for r in rows)
         self.state.log(f"[SQL] 讀到 {len(rows)} 筆結果、共 {n} 個數值")
         return rows
-
-    def run_smds(self, row_ids):
-        """逐一執行指定的 SMD。
-
-        用 StartSingleMeasurement 而非 StartMeasurements —— 這樣才能只跑選中的測項,
-        而且重試邏輯可以放在 Python 這一層,比用 EUserReaction.REDO_THIS 好控制。
-        """
-        if self.project is None or self.mo is None:
-            raise RuntimeError("尚未開啟專案或選定量測物件")
-
-        run_cfg = self.config.get("run", {})
-        use_mmd = bool(run_cfg.get("use_mmd_settings", True))
-        max_retries = int(run_cfg.get("max_retries", 0))
-        stop_on_fail = bool(run_cfg.get("stop_on_first_failure", False))
-        timeout = float(run_cfg.get("single_measurement_timeout_sec", 1800))
-        result_comment = str(run_cfg.get("result_comment", ""))
-
-        by_id = {s["row_id"]: s for s in self.state.smds}
-        targets = [by_id.get(r, {"row_id": r, "title": f"SMD #{r}"}) for r in row_ids]
-        total = len(targets)
-
-        self.state.clear_results()
-        self.state.set(running=True, cancel_requested=False)
-        self.state.log(f"=== 開始:共 {total} 筆測項 ===")
-
-        # 寫執行紀錄 —— 中途斷掉時才知道跑到哪
-        rl = self.state.runlog
-        if rl:
-            rl.start(mode="selected", database=self.state.database,
-                     project_group=self.state.open_group,
-                     project=self.state.open_project,
-                     measurement_object=self.state.measurement_object,
-                     planned=[{"row_id": s["row_id"], "title": s["title"]}
-                              for s in targets])
-
-        try:
-            i = 0
-            while i < total:
-                if self.state.cancel_requested:
-                    self.state.log("使用者要求中止", "warn")
-                    break
-
-                smd = targets[i]
-                attempt = 0
-                while True:
-                    self.state.set(current={"title": smd["title"], "index": i + 1, "total": total})
-                    self.state.log(f"[{i + 1}/{total}] 量測中:{smd['title']}"
-                                   + (f"(重試 {attempt})" if attempt else ""))
-
-                    self._last_result = None
-                    self._measuring_done = False
-                    self._meas_started = False
-                    # ⚠️ 簽章以 TypeLib 實測為準,比 CHM 多一個 ResultComment 參數:
-                    #    StartSingleMeasurement(SMDRowID, UseMMDSettings,
-                    #                           MeasurementObject, ResultComment)
-                    self.project.StartSingleMeasurement(
-                        smd["row_id"], use_mmd, self.mo.Title, result_comment)
-
-                    # ⭐ 等待邏輯(2026-08-11 再修正)
-                    #    1. IsMeasuring 約 1 秒後才翻成 True —— 不能一 start 就等它變 False
-                    #    2. 完成訊號有**三種**,任一到達就算完成:
-                    #         _last_result     ← OnFinishedSingleMeasurement
-                    #         _measuring_done  ← OnFinishedMeasurements  ⚠️ 之前漏掉這個!
-                    #         IsMeasuring 翻回 False
-                    #       實測發現單筆量測**也會**觸發 OnFinishedMeasurements
-                    #       (先前判斷它不會,是因為測試視窗只等了 90 秒)。
-                    #       漏掉它會讓程式一路等到 timeout(預設 1800 秒)才往下走。
-                    self._last_event_at = time.monotonic()
-                    try:
-                        self._wait_until(
-                            lambda: self._meas_started or self.app.IsMeasuring,
-                            timeout=60, what=f"量測啟動:{smd['title']}")
-                    except TimeoutError:
-                        self.state.log("    → 等不到量測啟動的訊號,可能 ACQUA 拒絕了這一項",
-                                       "error")
-
-                    self._wait_until_measured(smd["title"], timeout)
-
-                    # 事件可能比 IsMeasuring 慢一點點,給它一小段時間補送
-                    if self._last_result is None:
-                        grace = time.monotonic() + 3.0
-                        while self._last_result is None and time.monotonic() < grace:
-                            self.pump()
-                            time.sleep(0.05)
-
-                    if self._last_result is None:
-                        self.state.log("    → 沒有收到 OnFinishedSingleMeasurement 事件"
-                                       "(訊息幫浦或事件接線有問題)", "error")
-                        passed, status = False, -1
-                    else:
-                        title, status = self._last_result
-                        smd["title"] = title or smd["title"]
-                        passed = EMEResult.is_pass(status)
-
-                    if not passed and attempt < max_retries:
-                        attempt += 1
-                        self.state.log(f"    → {EMEResult.describe(status)},"
-                                       f"重試({attempt}/{max_retries})", "warn")
-                        continue
-                    break
-
-                self.state.add_result(smd["title"], smd["row_id"],
-                                      EMEResult.describe(status), passed, attempt)
-                if rl:
-                    rl.record(smd["row_id"], smd["title"],
-                              EMEResult.describe(status), passed, attempt)
-                self.state.log(f"    → {'PASS' if passed else 'FAIL'}"
-                               f"({EMEResult.describe(status)})",
-                               "info" if passed else "error")
-
-                if not passed and stop_on_fail:
-                    self.state.log("設定為失敗即停 —— 中止剩餘測項", "error")
-                    break
-                i += 1
-        finally:
-            self.state.set(running=False, current=None, progress=None)
-            if rl:
-                rl.finish(canceled=self.state.cancel_requested)
-            snap = self.state.snapshot()["summary"]
-            self.state.log(f"=== 結束:{snap['passed']} PASS / {snap['failed']} FAIL ===")
 
     def create_report(self, output_path, selection_type, result_index=0,
                       settle_timeout=600):
@@ -766,25 +814,252 @@ class ComBackend(AcquaBackend):
         if variables is None:
             variables = {v["name"]: v["value"] for v in self.state.variables}
         r = self._catalog().predict_run_set(
-            project_title=self.state.open_project, variables=variables)
+            project_title=self.state.open_project, variables=variables,
+            project_id=self._project_id())
+        # ⭐ 前端要拿 row_id 去勾選,不只是數量。
+        #    需要人工操作的項目一律排除 —— 它們會開視窗等人,
+        #    留著就沒辦法「開跑後不用管」。
+        is_manual = self._manual_matcher()
+        run_ids, manual_hits = [], []
+        for x in r["will_run"]:
+            if is_manual(x.get("title")):
+                manual_hits.append({"row_id": x["row_id"], "title": x["title"]})
+            else:
+                run_ids.append(x["row_id"])
         self.state.set(prediction={
-            "will_run": len(r["will_run"]),
+            "will_run": len(run_ids),
+            "run_ids": run_ids,
+            "manual_excluded": manual_hits,
             "skipped": len(r["skipped"]),
             "uncertain": len(r["uncertain"]),
+            "uncertain_items": [{"row_id": x["row_id"], "title": x["title"]}
+                                for x in r["uncertain"]][:50],
             "total": r["total_smds"],
-            "run_ids": [x["row_id"] for x in r["will_run"]],
             "sample_skipped": r["skipped"][:40],
         })
-        self.state.log(f"[預測] {len(r['will_run'])}/{r['total_smds']} 個測項會執行"
-                       + (f",{len(r['uncertain'])} 個判定沒把握" if r["uncertain"] else ""))
+        self.state.log(
+            f"[預測] {len(run_ids)}/{r['total_smds']} 個測項會執行"
+            + (f",排除 {len(manual_hits)} 個需人工操作的" if manual_hits else "")
+            + (f",{len(r['uncertain'])} 個判定沒把握" if r["uncertain"] else ""))
         return r
 
-    def run_all(self):
-        """⭐ 混合模式:跑整個專案,由 ConditionalExecution 依變數自動篩選。
+    def _wait_item(self, title, timeout):
+        """等單筆量測真的結束。回傳 True = 有拿到結果事件。
 
-        跟 run_smds 的差別:
-          run_smds —— 我們決定跑哪幾項(StartSingleMeasurement 逐項)
-          run_all  —— ACQUA 決定跑哪幾項(StartMeasurements 一次,依變數條件)
+        ACQUA 對單筆量測的事件行為(2026-08-21 實測整理)
+        ────────────────────────────────────────────────
+            OnFinishedSingleMeasurement   有時發,有時不發
+            OnFinishedMeasurements        **單筆也會發**,訊息像「完成 1/1」
+                                          —— 這是最可靠的完成訊號
+            OnBeginSingleMeasurement      有時完全不發(所以不能依賴 _meas_started)
+            IsMeasuring                   會先翻回 False,但 ACQUA 內部還沒收尾完
+
+        踩過的兩個坑
+        ────────────
+        ・依賴 _meas_started → 那筆沒發 Begin 事件時**永遠等不到**,卡死。
+        ・只看 IsMeasuring + 短寬限 → 太早返回,下一筆送出時被丟
+          "Acqua is busy.",而且一旦搶快就會一路忙到底
+          (20 筆有 18 筆 Busy,耗時從 80 秒變成 246 秒)。
+
+        所以:事件優先,IsMeasuring 只當「事件都沒來」時的保險絲,
+        而且要求**連續**多次確認閒置,不是看一次就算。
+        """
+        SETTLE = 1.0        # 剛送出,先給 ACQUA 一點時間動起來
+        IDLE_NEED = 5.0     # 事件沒來時,IsMeasuring 要連續閒置這麼久才敢算結束
+
+        t0 = time.monotonic()
+        deadline = t0 + timeout
+        idle_since = None
+
+        while True:
+            # ① 最可靠:這一筆的結果事件
+            if self._last_result is not None:
+                break
+            # ② 次可靠:ACQUA 自己說這批(單筆也算一批)結束了
+            if self._measuring_done:
+                break
+
+            # ③ 保險絲:兩個事件都沒來,靠 IsMeasuring 連續閒置判斷
+            busy = None
+            try:
+                busy = self.app.IsMeasuring
+            except Exception:                                # noqa: BLE001
+                pass                                         # COM 忙,下一圈再問
+
+            if busy is False and time.monotonic() - t0 > SETTLE:
+                if idle_since is None:
+                    idle_since = time.monotonic()
+                elif time.monotonic() - idle_since > IDLE_NEED:
+                    break
+            elif busy:
+                idle_since = None
+
+            self.pump()
+            time.sleep(0.05)
+            if time.monotonic() > deadline:
+                self.state.log(f"    ✗ 等待 {timeout:.0f} 秒逾時:{title}", "error")
+                return False
+
+        # 收尾:確定 ACQUA 真的閒了才讓呼叫端送下一筆。
+        # 事件到了不代表它內部處理完 —— 這一步就是在防 "Acqua is busy."。
+        self._settle()
+        return self._last_result is not None
+
+    def _settle(self, need=1.2, limit=30.0):
+        """等 ACQUA 真的閒下來(IsMeasuring 連續 need 秒為 False)。"""
+        t0 = time.monotonic()
+        idle_since = None
+        while time.monotonic() - t0 < limit:
+            try:
+                busy = self.app.IsMeasuring
+            except Exception:                                # noqa: BLE001
+                busy = True                                  # 問不到就當它還在忙
+            if busy:
+                idle_since = None
+            else:
+                if idle_since is None:
+                    idle_since = time.monotonic()
+                elif time.monotonic() - idle_since >= need:
+                    return True
+            self.pump()
+            time.sleep(0.05)
+        return False
+
+    def run_smds(self, row_ids):
+        """⭐ 逐項執行勾選的測項。
+
+        跟 run_measurements 的差別:
+            run_smds          你勾什麼跑什麼,順序由你決定,**可以真的中止**
+            run_measurements  ACQUA 依 ConditionalExecution 決定跑哪些
+
+        中止之所以在這裡有效:排隊的是 Python 的 for 迴圈,
+        不送下一筆就停了 —— 不需要 ACQUA 配合。
+        """
+        if self.project is None or self.mo is None:
+            raise RuntimeError("尚未開啟專案或選定量測物件")
+
+        # ⭐ 最後一道閘 —— 理由見 acqua/context.py。
+        #    寧可在這裡明白擋下,也不要讓它安靜地跑到別的專案的測項。
+        self._assert_rows_in_project(row_ids)
+
+        run_cfg = self.config.get("run", {})
+        use_mmd = bool(run_cfg.get("use_mmd_settings", True))
+        result_comment = str(run_cfg.get("result_comment", ""))
+        timeout = float(run_cfg.get("item_timeout_sec", 900))
+
+        by_id = {s["row_id"]: s for s in self.state.smds}
+        targets = [by_id.get(r, {"row_id": r, "title": f"SMD #{r}"}) for r in row_ids]
+        total = len(targets)
+
+        watcher = self._start_watcher()
+        self._per_item = True
+        self._batch_total = total
+        self._batch_index = 0
+
+        self.state.clear_results()
+        self.state.set(running=True, cancel_requested=False, paused=False, current=None)
+        hw = self.active_hardware_setting()
+        self.state.log(f"=== 開始逐項執行:共 {total} 筆 ===")
+        self.state.log(f"    硬體設定:{hw or '(讀不到)'}")
+
+        rl = self.state.runlog
+        if rl:
+            rl.start(mode="selected", database=self.state.database,
+                     project_group=self.state.open_group,
+                     project=self.state.open_project,
+                     measurement_object=self.state.measurement_object,
+                     planned=[{"row_id": s["row_id"], "title": s["title"]}
+                              for s in targets])
+
+        stopped = False
+        try:
+            for i, smd in enumerate(targets):
+                # ── 真正的中止:不送下一筆就結束了 ──
+                if self.state.cancel_requested:
+                    self.state.log(f"■ 已中止 —— 跑了 {i} / {total} 筆", "warn")
+                    stopped = True
+                    break
+
+                # ── 暫停:停在兩筆之間,不影響已送出的那筆 ──
+                while self.state.paused and not self.state.cancel_requested:
+                    self.pump()
+                    time.sleep(0.1)
+                if self.state.cancel_requested:
+                    self.state.log(f"■ 已中止 —— 跑了 {i} / {total} 筆", "warn")
+                    stopped = True
+                    break
+
+                self._batch_index = i + 1
+                self._last_result = None
+                self._measuring_done = False
+                self._meas_started = False
+                self.state.set(current={"title": smd["title"],
+                                        "index": i + 1, "total": total})
+                self.state.log(f"[{i + 1}/{total}] {smd['title']}")
+
+                self._current_row_id = smd["row_id"]
+
+                # ⚠️ 單筆出錯**不能**拖垮整批。
+                #    實測(2026-08-21):第 11 筆送出時 ACQUA 丟 "Acqua is busy.",
+                #    例外一路往上炸,剩下的測項全部沒跑(送 12 只跑了 10)。
+                try:
+                    # ── 送出。ACQUA 可能還在收尾,忙就等一下重送 ──
+                    # 送出前先確認 ACQUA 閒著 —— 被拒絕再重試代價高很多
+                    self._settle()
+                    sent = False
+                    for attempt in range(6):
+                        try:
+                            # 簽章以 TypeLib 為準,比 CHM 多一個 ResultComment
+                            self.project.StartSingleMeasurement(
+                                smd["row_id"], use_mmd, self.mo.Title, result_comment)
+                            sent = True
+                            break
+                        except Exception as exc:            # noqa: BLE001
+                            if "busy" not in str(exc).lower():
+                                raise
+                            self.state.log(
+                                f"    ACQUA 還在忙,等它閒下來再重送({attempt + 1}/6)",
+                                "warn")
+                            self._settle(need=1.5, limit=20.0)
+
+                    if not sent:
+                        self.state.log("    ✗ ACQUA 持續忙碌,跳過這一筆", "error")
+                        self.state.add_result(smd["title"], smd["row_id"], "Busy", False)
+                        continue
+
+                    self._wait_item(smd["title"], timeout)
+
+                    if self._last_result is None:
+                        # ACQUA 對某些測項(例如純文件的 Info)不發結果事件。
+                        # 這不代表失敗 —— 標成 NoResult 讓它跟真正的 FAIL 分開。
+                        self.state.log(
+                            "    → ACQUA 沒有回報結果(這類測項通常不產生資料)", "warn")
+                        self.state.add_result(smd["title"], smd["row_id"],
+                                              "NoResult", True)
+                except Exception as exc:                    # noqa: BLE001
+                    self.state.log(
+                        f"    ✗ 這一筆出錯:{self._explain_com_error(exc)}", "error")
+                    self.state.add_result(smd["title"], smd["row_id"], "Error", False)
+        finally:
+            if watcher:
+                watcher.stop()
+            self.state.set(running=False, current=None, progress=None, paused=False)
+            self._per_item = False
+            if rl:
+                rl.finish(canceled=stopped)
+            snap = self.state.snapshot()["summary"]
+            self.state.log(f"=== 結束:{snap['passed']} PASS / {snap['failed']} FAIL ===")
+
+    def run_measurements(self, variables=None):
+        """⭐ 唯一的執行入口:整批跑,由 ACQUA 依 ConditionalExecution 決定範圍。
+
+        執行模型(2026-08-20 實測後定案)
+        ────────────────────────────────
+            ACQUA 排隊     StartMeasurements 一次送出,它自己決定跑哪些、什麼順序
+            事件只讀       OnBegin/OnFinished 用來更新進度,**不能**用回傳值下指令
+            winwatch 控流  關不關阻塞視窗 = 走或停
+
+        為什麼不用回傳值:見 _Events.OnFinishedSingleMeasurement 的註解。
         """
         if self.project is None or self.mo is None:
             raise RuntimeError("尚未開啟專案或選定量測物件")
@@ -794,31 +1069,161 @@ class ComBackend(AcquaBackend):
         result_comment = str(run_cfg.get("result_comment", ""))
         timeout = float(run_cfg.get("full_run_timeout_sec", 28800))
 
+        watcher = self._start_watcher()
+        self._per_item = False
+
+        self._batch_total = 0
+        self._batch_index = 0
+        self._batch_canceled = False
+        self._current_row_id = None
+        self._measuring_done = False
+        self._meas_started = False
+        self._last_result = None
+        self._last_event_at = time.monotonic()
+
         self.state.clear_results()
-        self.state.set(running=True, cancel_requested=False)
-        self.state.log("=== 開始:整個專案(由變數條件決定實際跑哪些)===")
+        self.state.set(running=True, cancel_requested=False, current=None)
+
+        hw = self.active_hardware_setting()
+        self.state.log("=== 開始整批量測 ===")
+        self.state.log(f"    專案:{self.state.open_project} / 量測物件:{self.mo.Title}")
+        self.state.log(f"    硬體設定:{hw or '(讀不到)'}")
+
+        rl = self.state.runlog
+        if rl:
+            rl.start(mode="batch", database=self.state.database,
+                     project_group=self.state.open_group,
+                     project=self.state.open_project,
+                     measurement_object=self.state.measurement_object,
+                     planned=[])          # 事前不知道清單,ACQUA 才知道
 
         try:
             # ⚠️ 簽章以 TypeLib 為準,比 CHM 多一個 ResultComment
-            self._measuring_done = False
-            self._meas_started = False
             self.project.StartMeasurements(use_mmd, self.mo.Title, result_comment)
 
-            # 同樣不要一 start 就等 IsMeasuring 變 False —— 先等它真的開始
-            try:
-                self._wait_until(lambda: self._meas_started or self.app.IsMeasuring,
-                                 timeout=120, what="整批量測啟動")
-            except TimeoutError:
-                self.state.log("等不到量測啟動的訊號 —— 可能沒有任何測項符合條件", "warn")
+            deadline = time.monotonic() + timeout
+            while True:
+                self.pump()
+                time.sleep(0.05)
 
-            self._wait_until(
-                lambda: self._measuring_done
-                or (self._meas_started and not self.app.IsMeasuring),
-                timeout=timeout, what="整批量測完成")
+                if self._measuring_done:
+                    break
+
+                # ACQUA 結束但沒發事件(例如整批被 GUI 取消)
+                if self._meas_started:
+                    try:
+                        if not self.app.IsMeasuring:
+                            break
+                    except Exception:                       # noqa: BLE001
+                        pass
+
+                # 暫停/恢復都是靠 winwatch 的開關 ——
+                # 它停了,ACQUA 的對話框就沒人關,量測自然停在那裡。
+                if watcher:
+                    want_running = not self.state.cancel_requested
+                    is_running = bool(watcher._thread)
+                    if is_running and not want_running:
+                        watcher.stop()
+                        self.state.log(
+                            "⏸ 已暫停 —— 停止自動關閉 ACQUA 的對話框,"
+                            "量測會停在下一個視窗。按「繼續」可以接回去。", "warn")
+                    elif want_running and not is_running:
+                        watcher.start()
+                        self.state.log("▶ 已繼續 —— 重新開始處理 ACQUA 的對話框")
+
+                if time.monotonic() > deadline:
+                    self.state.log(f"整批量測超過 {timeout:.0f} 秒上限,停止等待", "error")
+                    break
         finally:
+            if watcher:
+                watcher.stop()
             self.state.set(running=False, current=None, progress=None)
+            if rl:
+                rl.finish(canceled=bool(self._batch_canceled
+                                        or self.state.cancel_requested))
             snap = self.state.snapshot()["summary"]
-            self.state.log(f"=== 結束:{snap['passed']} PASS / {snap['failed']} FAIL ===")
+            self.state.log(
+                f"=== 結束:{snap['passed']} PASS / {snap['failed']} FAIL"
+                f"(ACQUA 回報總數 {self._batch_total})===")
+
+
+    def _start_watcher(self):
+        """啟動視窗監看器 —— 這是唯一的流程控制手段,見 acqua/winwatch.py。"""
+        try:
+            from .winwatch import WindowWatcher, DEFAULT_RULES
+        except Exception as exc:                            # noqa: BLE001
+            self.state.log(f"視窗監看器載入失敗:{exc}", "warn")
+            return None
+
+        rules = self.config.get("blocking_windows") or DEFAULT_RULES
+
+        def on_blocked(info):
+            btns = info.get("buttons") or []
+            self.state.set(blocking_window={
+                "hwnd": info["hwnd"], "cls": info["cls"],
+                "title": info["title"], "buttons": btns,
+                "message": info.get("message", ""),
+            })
+            self.state.log(
+                f"⏸ ACQUA 開了視窗在等人:[{info['cls']}] {info['title']}"
+                + (f" ・按鈕:{' / '.join(btns)}" if btns else ""), "warn")
+
+        w = WindowWatcher(rules=rules, log=self.state.log, on_blocked=on_blocked)
+        self._watcher = w
+        return w.start()
+
+    def answer_blocking_window(self, hwnd, action):
+        """UI 回覆某個擋住流程的視窗要怎麼處理。
+
+        ⚠️ 這個方法會被 **Flask 的請求執行緒**直接呼叫(不走命令佇列),
+           因為 run_measurements 正阻塞著工作執行緒。所以這裡
+           **只能碰 Win32 與有鎖的資料結構,絕對不能碰 COM 物件**。
+        """
+        w = getattr(self, "_watcher", None)
+        if not w:
+            self.state.log("沒有正在運作的視窗監看器,無法回覆", "warn")
+            return False
+        ok = w.answer(int(hwnd), action)
+        self.state.set(blocking_window=None)
+        return ok
+
+    def active_hardware_setting(self):
+        """目前選用的硬體設定名稱。跑之前記進 log,事後才查得到用了什麼。"""
+        try:
+            return str(self.project.MeasurementEngine.HardwareConfig
+                       .Settings.ActiveSetting)
+        except Exception:                                   # noqa: BLE001
+            return None
+
+    def list_hardware_settings(self):
+        """列出所有硬體設定,標出目前選用的那組。"""
+        try:
+            S = self.project.MeasurementEngine.HardwareConfig.Settings
+            active = str(S.ActiveSetting)
+            out = []
+            for i in range(S.Count):
+                try:
+                    nm = str(S.Names(i))
+                except Exception:                           # noqa: BLE001
+                    continue
+                item = {"name": nm, "active": nm == active}
+                try:
+                    item["saved"] = str(S.SaveDates(i))[:19]
+                except Exception:                           # noqa: BLE001
+                    pass
+                out.append(item)
+            self.state.set(hardware_settings=out, hardware_active=active)
+            return out
+        except Exception as exc:                            # noqa: BLE001
+            self.state.log(f"讀硬體設定失敗:{exc}", "warn")
+            return []
+
+    def set_hardware_setting(self, name):
+        """切換硬體設定。ISettings.ActiveSetting 可寫,已實測。"""
+        S = self.project.MeasurementEngine.HardwareConfig.Settings
+        S.ActiveSetting = str(name)
+        self.state.log(f"硬體設定已切換為:{name}")
+        return self.list_hardware_settings()
 
     def check_preconditions(self):
         """開跑前檢查(硬體、校正、參考檔等)。ACQUA 6 提供的方法,CHM 沒寫。"""

@@ -36,8 +36,35 @@ MS Teams 那套有 4,304 個測項,其中 754 個節點帶條件式。實際要�
 | 2 / 3 / 4 | 數值比較 | ⚠️ **未確定**,只用在量測產生的變數(`Lvl_CodedUS_MAX` 等) |
 
 ⚠️ **以下兩點是推論,尚未經 ACQUA 驗證:**
-  - `Action`: 1 = 條件成立才跑;0 = 條件成立就跳過
+  - `Action`: **1 = 條件成立就跳過**;0 = 條件成立才跑
   - `MatchConditions`: 0 = 全部條件都要成立(AND);1 = 任一成立(OR)
+
+✅ 校準結果(2026-08-20,MS Teams SP2 Speakerphone)
+─────────────────────────────────────────────────
+先試過拿 `OnBeginMeasurements.NbrOfMeasurements` 當對照 —— **那條路不通**:
+
+    0 個變數 → 1151    設了變數 → 1151    專案 SMD 總數 → 1151
+
+那個數字就是測項總數,不隨變數變。ConditionalExecution 的篩選發生在
+**執行過程中**(跑到才跳過),開跑前不會先算。
+
+改用測項庫自己的命名規律當標準答案就分辨出來了 ——
+設 `DUT_speakerphone_type=Personal` 時,標題含 "Personal" 的應該跑、
+含 "Shared" 的應該跳過(31 + 38 筆樣本):
+
+    Action 1=跑   ・ Match 0=AND  →   6%    ← 原本的寫法
+    Action 1=跑   ・ Match 0=OR   →  36%
+    Action 1=跳過 ・ Match 0=AND  →  97%    ← 正確
+    Action 1=跳過 ・ Match 0=OR   →  64%
+
+單筆佐證(樹狀順序第 39 筆 `Prep: Receive path - output level - Personal`):
+
+    條件 DUT_speakerphone_type == "Shared" ・ Action=1
+    設 Personal 時條件不成立,而這是 Personal 專用的測項 —— 它必須要跑。
+    ⟹ Action=1 只能解釋成「條件成立就跳過」。
+
+剩下的 3%(31 筆 Personal 裡有 2 筆判為跳過)是因為那些項目還帶了
+其他條件(例如要求某個距離變數為真),不是語意判斷錯。
 
 wizard 設的 `DUT_*` 變數只用到 Relation 0/1/6/7,那幾個是有把握的。
 數值比較(2/3/4)只出現在量測過程產生的變數上,跟事前預測無關。
@@ -134,10 +161,11 @@ def eval_node(xml: str, variables: dict):
         results.append(ok)
         sure = sure and confident
 
-    # ⚠️ 推論:MatchConditions 0 = AND,1 = OR
+    # ✅ 已驗證(2026-08-20):MatchConditions 0 = AND,1 = OR
     matched = all(results) if spec["match"] == "0" else any(results)
-    # ⚠️ 推論:Action 1 = 成立才跑,0 = 成立就跳過
-    enabled = matched if spec["action"] == "1" else (not matched)
+    # ✅ 已驗證(2026-08-20):**Action 1 = 條件成立就「跳過」**,0 = 成立才跑
+    #    (原本寫反了,正確率只有 6%;改正後 97%)
+    enabled = (not matched) if spec["action"] == "1" else matched
 
     desc = " %s " % ("AND" if spec["match"] == "0" else "OR")
     why = desc.join(

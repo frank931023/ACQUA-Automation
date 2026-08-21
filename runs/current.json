@@ -1,50 +1,26 @@
 {
   "state": "finished",
   "mode": "selected",
-  "database": "61_Demo_SMDs_Rev07",
-  "project_group": "Standards",
-  "project": "Speakerphone Certification",
-  "measurement_object": "DUT_001",
-  "started_at": 1786599201.7933035,
-  "updated_at": 1786599205.5322177,
+  "database": "ACQUA_auto_v2026Aug",
+  "project_group": "(Unsorted Projects)",
+  "project": "ZoomRooms_v2020Oct_v1",
+  "measurement_object": "Front_of_Room",
+  "started_at": 1787304837.67963,
+  "updated_at": 1787304902.8006637,
   "planned": [
     {
-      "row_id": 1000,
-      "title": "Sending Loudness Rating"
-    },
-    {
-      "row_id": 1001,
-      "title": "Receiving Loudness Rating"
-    },
-    {
-      "row_id": 1002,
-      "title": "POLQA MOS Sending"
+      "row_id": 5920,
+      "title": "switch devices"
     }
   ],
   "done": [
     {
-      "row_id": 1000,
-      "title": "Sending Loudness Rating",
-      "status": "MEAS_DONE_OK",
+      "row_id": 5920,
+      "title": "switch devices",
+      "status": "Done",
       "passed": true,
       "retries": 0,
-      "ts": 1786599203.4135396
-    },
-    {
-      "row_id": 1001,
-      "title": "Receiving Loudness Rating",
-      "status": "MEAS_DONE_OK",
-      "passed": true,
-      "retries": 0,
-      "ts": 1786599204.4127479
-    },
-    {
-      "row_id": 1002,
-      "title": "POLQA MOS Sending",
-      "status": "MEAS_DONE_OK",
-      "passed": true,
-      "retries": 0,
-      "ts": 1786599205.5312145
+      "ts": 1787304901.3673332
     }
   ]
 }

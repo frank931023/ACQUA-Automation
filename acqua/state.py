@@ -33,7 +33,7 @@ class SharedState:
 
         # ⭐ 混合模式:ACQUA 變數(條件執行的依據)
         self.variables = []            # [{"name","value","type","state","state_text"}]
-        self.run_mode = "selected"     # selected | conditional
+        self.run_mode = "batch"        # 只剩整批模式(逐項已移除)
         self.prediction = None         # 變數驅動的事前預測結果
 
         # 數值結果(走 SQL 讀回來的,含極限值)
@@ -47,7 +47,20 @@ class SharedState:
         self.cancel_requested = False
         self.current = None            # {"title": str, "index": int, "total": int}
         self.progress = None           # {"text": str, "value": int, "total": int}
+        # 硬體連接設定 —— 跑之前要知道現在用的是哪一組
+        self.hardware_settings = []    # [{"name","active","saved"}]
+        self.hardware_active = None
+        # ACQUA 開了對話框在等人時,把內容與按鈕端到 UI
+        self.blocking_window = None    # {"hwnd","cls","title","buttons","message"}
+        self.paused = False            # 逐項模式:停在兩筆之間
+        # 從條件式反推的精靈選項(取代 ACQUA 那個 Tcl/Tk 視窗)
+        self.wizard_groups = []
+        # 哪個精靈管哪些變數(從 config 來,對應是推的)
+        self.wizard_scopes = {}
         self.results = []              # [{"title","row_id","status","passed","retries","ts"}]
+        # 目前上下文 (server|database|idProject)。前端拿它當快取 key ——
+        # 值一變就把勾選、結果對照、精靈選項全部丟掉。見 acqua/context.py
+        self.ctx = None
 
     # ── 事件串流(給 SSE 用)──────────────────────────
     def emit(self, kind: str, **payload):
@@ -86,7 +99,14 @@ class SharedState:
                 "cancel_requested": self.cancel_requested,
                 "current": self.current,
                 "progress": self.progress,
+                "hardware_settings": self.hardware_settings,
+                "hardware_active": self.hardware_active,
+                "blocking_window": self.blocking_window,
+                "paused": self.paused,
+                "wizard_groups": self.wizard_groups,
+                "wizard_scopes": self.wizard_scopes,
                 "results": self.results,
+                "ctx": self.ctx,
                 "summary": {
                     "total": len(self.results),
                     "passed": passed,

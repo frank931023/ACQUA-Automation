@@ -63,9 +63,13 @@ class AcquaWorker(threading.Thread):
         self.init_error = None
 
     # ── 給 Flask 執行緒呼叫 ──────────────────────────
-    def submit(self, name: str, **kwargs) -> Command:
-        """把命令排進佇列。非阻塞 —— 呼叫端要不要 .wait() 自己決定。"""
-        cmd = Command(name, kwargs)
+    def submit(self, _name: str, **kwargs) -> Command:
+        """把命令排進佇列。非阻塞 —— 呼叫端要不要 .wait() 自己決定。
+
+        參數名加底線前綴:指令的 kwargs 裡本來就可能有 name
+        (例如 set_hardware(name=...)),同名會撞成 TypeError。
+        """
+        cmd = Command(_name, kwargs)
         self._q.put(cmd)
         return cmd
 
@@ -73,10 +77,40 @@ class AcquaWorker(threading.Thread):
         """中止不走佇列 —— 因為 run 正在阻塞工作執行緒,佇列排不進去。
 
         直接設旗標,由 backend.run_smds 的迴圈自己檢查。
+        逐項模式下這是**真的中止** —— 排隊的是 Python 的 for 迴圈,
+        不送下一筆就結束了。在途的那一筆會跑完(強行打斷會留半筆資料)。
         對 bool 做跨執行緒讀寫在 CPython 是安全的。
         """
-        self.state.set(cancel_requested=True)
-        self.state.log("已送出中止要求 —— 會在當前這筆測項結束後生效", "warn")
+        self.state.set(cancel_requested=True, paused=False)
+        self.state.log("■ 已送出中止 —— 目前這筆跑完就停,不會再送下一筆", "warn")
+
+    def request_pause(self):
+        """暫停。逐項模式停在兩筆之間;整批模式停止關對話框。"""
+        self.state.set(paused=True)
+        self.state.log("⏸ 已暫停", "warn")
+
+    def request_resume(self):
+        """從暫停恢復。跟 request_cancel 一樣不走佇列。
+
+        暫停的實作是「停掉視窗監看器」,恢復就是把它開回來 ——
+        run_smds 的迴圈每一圈都會比對這個旗標。
+        """
+        self.state.set(cancel_requested=False, paused=False)
+        self.state.log("▶ 已繼續", "info")
+
+    def answer_blocking(self, hwnd, action):
+        """回答 ACQUA 的阻塞對話框。**不走佇列**。
+
+        原因跟 request_cancel 一樣:run_smds 正在阻塞這條執行緒,
+        排進佇列的命令要等整批跑完才會被處理 —— 但阻塞視窗偏偏只在
+        量測進行中才出現,排隊等於永遠不會被回答。
+
+        安全性:只碰 Win32 訊息與 winwatch 內部有鎖的 dict,不碰 COM,
+        所以不需要在 STA 執行緒上執行。
+        """
+        if self.backend is None:
+            return False
+        return self.backend.answer_blocking_window(hwnd, action)
 
     def stop(self):
         self._stop.set()
@@ -107,6 +141,13 @@ class AcquaWorker(threading.Thread):
 
             self._dispatch(cmd)
 
+        # 收工時如果還在跑,講清楚 —— 事件接收端一死,ACQUA 會卡在
+        # IsMeasuring=True 回不來(2026-08-17 實測過)。
+        if self.state.running:
+            self.state.log(
+                "⚠️ 工作執行緒結束時仍有量測在進行 —— "
+                "ACQUA 可能會停在 IsMeasuring=True。"
+                "請到 ACQUA 視窗確認並取消。", "error")
         try:
             self.backend.shutdown()
         except Exception:                              # noqa: BLE001
@@ -121,12 +162,17 @@ class AcquaWorker(threading.Thread):
             "select_mo": lambda **kw: self.backend.select_measurement_object(**kw),
             "write_metadata": lambda **kw: self.backend.write_metadata(**kw),
             "list_smds": lambda **kw: self.backend.list_smds(**kw),
-            "run_smds": lambda **kw: self.backend.run_smds(**kw),
             "create_report": lambda **kw: self.backend.create_report(**kw),
             # ⭐ 混合模式
             "list_variables": lambda **kw: self.backend.list_variables(),
             "set_variables": lambda **kw: self.backend.set_variables(**kw),
-            "run_all": lambda **kw: self.backend.run_all(),
+            # 開跑前的歸屬驗證(同步呼叫,錯誤要能回到 HTTP)
+            "check_rows": lambda **kw: self.backend.check_rows(**kw),
+            "run_smds": lambda **kw: self.backend.run_smds(**kw),
+            "answer_blocking": lambda **kw: self.backend.answer_blocking_window(**kw),
+            "wizard_options": lambda **kw: self.backend.wizard_options(),
+            "list_hardware": lambda **kw: self.backend.list_hardware_settings(),
+            "set_hardware": lambda **kw: self.backend.set_hardware_setting(**kw),
             "predict_run_set": lambda **kw: self.backend.predict_run_set(**kw),
             "read_results": lambda **kw: self.backend.read_results(**kw),
         }

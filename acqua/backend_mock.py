@@ -21,6 +21,10 @@ _FAKE_TREE = {
         # 名稱刻意包含 Shared / Personal / Premium / Bluetooth,
         # 讓 conditional 模式的變數篩選看得出效果
         "Speakerphone Certification": [
+            # 這三個模擬 ACQUA 的互動精靈 —— 用來驗證「自動排除需人工項目」
+            "DUT & Measurement Wizard",
+            "BGN Wizard",
+            "Hardware options",
             "Sending Loudness Rating",
             "Receiving Loudness Rating",
             "POLQA MOS Sending",
@@ -144,16 +148,28 @@ class MockBackend(AcquaBackend):
              for i, t in enumerate(titles)],
         )
         smds = [s for s in base if search.lower() in s["title"].lower()] if search else list(base)
+        # 跟真機一致:標出需要人工操作的項目
+        is_manual = self._manual_matcher()
+        for s in smds:
+            s["manual"] = is_manual(s.get("title"))
         self.state.set(smds=smds)
         return smds
 
+    def check_rows(self, row_ids):
+        """模擬模式沒有真的資料庫,一律放行。"""
+        return True
+
     def run_smds(self, row_ids):
+        """逐項執行(模擬)。中止/暫停的語意跟真機一致。"""
+        return self._run_titles(row_ids)
+
+    def _run_titles(self, row_ids):
         by_id = {s["row_id"]: s for s in self.state.smds}
         targets = [by_id[r] for r in row_ids if r in by_id]
         total = len(targets)
-        max_retries = int(self.config.get("run", {}).get("max_retries", 0))
-        stop_on_fail = bool(self.config.get("run", {}).get("stop_on_first_failure", False))
-
+        # ⚠️ 不模擬重試與「失敗即停」——
+        #    真機那條路已經沒有了(ByRef 回傳送不到 ACQUA,REDO_THIS 無效)。
+        #    mock 的行為必須跟真機一致,否則測起來會給錯誤的信心。
         self._attempts = {}
         self.state.clear_results()
         self.state.set(running=True, cancel_requested=False)
@@ -161,7 +177,7 @@ class MockBackend(AcquaBackend):
 
         rl = self.state.runlog
         if rl:
-            rl.start(mode="selected", database=self.state.database,
+            rl.start(mode="batch", database=self.state.database,
                      project_group=self.state.open_group,
                      project=self.state.open_project,
                      measurement_object=self.state.measurement_object,
@@ -171,14 +187,18 @@ class MockBackend(AcquaBackend):
         i = 0
         while i < total:
             if self.state.cancel_requested:
-                self.state.log("使用者要求中止", "warn")
+                self.state.log(f"■ 已中止 —— 跑了 {i} / {total} 筆", "warn")
+                break
+            while self.state.paused and not self.state.cancel_requested:
+                time.sleep(0.1)
+            if self.state.cancel_requested:
+                self.state.log(f"■ 已中止 —— 跑了 {i} / {total} 筆", "warn")
                 break
 
             smd = targets[i]
-            attempt = self._attempts.get(smd["row_id"], 0)
+            attempt = 0
             self.state.set(current={"title": smd["title"], "index": i + 1, "total": total})
-            self.state.log(f"[{i + 1}/{total}] 量測中:{smd['title']}"
-                           + (f"(重試 {attempt})" if attempt else ""))
+            self.state.log(f"[{i + 1}/{total}] 量測中:{smd['title']}")
 
             # 模擬量測期間的進度回報
             duration = self._rng.uniform(*_MOCK_SECONDS_PER_SMD)
@@ -192,20 +212,12 @@ class MockBackend(AcquaBackend):
             passed = self._rng.random() > _MOCK_FAIL_RATE
             status = "MEAS_DONE_OK" if passed else "MEAS_DONE_NOT_OK"
 
-            if not passed and attempt < max_retries:
-                self._attempts[smd["row_id"]] = attempt + 1
-                self.state.log(f"    → FAIL,重試({attempt + 1}/{max_retries})", "warn")
-                continue        # 不遞增 i,重跑同一筆
-
             self.state.add_result(smd["title"], smd["row_id"], status, passed, attempt)
             if rl:
                 rl.record(smd["row_id"], smd["title"], status, passed, attempt)
             self.state.log(f"    → {'PASS' if passed else 'FAIL'}",
                            "info" if passed else "error")
 
-            if not passed and stop_on_fail:
-                self.state.log("設定為失敗即停 —— 中止剩餘測項", "error")
-                break
             i += 1
 
         self.state.set(running=False, current=None, progress=None)
@@ -306,17 +318,28 @@ class MockBackend(AcquaBackend):
             "uncertain": [],
             "total_smds": len(kept) + len(skipped),
         }
+        # 跟真機一致:自動勾選時排除需要人工操作的項目
+        is_manual = self._manual_matcher()
+        run_ids, manual_hits = [], []
+        for x in r["will_run"]:
+            (manual_hits if is_manual(x["title"]) else run_ids).append(
+                {"row_id": x["row_id"], "title": x["title"]} if is_manual(x["title"])
+                else x["row_id"])
         self.state.set(prediction={
-            "will_run": len(r["will_run"]), "skipped": len(r["skipped"]),
+            "will_run": len(run_ids), "skipped": len(r["skipped"]),
             "uncertain": 0, "total": r["total_smds"],
-            "run_ids": [x["row_id"] for x in r["will_run"]],
+            "run_ids": run_ids,
+            "manual_excluded": manual_hits,
+            "uncertain_items": [],
             "sample_skipped": r["skipped"][:40],
         })
         self.state.log(f"【模擬模式】預測 {len(kept)}/{r['total_smds']} 個測項會執行")
         return r
 
-    def run_all(self):
+    def run_measurements(self, variables=None):
         """模擬「設變數 → 一次跑完」。ACQUA 會自己略過不符條件的項目。"""
+        if variables:
+            self.set_variables(variables)
         kept, skipped = self._conditional_filter()
         self.state.log(f"=== 開始:整個專案(變數條件篩選後 {len(kept)}/"
                        f"{len(self.state.smds)} 項)===")
@@ -325,4 +348,52 @@ class MockBackend(AcquaBackend):
         if not kept:
             self.state.log("條件篩選後沒有任何測項可跑", "warn")
             return
-        self.run_smds([s["row_id"] for s in kept])
+        self._run_titles([s["row_id"] for s in kept])
+
+    # ── 硬體設定(模擬)────────────────────────────
+    _MOCK_HW = ["BK+GRAS Mouth_3QUEST_v5_HRPF off_251029",
+                "BK+GRAS Mouth_2talker_v5_HRPF off_251028",
+                "Teams_chamber_v5", "ZRs_SND_RCV_headphone_250804"]
+
+    def list_hardware_settings(self):
+        act = getattr(self, "_hw_active", self._MOCK_HW[0])
+        out = [{"name": n, "active": n == act} for n in self._MOCK_HW]
+        self.state.set(hardware_settings=out, hardware_active=act)
+        return out
+
+    def set_hardware_setting(self, name):
+        self._hw_active = str(name)
+        self.state.log(f"【模擬模式】硬體設定切換為:{name}")
+        return self.list_hardware_settings()
+
+    def active_hardware_setting(self):
+        return getattr(self, "_hw_active", self._MOCK_HW[0])
+
+    # ── 設計 A:需要人工操作的測項 ────────────────
+    def _manual_matcher(self):
+        import fnmatch
+        m = self.config.get("manual_items") or {}
+        titles = {str(x).strip() for x in (m.get("titles") or [])}
+        pats = [str(x) for x in (m.get("title_patterns") or [])]
+        def is_manual(title):
+            t = (title or "").strip()
+            return t in titles or any(fnmatch.fnmatch(t, p) for p in pats)
+        return is_manual
+
+    def wizard_options(self):
+        """模擬版:直接給一組跟真機同名的選項,方便測 UI。"""
+        groups = [
+            {"title": "量測範圍", "items": [
+                {"name": "DUT_speakerphone_type", "kind": "choice",
+                 "values": ["Personal", "Shared"], "used_by": 105}]},
+            {"title": "連接方式", "items": [
+                {"name": "DUT_connection_type", "kind": "choice",
+                 "values": ["Android", "Bluetooth", "USB", "USB dongle"], "used_by": 26}]},
+            {"title": "DUT 特性", "items": [
+                {"name": "DUT_premium_reqs", "kind": "bool", "values": [], "used_by": 94},
+                {"name": "DUT_is_deskphone", "kind": "bool", "values": [], "used_by": 4}]},
+        ]
+        self.state.set(wizard_groups=groups,
+                       wizard_scopes=self.config.get("wizard_scopes") or {})
+        self.state.log("【模擬模式】精靈選項 %d 組" % len(groups))
+        return groups
