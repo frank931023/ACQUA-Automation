@@ -59,7 +59,20 @@ PAGES = ["templates/index.html", "templates/plans.html",
 SHARED = read("templates/_runmini.html")
 
 
-print("=== A. JS 取用的元素,HTML 裡都有嗎 ===")
+print("=== 0. 結構完整性 ===")
+for page in PAGES:
+    html = read(page)
+    ids = re.findall(r'\bid="([^"]+)"', html)
+    dup = sorted({i for i in ids if ids.count(i) > 1})
+    check("%s 的 id 不重複(%d 個)" % (os.path.basename(page), len(ids)),
+          not dup, "重複:" + ", ".join(dup))
+    # <div> 開關要平衡 —— 用字串替換做區塊編輯時最容易弄壞的就是這個
+    op = len(re.findall(r"<div\b", html))
+    cl = len(re.findall(r"</div>", html))
+    check("%s 的 <div> 平衡(%d/%d)" % (os.path.basename(page), op, cl), op == cl)
+
+
+print("\n=== A. JS 取用的元素,HTML 裡都有嗎 ===")
 for page in PAGES:
     html = read(page)
     js = scripts_of(html)
@@ -197,6 +210,87 @@ check("Standards 範本給人看得懂的說明", "cannot be modified" in com an
 check("ProjectGroups 集合失效會重讀一次", "重讀 ProjectGroups 再試" in com)
 check("標題比對去頭尾空白(實測有尾巴帶空格的群組)",
       "str(pg.Title).strip() != want_g" in com)
+
+
+print("\n=== G. 不可逆的動作要先確認 ===")
+idx_html = read("templates/index.html")
+pl_html = read("templates/plans.html")
+
+# 存成計畫:按下去之前先攤開內容,存完清空 —— 不清很容易把同一批重複存
+check("存成計畫先跳確認視窗", 'id="planov"' in idx_html and "btn-pv-save" in idx_html)
+check("確認視窗列出勾選的項目", 'id="pv-items"' in idx_html)
+check("存好後顯示成功並倒數關閉",
+      "已存成計畫" in idx_html and "秒後自動關閉" in idx_html)
+check("存好後清空輸入框與勾選",
+      "$('#plan-title').value = '';" in idx_html and "selected.clear();" in idx_html)
+
+# 刪除計畫:沒有復原,所以要打名稱
+check("刪除要先跳視窗", 'id="delov"' in pl_html)
+check("刪除要把名稱完整打一次",
+      "$('#dl-input').value.trim() === p.title" in pl_html)
+check("名稱沒對上時刪除鈕是停用的", "$('#dl-go').disabled = !same" in pl_html)
+check("刪除後顯示成功字樣", "已刪除" in pl_html)
+
+check("計畫庫有關鍵字搜尋", 'id="q"' in pl_html and "function matches(p)" in pl_html)
+check("搜尋涵蓋名稱/說明/來源/setup",
+      "s.database, s.project, s.measurement_object" in pl_html)
+
+
+print("\n=== H. 序列每一步的設定 ===")
+# 每一步各自帶 run 名稱與 Word 輸出 —— 同一個計畫在不同輪次要用不同名字
+for f in ("run_name", "doc_name", "doc_dir"):
+    check("序列步驟有 %s 欄位" % f, ('data-f="%s"' % f) in pl_html)
+check("序列步驟是物件,且吃得下舊的純 id 陣列",
+      "const newStep = (id)" in pl_html and "typeof x === 'string' ? newStep(x)" in pl_html)
+check("欄位改動即時存進 localStorage",
+      "st[el.dataset.f] = el.value" in pl_html and "saveSeq();" in pl_html)
+check("打字時不會被輪詢重繪洗掉",
+      "$('#seq').contains(document.activeElement)" in pl_html)
+check("這一步填了名稱就優先用它", "st.run_name.trim()" in pl_html)
+check("跑完會依設定產出 Word", "async function makeReport" in pl_html)
+check("報告同名不覆蓋,自動加編號",
+      "if (!sv.exists)" in pl_html and "_${n}${ext}" in pl_html)
+check("計畫細節看得到完整測項", 'id="detov"' in pl_html
+      and "async function openDetail" in pl_html)
+
+print()
+print("=== J. 序列的執行流程 ===")
+check("兩步之間會跑 Moving to new setup", "function movingToSetup" in pl_html)
+check("那段目前是 mock,並在程式裡註明",
+      "目前是 mock" in pl_html and "Raspberry Pi" in pl_html)
+check("移動階段可以被中止", "if (abort) { clearInterval(timer)" in pl_html)
+check("縮小視窗涵蓋整個序列(含移動階段)",
+      "window.__miniInfo" in pl_html
+      and "window.__miniInfo === 'function'" in read("templates/_runmini.html"))
+check("跑完列出產生的 Word", "madeDocs.push" in pl_html and "dn-files" in pl_html)
+check("完成視窗五秒後自動關閉", "秒後自動關閉" in pl_html and "closeRunOv" in pl_html)
+check("滑鼠一動就取消自動關閉", "已取消自動關閉" in pl_html)
+check("舊的手動 setup 對話框已移除",
+      "btwov" not in pl_html and "waitSetup" not in pl_html)
+
+# 跨庫/跨機時每台受測物名稱不同 —— 執行當下才決定要寫進哪個 MO
+check("序列步驟可選 DUT", 'data-f="mo"' in pl_html and 'select data-f' in pl_html)
+check("DUT 選單來自該計畫來源專案", 'plans/<plan_id>/mos' in read("app.py")
+      and "def list_mobjects" in read("acqua/sqlcat.py"))
+check("新增 DUT 失敗會明講(AddMeasurementObject 回 -1)",
+      "int(idx) < 0" in read("acqua/backend_com.py"))
+check("執行時把 DUT 名稱送給 prepare",
+      "measurement_object: st.mo.trim()" in pl_html)
+ap = read("app.py")
+check("prepare 收得到 DUT 覆寫", 'mo_override = str(body.get("measurement_object")' in ap)
+# 選單裡的名稱都是既有的,所以一律不建立(COM 也建不了)
+check("選 DUT 一律不嘗試建立", "create_if_missing=False).wait(timeout=120)" in ap)
+
+print("\n=== I. 計畫庫的排序與分頁 ===")
+check("有排序選單", 'id="sort"' in pl_html and "function sorted(" in pl_html)
+check("時間與名稱都可正反排",
+      all(k in pl_html for k in ("created_desc", "created_asc",
+                                 "title_asc", "title_desc")))
+check("一頁十筆", "const PAGE = 10" in pl_html)
+check("有上一頁 / 下一頁", 'id="pg-prev"' in pl_html and 'id="pg-next"' in pl_html)
+check("顯示目前第幾頁", "第 ${page} / ${pages} 頁" in pl_html)
+check("換搜尋或排序會回第一頁", pl_html.count("page = 1;") >= 3)
+check("過濾後頁數縮水會自動修正", "if (page > pages) page = pages;" in pl_html)
 
 
 print("\n" + ("結論:全部通過" if not fails

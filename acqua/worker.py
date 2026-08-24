@@ -186,6 +186,8 @@ class AcquaWorker(threading.Thread):
             "set_variables": lambda **kw: self.backend.set_variables(**kw),
             # 開跑前的歸屬驗證(同步呼叫,錯誤要能回到 HTTP)
             "check_rows": lambda **kw: self.backend.check_rows(**kw),
+            # 計畫裡的測項 → 目前這個專案的 row_id(跨庫時靠路徑+名稱)
+            "resolve_items": lambda **kw: self.backend.resolve_items(**kw),
             "run_smds": lambda **kw: self.backend.run_smds(**kw),
             "answer_blocking": lambda **kw: self.backend.answer_blocking_window(**kw),
             "wizard_options": lambda **kw: self.backend.wizard_options(),

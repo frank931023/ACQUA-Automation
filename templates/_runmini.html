@@ -66,22 +66,45 @@
 
     // 這一頁自己開著大的進度框時就不要疊兩層
     const own = document.querySelector('#runov.on');
-    box.classList.toggle('on', !!s.running && !own);
+
+    // 宿主頁面可以提供自己的階段 —— 例如序列在「移動治具」那幾秒,
+    // 伺服器沒有量測在跑,但整件事還沒結束。
+    const host = (typeof window.__miniInfo === 'function')
+      ? window.__miniInfo() : null;
+    const active = (host && host.active) || !!s.running;
+
+    box.classList.toggle('on', active && !own);
     box.classList.toggle('stopping', !!s.cancel_requested);
-    if (!s.running) { t0 = null; return; }
+    if (!active) { t0 = null; return; }
+
+    // 宿主說了算的階段(沒有伺服器端進度可用)
+    if (host && host.active && !s.running) {
+      el('rm-title').textContent = host.title || '進行中';
+      el('rm-i').textContent = host.index || 0;
+      el('rm-n').textContent = host.total || 0;
+      el('rm-bar').style.width = (host.percent || 0) + '%';
+      el('rm-p').textContent = host.passed || 0;
+      el('rm-f').textContent = host.failed || 0;
+      el('rm-name').textContent = host.detail || '';
+      el('rm-eta').textContent = '';
+      t0 = null;
+      return;
+    }
 
     const cur = s.current || {};
     const total = cur.total || (s.summary ? s.summary.total : 0) || 0;
     const done = s.summary ? s.summary.total : 0;
     if (t0 === null) { t0 = Date.now(); seen = done; }
 
-    el('rm-title').textContent = s.cancel_requested ? '停止中…' : '測試進行中';
+    el('rm-title').textContent = s.cancel_requested ? '停止中…'
+      : ((host && host.title) || '測試進行中');
     el('rm-i').textContent = cur.index || done;
     el('rm-n').textContent = total || '?';
     el('rm-bar').style.width = total ? Math.round(done / total * 100) + '%' : '0%';
     el('rm-p').textContent = s.summary ? s.summary.passed : 0;
     el('rm-f').textContent = s.summary ? s.summary.failed : 0;
-    el('rm-name').textContent = cur.title || '';
+    el('rm-name').textContent =
+      ((host && host.detail) ? host.detail + ' ・ ' : '') + (cur.title || '');
 
     // 預估剩餘:用這一頁看到的區間去算,不需要後端配合
     const dn = done - seen;

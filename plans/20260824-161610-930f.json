@@ -1,0 +1,56 @@
+{
+  "id": "20260824-161610-930f",
+  "created": "2026-08-24T16:16:10",
+  "title": "0824-finaltest-1",
+  "description": "",
+  "updated": "2026-08-24T16:16:10",
+  "items": [
+    {
+      "row_id": 3579,
+      "title": "Info: MS Teams Information",
+      "path": "MS Teams v5 Rev05 SP2 - Speakerphone / V5_Personal Space and Shared Space Devices - Desk Phone, Speakerphone / Information and preparation",
+      "smd_type": 34
+    },
+    {
+      "row_id": 3580,
+      "title": "Info: Setting up the RME soundcard for MS Teams testing",
+      "path": "MS Teams v5 Rev05 SP2 - Speakerphone / V5_Personal Space and Shared Space Devices - Desk Phone, Speakerphone / Information and preparation",
+      "smd_type": 34
+    },
+    {
+      "row_id": 3581,
+      "title": "Info: Setting up the Reference (REF) PC - MS Teams",
+      "path": "MS Teams v5 Rev05 SP2 - Speakerphone / V5_Personal Space and Shared Space Devices - Desk Phone, Speakerphone / Information and preparation",
+      "smd_type": 34
+    },
+    {
+      "row_id": 3583,
+      "title": "Info: Measurement settings",
+      "path": "MS Teams v5 Rev05 SP2 - Speakerphone / V5_Personal Space and Shared Space Devices - Desk Phone, Speakerphone / Information and preparation",
+      "smd_type": 34
+    },
+    {
+      "row_id": 3582,
+      "title": "Info: Setting up the Device Under Test (DUT) PC - MS Teams",
+      "path": "MS Teams v5 Rev05 SP2 - Speakerphone / V5_Personal Space and Shared Space Devices - Desk Phone, Speakerphone / Information and preparation",
+      "smd_type": 34
+    }
+  ],
+  "count": 5,
+  "variables": {},
+  "source": {
+    "server": "AUTOMATION_ACQU\\ACQUADBSERVER",
+    "database": "51_MS_Teams_Rev05_SP2",
+    "group": "MS Teams v5 Rev05 SP2 - Speakerphone",
+    "project": "MS Teams v5 Rev05 SP2 - Speakerphone",
+    "measurement_object": "New Measurement Object",
+    "ctx": "AUTOMATION_ACQU\\ACQUADBSERVER|51_MS_Teams_Rev05_SP2|6"
+  },
+  "manual_excluded": [],
+  "setup": {
+    "name": "",
+    "note": "",
+    "params": {},
+    "_note": "尚未自動化:目前只會在序列中間停下來提示人工調整"
+  }
+}

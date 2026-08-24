@@ -1,85 +1,85 @@
 {
-  "state": "finished",
+  "state": "canceled",
   "mode": "selected",
-  "comment": "test_0824_2",
+  "comment": "0824test · 0824-finaltest-2",
   "database": "51_MS_Teams_Rev05_SP2",
   "project_group": "MS Teams v5 Rev05 SP2 - Speakerphone",
   "project": "MS Teams v5 Rev05 SP2 - Speakerphone",
   "measurement_object": "New Measurement Object",
-  "started_at": 1787553296.8564444,
-  "updated_at": 1787553327.0797148,
+  "started_at": 1787562910.3448026,
+  "updated_at": 1787563032.9372966,
   "planned": [
     {
-      "row_id": 3579,
-      "title": "Info: MS Teams Information"
+      "row_id": 3584,
+      "title": "Info: labCORE settings"
     },
     {
-      "row_id": 3580,
-      "title": "Info: Setting up the RME soundcard for MS Teams testing"
+      "row_id": 3585,
+      "title": "Info: Workplace settings"
     },
     {
-      "row_id": 3581,
-      "title": "Info: Setting up the Reference (REF) PC - MS Teams"
+      "row_id": 3586,
+      "title": "Info: Input calibration"
     },
     {
-      "row_id": 3582,
-      "title": "Info: Setting up the Device Under Test (DUT) PC - MS Teams"
+      "row_id": 3587,
+      "title": "Info: Mouth equalization"
     },
     {
-      "row_id": 3583,
-      "title": "Info: Measurement settings"
+      "row_id": 3588,
+      "title": "Info: SMD Collections"
     }
   ],
   "done": [
     {
-      "row_id": 3579,
-      "title": "Info: MS Teams Information",
+      "row_id": 3584,
+      "title": "Info: labCORE settings",
       "status": "Done",
       "code": 1,
       "path": "MS Teams v5 Rev05 SP2 - Speakerphone / V5_Personal Space and Shared Space Devices - Desk Phone, Speakerphone / Information and preparation",
       "passed": true,
       "retries": 0,
-      "ts": 1787553301.4338205
+      "ts": 1787562914.6668441
     },
     {
-      "row_id": 3580,
-      "title": "Info: Setting up the RME soundcard for MS Teams testing",
+      "row_id": 3585,
+      "title": "Info: Workplace settings",
       "status": "Done",
       "code": 1,
       "path": "MS Teams v5 Rev05 SP2 - Speakerphone / V5_Personal Space and Shared Space Devices - Desk Phone, Speakerphone / Information and preparation",
       "passed": true,
       "retries": 0,
-      "ts": 1787553308.394242
+      "ts": 1787562920.0084522
     },
     {
-      "row_id": 3581,
-      "title": "Info: Setting up the Reference (REF) PC - MS Teams",
+      "row_id": 3586,
+      "title": "Info: Input calibration",
       "status": "Done",
       "code": 1,
       "path": "MS Teams v5 Rev05 SP2 - Speakerphone / V5_Personal Space and Shared Space Devices - Desk Phone, Speakerphone / Information and preparation",
       "passed": true,
       "retries": 0,
-      "ts": 1787553314.494168
+      "ts": 1787562925.3186219
     },
     {
-      "row_id": 3582,
-      "title": "Info: Setting up the Device Under Test (DUT) PC - MS Teams",
+      "row_id": 3587,
+      "title": "Info: Mouth equalization",
       "status": "Done",
       "code": 1,
       "path": "MS Teams v5 Rev05 SP2 - Speakerphone / V5_Personal Space and Shared Space Devices - Desk Phone, Speakerphone / Information and preparation",
       "passed": true,
       "retries": 0,
-      "ts": 1787553320.1752079
+      "ts": 1787562931.052039
     },
     {
-      "row_id": 3583,
-      "title": "Info: Measurement settings",
+      "row_id": 3588,
+      "title": "Info: SMD Collections",
       "status": "Done",
       "code": 1,
       "path": "MS Teams v5 Rev05 SP2 - Speakerphone / V5_Personal Space and Shared Space Devices - Desk Phone, Speakerphone / Information and preparation",
       "passed": true,
       "retries": 0,
-      "ts": 1787553325.5727062
+      "ts": 1787562936.2619233
     }
   ]
 }

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>測試計畫 — ACQUA 自動化</title>
+<title>執行序列 — ACQUA 自動化</title>
 <style>
   :root {
     --bg:#f6f7f9; --panel:#fff; --border:#e3e6ea; --fg:#1f2328; --muted:#6b7480;
@@ -18,12 +18,18 @@
   header a { font-size:12px; color:var(--accent); text-decoration:none; }
   .badge { font-size:11px; color:var(--muted); border:1px solid var(--border);
            border-radius:20px; padding:2px 10px; }
-  main { max-width:900px; margin:20px auto; padding:0 20px; }
+  main { max-width:1180px; margin:20px auto; padding:0 20px;
+         display:grid; grid-template-columns:1fr 1.15fr; gap:16px; align-items:start; }
+  @media (max-width:980px) { main { grid-template-columns:1fr; } }
   .panel { background:var(--panel); border:1px solid var(--border);
            border-radius:12px; padding:18px 20px; margin-bottom:16px; }
   h2 { font-size:14px; margin:0 0 4px; }
   .hint { font-size:12px; color:var(--muted); margin:0 0 14px; }
   .row { display:flex; gap:8px; align-items:center; margin-bottom:10px; }
+  input[type=text], select { font:inherit; font-size:13px; padding:7px 10px;
+                     border:1px solid var(--border); border-radius:8px;
+                     background:var(--panel); color:var(--fg); }
+  select { cursor:pointer; }
   button { font:inherit; font-size:13px; padding:7px 14px; border-radius:8px;
            border:1px solid var(--border); background:var(--panel);
            color:var(--fg); cursor:pointer; }
@@ -31,22 +37,39 @@
   button:disabled { opacity:.45; cursor:default; }
   button.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
   button.danger  { background:var(--fail); border-color:var(--fail); color:#fff; }
+  .empty { color:var(--muted); font-size:13px; padding:18px; text-align:center; }
 
-  .pl { display:flex; align-items:center; gap:12px; padding:11px 12px;
+  /* ── 計畫庫 ── */
+  .pl { display:flex; align-items:flex-start; gap:11px; padding:11px 12px;
         border:1px solid var(--border); border-radius:9px; margin-bottom:8px; }
   .pl:hover { border-color:#c9ced6; }
-  /* 別的專案建立的計畫 —— 它的 row_id 在這個專案沒有意義 */
-  .pl.mismatch { opacity:.55; background:#f6f6f8; }
-  .pl.mismatch:hover { border-color:var(--border); }
-  .pl .t .mm { display:block; color:#c2410c; font-weight:600; margin-top:2px; }
-  .pl.on { border-color:var(--accent); background:#2f6fed0d; }
-  .pl input[type=checkbox] { width:16px; height:16px; flex:none; }
   .pl .t { flex:1; min-width:0; }
   .pl .t b { display:block; font-size:13px; }
-  .pl .t small { color:var(--muted); font-size:11px; }
-  .pl .n { flex:none; font-variant-numeric:tabular-nums; color:var(--muted); font-size:12px; }
-  .pl .x { flex:none; font-size:11px; padding:3px 9px; }
-  .empty { color:var(--muted); font-size:13px; padding:18px; text-align:center; }
+  .pl .t small { display:block; color:var(--muted); font-size:11px; }
+  .pl .t .src { font-size:11px; color:var(--muted); margin-top:2px; }
+  .pl .t .src i { font-style:normal; color:var(--accent); }
+  .pl .btns { display:flex; flex-direction:column; gap:5px; flex:none; }
+  .pl .btns button { font-size:11px; padding:3px 9px; white-space:nowrap; }
+
+  /* ── 執行序列 ── */
+  .step { display:flex; align-items:flex-start; gap:10px; padding:11px 12px;
+          border:1px solid var(--border); border-radius:9px; margin-bottom:8px;
+          background:var(--panel); }
+  .step.cur { border-color:var(--accent); background:#2f6fed0d; }
+  .step.done { opacity:.6; }
+  .step .no { flex:none; width:24px; height:24px; border-radius:50%;
+              background:var(--bg); border:1px solid var(--border);
+              font-size:11px; display:flex; align-items:center;
+              justify-content:center; font-variant-numeric:tabular-nums; }
+  .step .t { flex:1; min-width:0; }
+  .step .t b { display:block; font-size:13px; }
+  .step .t .src { font-size:11px; color:var(--muted); }
+  .step .t .setup { font-size:11px; margin-top:3px; color:var(--warn); }
+  .step .btns { display:flex; gap:4px; flex:none; }
+  .step .btns button { font-size:11px; padding:2px 7px; }
+  /* 前後兩步的資料庫不同 —— 中間會自己切,標出來讓人知道會發生什麼 */
+  .dbswitch { font-size:11px; color:var(--accent); margin:-3px 0 8px 34px; }
+  .setupbar { font-size:11px; color:var(--warn); margin:-3px 0 8px 34px; }
 
   .ov { position:fixed; inset:0; background:#0006; backdrop-filter:blur(2px);
         display:none; align-items:center; justify-content:center; z-index:100; }
@@ -54,14 +77,16 @@
   .bx { background:var(--panel); border-radius:14px; padding:24px 28px;
         width:min(560px,94vw); box-shadow:0 16px 50px #0003; }
   .bx h3 { margin:0 0 8px; font-size:16px; }
+  .bx label { display:block; font-size:12px; color:var(--muted); margin-top:12px; }
+  .bx label input { display:block; width:100%; margin-top:4px; }
   .big { font-size:34px; font-weight:600; font-variant-numeric:tabular-nums; margin:10px 0 2px; }
   .big small { font-size:14px; font-weight:400; color:var(--muted); }
   .pbar { height:8px; border-radius:5px; background:var(--border); overflow:hidden; margin:10px 0; }
   .pbar i { display:block; height:100%; background:var(--accent); transition:width .3s; }
-  .cur { padding:10px 12px; border:1px solid var(--border); border-radius:8px;
-         background:var(--bg); margin-top:10px; }
-  .cur .p { font-size:11px; color:var(--muted); }
-  .cur .n2 { font-size:13px; font-weight:600; word-break:break-word; }
+  .cur2 { padding:10px 12px; border:1px solid var(--border); border-radius:8px;
+          background:var(--bg); margin-top:10px; }
+  .cur2 .p { font-size:11px; color:var(--muted); }
+  .cur2 .n2 { font-size:13px; font-weight:600; word-break:break-word; }
   .cnt { display:flex; gap:8px; margin-top:12px; }
   .cnt div { flex:1; text-align:center; padding:8px; border:1px solid var(--border);
              border-radius:8px; font-size:11px; color:var(--muted); }
@@ -76,12 +101,45 @@
   .log { margin-top:12px; max-height:110px; overflow-y:auto;
          font:11px/1.6 Consolas,monospace; color:var(--muted);
          border-top:1px solid var(--border); padding-top:9px; }
+  .prep { margin-top:10px; font-size:12px; }
+  .prep div { padding:2px 0; }
+  .prep .bad { color:var(--fail); }
+
+  /* 兩步之間的「移動治具」階段 */
+  .setupph { margin-top:12px; padding:11px 13px; border-radius:9px;
+             border:1px solid var(--accent); background:#2f6fed0d; }
+  .setupph .h { font-size:12px; font-weight:600; color:var(--accent);
+                margin-bottom:5px; }
+
+  /* 跑完的摘要 */
+  .done { margin-top:12px; padding:12px 14px; border-radius:9px;
+          border:1px solid var(--ok); background:#1a7f370d; }
+  .done .h { font-size:13px; font-weight:600; color:var(--ok); margin-bottom:6px; }
+  .done .f { font-size:11px; padding:4px 0; border-top:1px dashed var(--border); }
+  .done .f b { display:block; }
+  .done .f small { color:var(--muted); word-break:break-all; }
+  .ok-msg { color:var(--ok); font-weight:600; }
+
+  /* 每一步自己的設定:run 名稱 + Word 輸出 */
+  .stcfg { margin:6px 0 0 34px; display:grid; gap:5px;
+           grid-template-columns:1fr 1fr; }
+  .stcfg label { font-size:10px; color:var(--muted); display:block; }
+  .stcfg label span { display:block; margin-bottom:2px; }
+  .stcfg input { width:100%; font-size:12px; padding:5px 8px; }
+  .stcfg .wide { grid-column:1 / -1; }
+
+  /* 計畫細節 */
+  .det { max-height:46vh; overflow-y:auto; margin-top:10px;
+         border:1px solid var(--border); border-radius:8px;
+         padding:9px 11px; background:var(--bg); }
+  .det div { font-size:11px; padding:2px 0; }
+  .det small { color:var(--muted); }
 </style>
 </head>
 <body>
 
 <header>
-  <h1>測試計畫</h1>
+  <h1>執行序列</h1>
   <span class="badge" id="b-backend">—</span>
   <span class="badge" id="b-proj">未開啟專案</span>
   <span style="flex:1"></span>
@@ -90,29 +148,114 @@
 </header>
 
 <main>
+  <!-- ── 左:計畫庫 ────────────────────────────── -->
   <section class="panel">
-    <h2>勾選要跑的計畫</h2>
-    <p class="hint">勾起來的會<b>由上到下依序執行</b>。每個計畫之間會停下來,
-      讓你移動治具或更換待測物 —— 之後這一步會改成自動(發 HTTP 給 Raspberry Pi)。<br>
-      計畫是在 <a href="/acqua">測項選擇</a> 那一頁勾好測項後存出來的。</p>
+    <h2>計畫庫</h2>
+    <p class="hint">計畫是在 <a href="/acqua">測項選擇</a> 那一頁勾好測項後存出來的。
+      每個計畫記得自己是在<b>哪個資料庫的哪個專案</b>挑的 ——
+      執行時會自動切過去,不必先手動開好。</p>
+    <div class="row">
+      <input type="text" id="q" placeholder="搜尋:名稱 / 說明 / 資料庫 / 專案 / setup"
+             style="flex:1">
+      <button id="btn-qclear">清除</button>
+    </div>
+    <div class="row">
+      <select id="sort">
+        <option value="created_desc">建立時間:新 → 舊</option>
+        <option value="created_asc">建立時間:舊 → 新</option>
+        <option value="title_asc">名稱:A → Z</option>
+        <option value="title_desc">名稱:Z → A</option>
+        <option value="count_desc">項目數:多 → 少</option>
+      </select>
+      <button id="btn-reload">重新讀取</button>
+      <button id="btn-addall">整頁加入序列</button>
+      <span style="flex:1"></span>
+      <span class="hint" id="q-n" style="margin:0"></span>
+    </div>
+    <div id="list"><div class="empty">載入中…</div></div>
+    <div class="row" id="pager" style="margin-top:10px">
+      <button id="pg-prev">← 上一頁</button>
+      <span class="hint" id="pg-n" style="margin:0;flex:1;text-align:center"></span>
+      <button id="pg-next">下一頁 →</button>
+    </div>
+  </section>
+
+  <!-- ── 右:執行序列 ──────────────────────────── -->
+  <section class="panel">
+    <h2>執行序列</h2>
+    <p class="hint">由上到下依序執行。每一步之間會停下來讓你調整
+      <b>setup 位置</b>(移動治具 / 馬達 / 換待測物)——
+      之後這一步會改成自動發 HTTP 給 Raspberry Pi。</p>
 
     <div class="row">
-      <button id="btn-all">全選</button>
-      <button id="btn-none">全不選</button>
-      <button id="btn-reload">重新讀取</button>
-      <span style="flex:1"></span>
-      <span class="hint" id="sel-n" style="margin:0">已選 0 個</span>
+      <input type="text" id="seq-name" placeholder="這一輪的名稱(選填,會併進每筆結果的名稱)"
+             style="flex:1">
     </div>
-
-    <div id="list"><div class="empty">載入中…</div></div>
-
-    <div class="row" style="margin-top:14px">
+    <div class="row">
       <button class="primary" id="btn-run" disabled>▶ 依序執行</button>
       <button id="btn-pause" disabled>⏸ 暫停</button>
       <button class="danger" id="btn-stop" disabled>■ 中止</button>
+      <span style="flex:1"></span>
+      <button id="btn-clear">清空</button>
     </div>
+
+    <div id="seq"><div class="empty">序列是空的 —— 從左邊把計畫加進來</div></div>
   </section>
 </main>
+
+<!-- setup 位置設定 -->
+<div class="ov" id="setupov">
+  <div class="bx">
+    <h3>setup 位置</h3>
+    <div class="hint" id="su-plan" style="margin:0"></div>
+    <p class="hint">這一步要把治具 / 待測物擺成什麼樣子。<br>
+      <b>目前只會在序列中間停下來提示你</b> —— 細節底定之後會接上
+      soundproofroom 的座標,由 Flask 發 HTTP 給 Raspberry Pi 自動就位。</p>
+    <label>位置名稱<input type="text" id="su-name" placeholder="例如 0°／1m／桌面中央"></label>
+    <label>備註<input type="text" id="su-note" placeholder="要做什麼、注意什麼"></label>
+    <div class="acts">
+      <button class="primary" id="su-save">儲存</button>
+      <button id="su-cancel">取消</button>
+    </div>
+  </div>
+</div>
+
+<!-- 計畫細節:這個計畫會跑哪些測項 -->
+<div class="ov" id="detov">
+  <div class="bx" style="width:min(680px,94vw)">
+    <h3 id="dt-title">計畫細節</h3>
+    <div class="hint" id="dt-meta" style="margin:0"></div>
+    <div class="hint" id="dt-setup" style="margin:6px 0 0"></div>
+    <div class="det" id="dt-items"></div>
+    <div class="acts">
+      <button class="primary" id="dt-close">關閉</button>
+      <button id="dt-add">加入序列</button>
+    </div>
+  </div>
+</div>
+
+<!-- 刪除計畫:要打名稱才算數 -->
+<div class="ov" id="delov">
+  <div class="bx">
+    <h3>刪除計畫</h3>
+    <div class="cur2">
+      <div class="p">要刪除的計畫</div>
+      <div class="n2" id="dl-title">—</div>
+    </div>
+    <div class="hint" id="dl-meta" style="margin:8px 0 0"></div>
+    <p class="hint" style="margin:12px 0 0">刪掉不能復原。
+      請把<b>計畫名稱</b>完整打一次,確認你要刪的是這一個。</p>
+    <label style="display:block;margin-top:10px">
+      <input type="text" id="dl-input" placeholder="在這裡輸入計畫名稱"
+             style="width:100%" spellcheck="false">
+    </label>
+    <div class="hint" id="dl-msg" style="margin:8px 0 0"></div>
+    <div class="acts">
+      <button class="danger" id="dl-go" disabled>刪除</button>
+      <button id="dl-cancel">取消</button>
+    </div>
+  </div>
+</div>
 
 <!-- 執行中 -->
 <div class="ov" id="runov">
@@ -121,11 +264,23 @@
     <div class="hint" id="r-meta" style="margin:0"></div>
     <div class="big"><span id="r-idx">0</span><small> / <span id="r-total">0</span> 項</small></div>
     <div class="pbar"><i id="r-bar" style="width:0%"></i></div>
-    <div class="cur"><div class="p" id="r-plan">—</div><div class="n2" id="r-name">準備中…</div></div>
+    <div class="cur2"><div class="p" id="r-plan">—</div><div class="n2" id="r-name">準備中…</div></div>
     <div class="cnt">
       <div class="p"><b id="r-pass">0</b>PASS</div>
       <div class="f"><b id="r-fail">0</b>FAIL</div>
       <div><b id="r-left">0</b>剩餘</div>
+    </div>
+    <div class="setupph" id="r-setup" style="display:none">
+      <div class="h">🔧 Moving to new setup</div>
+      <div id="sp-name">—</div>
+      <div class="pbar" style="margin:8px 0 4px"><i id="sp-bar" style="width:0%"></i></div>
+      <div id="sp-left" style="font-size:11px;color:var(--muted)"></div>
+    </div>
+    <div class="done" id="r-done" style="display:none">
+      <div class="h" id="dn-h">✓ 全部完成</div>
+      <div id="dn-sum"></div>
+      <div id="dn-files"></div>
+      <div id="dn-left" style="font-size:11px;color:var(--muted);margin-top:8px"></div>
     </div>
     <div class="blk" id="r-blk" style="display:none">
       <div class="h">⏸ ACQUA 開了視窗在等你</div>
@@ -135,125 +290,427 @@
     <div class="log" id="r-log"></div>
     <div class="acts">
       <button id="r-pause">⏸ 暫停</button>
-      <button class="danger" id="r-stop">■ 中止整個佇列</button>
+      <button class="danger" id="r-stop">■ 中止整個序列</button>
       <button id="r-hide">縮小</button>
     </div>
   </div>
 </div>
 
-<!-- 計畫之間 -->
-<div class="ov" id="btwov">
-  <div class="bx">
-    <h3>下一個計畫開始前</h3>
-    <div class="hint" id="bt-meta" style="margin:0"></div>
-    <div class="cur"><div class="p">接下來要跑</div><div class="n2" id="bt-next">—</div></div>
-    <p class="hint">需要移動治具或更換待測物的話,現在做。完成後按繼續。<br>
-      (之後這一步會改成自動 —— 發 HTTP 給 Raspberry Pi 控制馬達)</p>
-    <div class="acts">
-      <button class="primary" id="bt-go">完成了,繼續</button>
-      <button class="danger" id="bt-stop">停止佇列</button>
-    </div>
-  </div>
-</div>
+
 
 <script>
 const $ = s => document.querySelector(s);
-const esc = s => String(s).replace(/[&<>"]/g, c =>
+const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c =>
   ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
-let plans = [], picked = new Set(), S = {}, running = false, abort = false;
+// 序列存在瀏覽器裡 —— 它是「這次要怎麼跑」,不是計畫本身的一部分,
+// 所以不寫進 plans/*.json,重整頁面也不會不見。
+const SEQ_KEY = 'acqua.sequence';
+// 一步 = {id, run_name, doc_name, doc_dir}
+// 舊版存的是純 id 陣列 —— 使用者瀏覽器裡已經有那種資料了,要能吃下去。
+const newStep = (id) => ({id, run_name: '', mo: '', doc_name: '', doc_dir: ''});
+const loadSeq = () => {
+  try {
+    return JSON.parse(localStorage.getItem(SEQ_KEY) || '[]').map(x =>
+      typeof x === 'string' ? newStep(x)
+        : {id: x.id, run_name: x.run_name || '', mo: x.mo || '',
+           doc_name: x.doc_name || '', doc_dir: x.doc_dir || ''});
+  } catch (e) { return []; }
+};
+const saveSeq = () => {
+  try { localStorage.setItem(SEQ_KEY, JSON.stringify(seq)); } catch (e) {}
+};
+
+let plans = [], seq = loadSeq(), S = {}, running = false, abort = false;
+let query = '';
+const PAGE = 10;                 // 一頁最多幾個計畫
+let page = 1, sortBy = 'created_desc';
+let curStep = -1;
+const byId = id => plans.find(p => p.id === id);
 
 function log(m) {
   const d = document.createElement('div');
-  d.textContent = new Date().toLocaleTimeString() + '  ' + m;
+  d.textContent = new Date().toLocaleTimeString('zh-TW', {hour12: false}) + '  ' + m;
   $('#r-log').appendChild(d);
-  $('#r-log').scrollTop = 1e9;
+  $('#r-log').scrollTop = $('#r-log').scrollHeight;
 }
 
-// ── 清單 ──────────────────────────────────────
 async function loadPlans() {
-  try {
-    const r = await (await fetch('/acqua/api/plans')).json();
-    plans = r.plans || [];
-  } catch (e) { plans = []; }
+  const r = await (await fetch('/acqua/api/plans')).json();
+  plans = r.plans || [];
+  seq = seq.filter(st => byId(st.id));    // 已刪掉的計畫不要留在序列裡
+  saveSeq();
   render();
 }
 
-/** 這個計畫是不是別的專案建立的?ctx = server|database|idProject */
-function plansMismatch(p) {
-  if (!p.ctx || !S.ctx) return false;     // 舊計畫沒存 ctx,不擋(後端仍會驗)
-  return p.ctx !== S.ctx;
+/** 一行「這個計畫在哪裡挑的」 */
+function srcLine(p) {
+  const s = p.source || {};
+  const bits = [s.database, s.project, s.measurement_object].filter(Boolean);
+  return bits.length ? bits.map(esc).join(' <i>/</i> ') : '(來源不明 —— 舊格式的計畫)';
+}
+
+/** 關鍵字比對:名稱、說明、來源、setup 都算 —— 使用者記得哪個就用哪個找 */
+function matches(p) {
+  if (!query) return true;
+  const s = p.source || {}, su = p.setup || {};
+  return [p.title, p.description, s.database, s.project, s.measurement_object,
+          su.name, su.note]
+    .filter(Boolean).join(' ').toLowerCase().includes(query);
+}
+
+/** 依目前選的方式排序。時間欄位是 ISO 字串,直接字串比大小就是時間順序。 */
+function sorted(list) {
+  const cmp = {
+    created_desc: (a, b) => (b.created || '').localeCompare(a.created || ''),
+    created_asc:  (a, b) => (a.created || '').localeCompare(b.created || ''),
+    title_asc:    (a, b) => (a.title || '').localeCompare(b.title || '', 'zh-Hant'),
+    title_desc:   (a, b) => (b.title || '').localeCompare(a.title || '', 'zh-Hant'),
+    count_desc:   (a, b) => (b.count || 0) - (a.count || 0),
+  }[sortBy];
+  return [...list].sort(cmp);
 }
 
 function render() {
+  // 正在這些欄位裡打字時不要重畫序列 —— 重畫會把焦點與未存的字洗掉。
+  // (狀態輪詢每 2.5 秒就會叫一次 render)
+  const typing = $('#seq').contains(document.activeElement);
+
+  // ── 計畫庫 ──
   const box = $('#list');
-  if (!plans.length) {
-    box.innerHTML = '<div class="empty">還沒有任何計畫 —— '
-                  + '請先到<a href="/acqua">測項選擇</a>頁勾好測項後「存成計畫」</div>';
+  const hits = sorted(plans.filter(matches));
+  const pages = Math.max(1, Math.ceil(hits.length / PAGE));
+  if (page > pages) page = pages;          // 過濾之後頁數可能縮水
+  const shown = hits.slice((page - 1) * PAGE, page * PAGE);
+
+  $('#q-n').textContent = query
+    ? `符合 ${hits.length} / ${plans.length} 個`
+    : `共 ${plans.length} 個`;
+  $('#pg-n').textContent = hits.length
+    ? `第 ${page} / ${pages} 頁 ・ 這頁 ${shown.length} 個`
+    : '';
+  $('#pg-prev').disabled = page <= 1;
+  $('#pg-next').disabled = page >= pages;
+  $('#pager').style.display = hits.length > PAGE ? '' : 'none';
+
+  box.innerHTML = shown.length ? shown.map(p => `
+    <div class="pl">
+      <div class="t">
+        <b>${esc(p.title)}</b>
+        ${p.description ? `<small>${esc(p.description)}</small>` : ''}
+        <div class="src">${srcLine(p)}</div>
+        <small>${p.count} 項 ・ 建立於 ${esc((p.created || '').replace('T', ' '))}
+          ${(p.setup && p.setup.name) ? ' ・ setup:' + esc(p.setup.name) : ''}</small>
+      </div>
+      <div class="btns">
+        <button data-add="${esc(p.id)}">加入序列</button>
+        <button data-detail="${esc(p.id)}">計畫細節</button>
+        <button data-setup="${esc(p.id)}">setup…</button>
+        <button data-del="${esc(p.id)}">刪除</button>
+      </div>
+    </div>`).join('')
+    : (plans.length
+        ? `<div class="empty">沒有符合「${esc(query)}」的計畫</div>`
+        : '<div class="empty">還沒有任何計畫 —— 到<a href="/acqua">測項選擇</a>頁勾好測項後「存成計畫」</div>');
+
+  // ── 執行序列 ──
+  const sb = $('#seq');
+  if (typing) { paintSeqButtons(); return; }
+  if (!seq.length) {
+    sb.innerHTML = '<div class="empty">序列是空的 —— 從左邊把計畫加進來</div>';
   } else {
-    box.innerHTML = plans.map(p => {
-      // 計畫裡的 row_id 只在它被建立的那個專案有意義。ctx 對不上就不給跑 ——
-      // 後端 run 也會再擋一次,這裡只是讓人早點看到原因。
-      const bad = plansMismatch(p);
-      return `
-      <label class="pl${picked.has(p.id) ? ' on' : ''}${bad ? ' mismatch' : ''}">
-        <input type="checkbox" data-id="${esc(p.id)}" ${picked.has(p.id) ? 'checked' : ''}
-               ${bad ? 'disabled' : ''}>
-        <span class="t"><b>${esc(p.title)}</b>
-          <small>${esc(p.description || '')}${p.description ? ' ・ ' : ''}
-            ${esc((p.created || '').replace('T', ' '))}
-            ${p.project ? ' ・ ' + esc(p.project) : ''}
-            ${bad ? '<b class="mm">⚠ 屬於 ' + esc(p.database || '?') + ' / '
-                    + esc(p.project || '?') + ',不能在目前專案跑</b>' : ''}</small></span>
-        <span class="n">${p.count} 項</span>
-        <button class="x" data-del="${esc(p.id)}">刪除</button>
-      </label>`;
+    let prevDb = S.database || null;
+    sb.innerHTML = seq.map((st, i) => {
+      const p = byId(st.id) || {};
+      const s = p.source || {};
+      const su = p.setup || {};
+      let head = '';
+      if (i > 0) {
+        head += `<div class="setupbar">↓ 停下來調整 setup${
+          su.name ? ':' + esc(su.name) : '(未設定位置)'}</div>`;
+      }
+      if (s.database && s.database !== prevDb) {
+        head += `<div class="dbswitch">↻ 會自動切換到資料庫 ${esc(s.database)}</div>`;
+      }
+      prevDb = s.database || prevDb;
+      const cls = running
+        ? (i < curStep ? ' done' : (i === curStep ? ' cur' : ''))
+        : '';
+      return head + `
+        <div class="step${cls}">
+          <div class="no">${i + 1}</div>
+          <div class="t">
+            <b>${esc(p.title || '(已刪除)')}</b>
+            <div class="src">${srcLine(p)} ・ ${p.count || 0} 項</div>
+            ${su.name ? `<div class="setup">setup:${esc(su.name)}${
+                su.note ? ' —— ' + esc(su.note) : ''}</div>` : ''}
+          </div>
+          <div class="btns">
+            <button data-up="${i}" ${i === 0 ? 'disabled' : ''}>↑</button>
+            <button data-down="${i}" ${i === seq.length - 1 ? 'disabled' : ''}>↓</button>
+            <button data-rm="${i}">✕</button>
+          </div>
+        </div>
+        <div class="stcfg">
+          <label class="wide"><span>這一步的 run 名稱(ACQUA 的 Description)</span>
+            <input type="text" data-f="run_name" data-i="${i}"
+                   value="${esc(st.run_name)}"
+                   placeholder="留空 = 上面那一輪的名稱 · ${esc(p.title || '')}"></label>
+          <label class="wide"><span>DUT(量測物件)—— 選單是這個專案現有的;
+              要新的請先在 ACQUA 裡建立</span>
+            <select data-f="mo" data-i="${i}" data-plan="${esc(st.id)}">
+              <option value="">${esc(s.measurement_object || '(用計畫記的那個)')}</option>
+            </select></label>
+          <label><span>Word 檔名</span>
+            <input type="text" data-f="doc_name" data-i="${i}"
+                   value="${esc(st.doc_name)}"
+                   placeholder="留空 = 不出報告"></label>
+          <label><span>Word 存放位置</span>
+            <input type="text" data-f="doc_dir" data-i="${i}"
+                   value="${esc(st.doc_dir)}"
+                   placeholder="例如 D:/報告/2026"></label>
+        </div>`;
     }).join('');
   }
-  // 換了專案之後,原本勾的可能已經不能跑了 —— 直接取消勾選,不要留著誤導
-  plans.forEach(p => { if (plansMismatch(p)) picked.delete(p.id); });
-  $('#sel-n').textContent = `已選 ${picked.size} 個`;
-  $('#btn-run').disabled = !picked.size || running;
-  $('#btn-stop').disabled = !running;
+
+  paintSeqButtons();
+  fillMoSelects();
+}
+
+function paintSeqButtons() {
+  $('#btn-run').disabled   = !seq.length || running;
+  $('#btn-stop').disabled  = !running;
   $('#btn-pause').disabled = !running;
   const label = S.paused ? '▶ 繼續' : '⏸ 暫停';
   $('#btn-pause').textContent = label;
   $('#r-pause').textContent = label;
 }
 
+// 欄位改動直接寫回序列並存檔 —— 不需要按儲存
+function onFieldChange(e) {
+  const el = e.target.closest('[data-f]');
+  if (!el) return;
+  const st = seq[+el.dataset.i];
+  if (!st) return;
+  st[el.dataset.f] = el.value;
+  saveSeq();
+}
+$('#seq').addEventListener('input', onFieldChange);
+$('#seq').addEventListener('change', onFieldChange);   // <select> 只發 change
+
+// ── DUT 選單 ──────────────────────────────────
+// 走 SQL 直接查該計畫來源專案的量測物件 —— 不需要先把 ACQUA 切過去。
+// 一個計畫抓一次就夠,同一份清單在序列裡可能被用到很多次。
+const moCache = new Map();
+let madeDocs = [];        // 這一輪產生的 Word:[{name, path, plan}]
+
+async function mosOf(planId) {
+  if (moCache.has(planId)) return moCache.get(planId);
+  const p = (async () => {
+    try {
+      const r = await (await fetch(
+        '/acqua/api/plans/' + encodeURIComponent(planId) + '/mos')).json();
+      return r.ok ? (r.mos || []) : [];
+    } catch (e) { return []; }
+  })();
+  moCache.set(planId, p);
+  return p;
+}
+
+/** 把序列裡每個 <select data-f="mo"> 填上選項 */
+async function fillMoSelects() {
+  const els = [...document.querySelectorAll('#seq select[data-f="mo"]')];
+  for (const el of els) {
+    const st = seq[+el.dataset.i];
+    if (!st) continue;
+    const list = await mosOf(el.dataset.plan);
+    const keep = el.firstElementChild;               // 「用計畫記的那個」
+    el.innerHTML = '';
+    el.appendChild(keep);
+    for (const name of list) {
+      const o = document.createElement('option');
+      o.value = name; o.textContent = name;
+      el.appendChild(o);
+    }
+    // 存過的選擇如果已經不在清單裡(DUT 被刪掉),就退回預設並講一聲
+    if (st.mo && !list.includes(st.mo)) {
+      const o = document.createElement('option');
+      o.value = st.mo; o.textContent = st.mo + '(已不存在)';
+      el.appendChild(o);
+    }
+    el.value = st.mo || '';
+  }
+}
+
+// ── 計畫庫的動作 ──────────────────────────────
 $('#list').addEventListener('click', async (e) => {
-  const del = e.target.closest('button[data-del]');
-  if (del) {
-    e.preventDefault();
-    const id = del.dataset.del;
-    const r = await (await fetch('/acqua/api/plans/' + encodeURIComponent(id),
-                                 {method: 'DELETE'})).json();
-    plans = r.plans || [];
-    picked.delete(id);
-    render();
-    return;
+  const b = e.target.closest('button');
+  if (!b) return;
+  if (b.dataset.add) {
+    seq.push(newStep(b.dataset.add)); saveSeq(); render(); return;
   }
-  const cb = e.target.closest('input[type=checkbox]');
-  if (cb) {
-    cb.checked ? picked.add(cb.dataset.id) : picked.delete(cb.dataset.id);
-    render();
-  }
+  if (b.dataset.detail) { openDetail(b.dataset.detail); return; }
+  if (b.dataset.setup) { openSetup(b.dataset.setup); return; }
+  if (b.dataset.del) { openDelete(b.dataset.del); return; }
 });
 
-$('#btn-all').onclick    = () => {
-  plans.forEach(p => { if (!plansMismatch(p)) picked.add(p.id); });
-  render();
+// ── 計畫細節:這個計畫會跑哪些測項 ────────────────
+let detailId = null;
+
+async function openDetail(id) {
+  const p = byId(id); if (!p) return;
+  detailId = id;
+  const s = p.source || {}, su = p.setup || {};
+  $('#dt-title').textContent = p.title;
+  $('#dt-meta').textContent =
+    [s.database, s.project, s.measurement_object].filter(Boolean).join(' / ');
+  $('#dt-setup').textContent = su.name
+    ? `setup:${su.name}${su.note ? ' —— ' + su.note : ''}`
+    : 'setup:未設定';
+  $('#dt-items').innerHTML = '<div>讀取中…</div>';
+  $('#detov').classList.add('on');
+
+  // 清單頁只回摘要,完整的 items 要另外拿
+  const r = await (await fetch('/acqua/api/plans/' + encodeURIComponent(id))).json();
+  if (!r.ok) { $('#dt-items').innerHTML = '<div>讀取失敗</div>'; return; }
+  const items = r.plan.items || [];
+  $('#dt-items').innerHTML = items.length
+    ? items.map((x, i) => `<div>${i + 1}. #${x.row_id} ${esc(x.title)}`
+        + (x.path ? `<br><small>　　${esc(x.path)}</small>` : '') + '</div>').join('')
+    : '<div>這個計畫沒有任何測項</div>';
+  $('#dt-title').textContent = `${p.title}(${items.length} 項)`;
+}
+$('#dt-close').onclick = () => $('#detov').classList.remove('on');
+$('#dt-add').onclick = () => {
+  seq.push(newStep(detailId)); saveSeq(); render();
+  $('#detov').classList.remove('on');
 };
-$('#btn-none').onclick   = () => { picked.clear(); render(); };
+
+// ── 刪除:要把名稱完整打一次 ────────────────────
+let delId = null, delTimer = null;
+
+function openDelete(id) {
+  const p = byId(id); if (!p) return;
+  delId = id;
+  const s = p.source || {};
+  $('#dl-title').textContent = p.title;
+  $('#dl-meta').textContent =
+    [s.database, s.project, `${p.count} 項`].filter(Boolean).join(' / ');
+  $('#dl-input').value = '';
+  $('#dl-msg').textContent = '';
+  $('#dl-go').disabled = true;
+  $('#dl-go').textContent = '刪除';
+  $('#dl-cancel').textContent = '取消';
+  $('#delov').classList.add('on');
+  $('#dl-input').focus();
+}
+
+function closeDelete() {
+  clearInterval(delTimer); delTimer = null;
+  $('#delov').classList.remove('on');
+}
+$('#dl-cancel').onclick = closeDelete;
+
+$('#dl-input').addEventListener('input', () => {
+  const p = byId(delId);
+  const same = p && $('#dl-input').value.trim() === p.title;
+  $('#dl-go').disabled = !same;
+  $('#dl-msg').textContent = same ? '' : (p ? '名稱還沒對上' : '');
+});
+$('#dl-input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !$('#dl-go').disabled) $('#dl-go').click();
+});
+
+$('#dl-go').onclick = async () => {
+  const p = byId(delId);
+  $('#dl-go').disabled = true;
+  const r = await (await fetch('/acqua/api/plans/' + encodeURIComponent(delId),
+                               {method: 'DELETE'})).json();
+  if (!r.ok) {
+    $('#dl-msg').innerHTML = '<b style="color:var(--fail)">刪除失敗</b>';
+    return;
+  }
+  seq = seq.filter(x => x.id !== delId); saveSeq();
+  moCache.delete(delId);
+  await loadPlans();
+
+  $('#dl-cancel').textContent = '關閉';
+  let left = 3;
+  const tick = () => {
+    $('#dl-msg').innerHTML =
+      `<span class="ok-msg">✓ 已刪除「${esc(p ? p.title : '')}」</span>`
+      + `<br><small>${left} 秒後自動關閉</small>`;
+    if (left-- <= 0) closeDelete();
+  };
+  clearInterval(delTimer);
+  tick();
+  delTimer = setInterval(tick, 1000);
+};
+
+// ── 序列的動作 ────────────────────────────────
+$('#seq').addEventListener('click', (e) => {
+  const b = e.target.closest('button');
+  if (!b || running) return;
+  const swap = (i, j) => { const t = seq[i]; seq[i] = seq[j]; seq[j] = t; };
+  if (b.dataset.up   !== undefined) swap(+b.dataset.up, +b.dataset.up - 1);
+  if (b.dataset.down !== undefined) swap(+b.dataset.down, +b.dataset.down + 1);
+  if (b.dataset.rm   !== undefined) seq.splice(+b.dataset.rm, 1);
+  saveSeq(); render();
+});
+
+$('#q').addEventListener('input', (e) => {
+  query = e.target.value.trim().toLowerCase();
+  page = 1;                        // 換了條件就回第一頁,不然會停在空白頁
+  render();
+});
+$('#btn-qclear').onclick = () => {
+  $('#q').value = ''; query = ''; page = 1; render();
+};
+$('#sort').onchange = (e) => { sortBy = e.target.value; page = 1; render(); };
+$('#pg-prev').onclick = () => { if (page > 1) { page--; render(); } };
+$('#pg-next').onclick = () => { page++; render(); };
 $('#btn-reload').onclick = loadPlans;
+// 只加「這一頁看得到的」—— 按鈕旁邊就是分頁,加了看不見的東西會嚇到人
+$('#btn-addall').onclick = () => {
+  const hits = sorted(plans.filter(matches));
+  hits.slice((page - 1) * PAGE, page * PAGE)
+      .forEach(p => seq.push(newStep(p.id)));
+  saveSeq(); render();
+};
+$('#btn-clear').onclick  = () => { seq = []; saveSeq(); render(); };
+
+// ── setup 位置 ────────────────────────────────
+let setupId = null;
+function openSetup(id) {
+  const p = byId(id); if (!p) return;
+  setupId = id;
+  const su = p.setup || {};
+  $('#su-plan').textContent = p.title;
+  $('#su-name').value = su.name || '';
+  $('#su-note').value = su.note || '';
+  $('#setupov').classList.add('on');
+  $('#su-name').focus();
+}
+$('#su-cancel').onclick = () => $('#setupov').classList.remove('on');
+$('#su-save').onclick = async () => {
+  await fetch('/acqua/api/plans/' + encodeURIComponent(setupId), {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({setup: {name: $('#su-name').value.trim(),
+                                  note: $('#su-note').value.trim()}}),
+  });
+  $('#setupov').classList.remove('on');
+  await loadPlans();
+};
 
 // ── 狀態輪詢 ──────────────────────────────────
 async function poll() {
   try {
     S = await (await fetch('/acqua/api/status')).json();
     $('#b-backend').textContent = S.backend === 'com' ? 'COM(真實 ACQUA)' : '模擬模式';
-    $('#b-proj').textContent = S.open_project || '未開啟專案';
+    $('#b-proj').textContent =
+      [S.database, S.open_project].filter(Boolean).join(' / ') || '未開啟專案';
     paintRun();
+    if (!running) render();
   } catch (e) { /* 伺服器還沒起來 */ }
   setTimeout(poll, running ? 700 : 2500);
 }
@@ -313,69 +770,234 @@ function beep() {
   } catch (e) {}
 }
 
-// ── 依序執行 ──────────────────────────────────
-$('#btn-run').onclick = runQueue;
+// ── 執行 ──────────────────────────────────────
+$('#btn-run').onclick = runSeq;
 $('#btn-stop').onclick = $('#r-stop').onclick = async () => {
   abort = true;
   await fetch('/acqua/api/cancel', {method: 'POST'});
   log('已要求中止');
 };
-$('#r-hide').onclick = () => $('#runov').classList.remove('on');
+$('#r-hide').onclick = closeRunOv;
 
 // 暫停/繼續 —— 停在兩筆之間,在途那筆會跑完。
-// 佇列本身也會停:當前計畫沒結束就不會進到下一個。
+// 序列本身也會停:當前計畫沒結束就不會進到下一步。
 $('#btn-pause').onclick = $('#r-pause').onclick = async () => {
   const to = S.paused ? 'resume' : 'pause';
   await fetch('/acqua/api/' + to, {method: 'POST'});
   log(to === 'pause' ? '已暫停 —— 目前這筆跑完就停住' : '已繼續');
 };
 
-async function runQueue() {
-  if (running) return;
-  const ids = plans.filter(p => picked.has(p.id)).map(p => p.id);   // 照畫面順序
-  if (!ids.length) return;
-  running = true; abort = false;
+const post = async (url, body) => (await fetch(url, {
+  method: 'POST', headers: {'Content-Type': 'application/json'},
+  body: JSON.stringify(body || {}),
+})).json();
+
+// 右下角的縮小視窗只看得到伺服器狀態,而「移動治具」那幾秒伺服器是閒的。
+// 把序列自己的階段餵給它,才不會每兩步之間閃掉一次。
+let miniPhase = null;
+window.__miniInfo = () => miniPhase;
+
+async function runSeq() {
+  if (running || !seq.length) return;
+  running = true; abort = false; curStep = -1;
+  madeDocs = [];
+  $('#r-done').style.display = 'none';
+  $('#r-setup').style.display = 'none';
   $('#r-log').innerHTML = '';
   $('#runov').classList.add('on');
   render();
 
-  try {
-    for (let i = 0; i < ids.length; i++) {
-      if (abort) { log('佇列已中止'); break; }
-      const r = await (await fetch('/acqua/api/plans/' + encodeURIComponent(ids[i]))).json();
-      if (!r.ok) { log('計畫載入失敗,中止'); break; }
-      const plan = r.plan;
+  const seqName = $('#seq-name').value.trim();
+  const t0 = Date.now();
 
-      if (i > 0 && !(await waitBetween(plan, i + 1, ids.length))) {
-        log('使用者停止佇列'); break;
+  try {
+    for (let i = 0; i < seq.length; i++) {
+      if (abort) { log('序列已中止'); break; }
+      curStep = i; render();
+
+      const st = seq[i];
+      const p = byId(st.id);
+      if (!p) { log(`第 ${i + 1} 步的計畫已被刪除,跳過`); continue; }
+
+      // 第二步開始:先跑一段「移動治具」。
+      // ⚠️ 目前是 mock —— 固定五秒,不會真的動任何東西。
+      //    之後這裡會換成「發 HTTP 給 Raspberry Pi 並等它回報就位」,
+      //    介面不變(一樣是 await 一個會結束的動作)。
+      if (i > 0) {
+        if (!(await movingToSetup(p, i + 1, seq.length))) {
+          log('序列已中止'); break;
+        }
       }
 
-      const row_ids = (plan.items || []).map(x => x.row_id);
-      if (!row_ids.length) { log(`「${plan.title}」沒有項目,跳過`); continue; }
+      miniPhase = {active: true, title: `序列 ${i + 1}/${seq.length}`,
+                   index: i + 1, total: seq.length,
+                   percent: Math.round(i / seq.length * 100),
+                   detail: p.title};
+      $('#r-title').textContent = `執行中 — ${p.title}`;
+      $('#r-meta').textContent = `序列 ${i + 1} / ${seq.length}`;
+      $('#r-plan').textContent = p.title;
+      $('#r-name').textContent = '準備中 —— 切換到這個計畫的位置';
 
-      $('#r-title').textContent = `執行中 — ${plan.title}`;
-      $('#r-meta').textContent = `佇列 ${i + 1} / ${ids.length}`;
-      $('#r-plan').textContent = plan.title;
-      log(`[${i + 1}/${ids.length}] 開始「${plan.title}」(${row_ids.length} 項)`);
+      // ① 把 ACQUA 帶到這個計畫需要的地方,並把測項對應回來。
+      //    跨資料庫時 row_id 不能沿用,由後端用「路徑 + 名稱」重對。
+      log(`[${i + 1}/${seq.length}] 準備「${p.title}」`);
+      const prep = await post(
+        '/acqua/api/plans/' + encodeURIComponent(st.id) + '/prepare',
+        {measurement_object: st.mo.trim()});
+      (prep.steps || []).forEach(s =>
+        log('   ' + (s.ok ? '✓ ' : '✗ ') + s.name + (s.detail ? ' — ' + s.detail : '')));
+      if (!prep.ok) { log('準備失敗,序列中止'); break; }
 
-      const j = await (await fetch('/acqua/api/run', {
-        method: 'POST', headers: {'Content-Type': 'application/json'},
-        // 計畫自己的 ctx —— 它是在哪個專案建立的就只能在哪裡跑
-        body: JSON.stringify({row_ids, ctx: plan.ctx || S.ctx}),
-      })).json();
+      const res = prep.resolution || {};
+      (res.missing || []).forEach(m =>
+        log('   ⚠ 找不到測項:' + (m.path ? m.path + ' / ' : '') + m.title));
+      (res.ambiguous || []).forEach(m =>
+        log(`   ⚠ 同名 ${m.count} 筆無法分辨,已跳過:${m.title}`));
+
+      const row_ids = prep.row_ids || [];
+      if (!row_ids.length) { log('   沒有可執行的測項,跳過這一步'); continue; }
+      if (res.missing?.length || res.ambiguous?.length) {
+        const n = (res.missing || []).length + (res.ambiguous || []).length;
+        if (!confirm(`「${p.title}」有 ${n} 項對應不到,只會跑 ${row_ids.length} 項。\n`
+                   + '要繼續嗎?(詳情看執行視窗的日誌)')) {
+          log('使用者取消'); break;
+        }
+      }
+
+      // ② 送出。這一步自己有填名稱就用它,沒填才退回「序列名稱 · 計畫名稱」。
+      //    這個字串會變成每筆結果在 ACQUA 裡的 Description。
+      const comment = st.run_name.trim()
+        || [seqName, p.title].filter(Boolean).join(' · ');
+      const j = await post('/acqua/api/run',
+                           {row_ids, ctx: prep.ctx, comment});
       if (!j.ok) { log('送出失敗:' + (j.error || '')); break; }
+      log(`   已送出 ${row_ids.length} 項 ・ 名稱「${comment || '(未命名)'}」`);
 
       await waitDone();
       const sm = S.summary || {};
-      log(`[${i + 1}/${ids.length}]「${plan.title}」結束 — `
+      log(`[${i + 1}/${seq.length}]「${p.title}」結束 — `
         + `${sm.passed || 0} PASS / ${sm.failed || 0} FAIL`);
+
+      // ③ 這一步有指定 Word 輸出就順手產一份
+      if (st.doc_name.trim() || st.doc_dir.trim()) await makeReport(st, p);
     }
   } finally {
-    running = false;
+    running = false; curStep = -1;
+    miniPhase = null;
+    $('#r-setup').style.display = 'none';
     render();
-    $('#r-title').textContent = '佇列結束';
+    $('#r-title').textContent = abort ? '序列已中止' : '序列完成';
+    $('#r-name').textContent = '';
     beep();
+    showDone(Math.round((Date.now() - t0) / 1000));
   }
+}
+
+/** 兩步之間的「移動治具」。回傳 false = 使用者中止。
+
+    現在是 mock:固定五秒、只顯示進度。之後換成發 HTTP 給 Raspberry Pi
+    時,把這個函式裡面換掉就好,外面的流程不用動。 */
+function movingToSetup(plan, idx, total) {
+  const su = plan.setup || {};
+  const label = su.name
+    ? `${su.name}${su.note ? ' —— ' + su.note : ''}`
+    : `${plan.title}(這個計畫還沒設定位置)`;
+  const SEC = 5;
+
+  $('#r-title').textContent = 'Moving to new setup';
+  $('#r-meta').textContent = `序列 ${idx} / ${total}`;
+  $('#r-setup').style.display = '';
+  $('#sp-name').textContent = label;
+  log(`Moving to new setup —— ${label}`);
+
+  return new Promise(res => {
+    const start = Date.now();
+    const timer = setInterval(() => {
+      const el = (Date.now() - start) / 1000;
+      const pct = Math.min(100, Math.round(el / SEC * 100));
+      $('#sp-bar').style.width = pct + '%';
+      $('#sp-left').textContent = `還要 ${Math.max(0, (SEC - el)).toFixed(1)} 秒`
+        + '(目前是模擬,之後由 Raspberry Pi 回報就位)';
+      miniPhase = {active: true, title: 'Moving to new setup',
+                   index: idx, total, percent: pct, detail: label};
+      if (abort) { clearInterval(timer); finish(false); return; }
+      if (el >= SEC) { clearInterval(timer); finish(true); }
+    }, 100);
+    const finish = (ok) => {
+      $('#r-setup').style.display = 'none';
+      $('#sp-bar').style.width = '0%';
+      res(ok);
+    };
+  });
+}
+
+/** 跑完的摘要:總結 + 產生了哪些 Word。五秒後自動關閉。 */
+let doneTimer = null;
+function showDone(secs) {
+  const sm = S.summary || {};
+  $('#dn-h').textContent = abort ? '■ 序列已中止' : '✓ 全部完成';
+  $('#dn-sum').innerHTML =
+    `${seq.length} 個計畫 ・ 花了 ${Math.floor(secs / 60)} 分 ${secs % 60} 秒`
+    + `<br>最後一批:${sm.passed || 0} PASS / ${sm.failed || 0} FAIL`;
+  $('#dn-files').innerHTML = madeDocs.length
+    ? '<div style="margin-top:8px;font-size:11px;color:var(--muted)">'
+      + `產生了 ${madeDocs.length} 份 Word:</div>`
+      + madeDocs.map(d => `<div class="f"><b>${esc(d.name)}</b>`
+          + `<small>${esc(d.path)}</small></div>`).join('')
+    : '<div style="margin-top:8px;font-size:11px;color:var(--muted)">'
+      + '沒有產生 Word(序列裡沒有步驟填了輸出檔名)</div>';
+  $('#r-done').style.display = '';
+
+  let left = 5;
+  const tick = () => {
+    $('#dn-left').textContent = `${left} 秒後自動關閉 —— 移動滑鼠可取消`;
+    if (left-- <= 0) { clearInterval(doneTimer); doneTimer = null; closeRunOv(); }
+  };
+  clearInterval(doneTimer);
+  tick();
+  doneTimer = setInterval(tick, 1000);
+}
+
+function closeRunOv() {
+  clearInterval(doneTimer); doneTimer = null;
+  $('#runov').classList.remove('on');
+  $('#r-done').style.display = 'none';
+}
+
+// 想看清楚檔案路徑時,滑鼠一動就別自動關
+$('#runov').addEventListener('mousemove', () => {
+  if (!doneTimer) return;
+  clearInterval(doneTimer); doneTimer = null;
+  $('#dn-left').textContent = '(已取消自動關閉)';
+}, {passive: true});
+
+/** 產生 Word 報告並存到這一步指定的位置。
+
+    同名不覆蓋 —— 序列常常是同一批重跑,直接蓋掉等於把上一輪的結果弄丟。
+    改成自動加編號,並在日誌講清楚最後存成什麼名字。 */
+async function makeReport(st, plan) {
+  log('   產生 Word 報告…');
+  const rep = await post('/acqua/api/report', {});
+  if (!rep.ok) { log('   ✗ 報告產生失敗:' + (rep.error || '')); return; }
+
+  const dir = st.doc_dir.trim() || rep.suggest_dir;
+  let name = st.doc_name.trim() || rep.suggest_name;
+  if (!/\.[A-Za-z]{2,5}$/.test(name)) name += '.doc';
+
+  const dot = name.lastIndexOf('.');
+  const stem = name.slice(0, dot), ext = name.slice(dot);
+  for (let n = 1; n <= 50; n++) {
+    const fn = n === 1 ? name : `${stem}_${n}${ext}`;
+    const sv = await post('/acqua/api/report/save',
+                          {src: rep.result, filename: fn, directory: dir});
+    if (sv.ok) {
+      log('   ✓ 報告已存到 ' + sv.path);
+      madeDocs.push({name: fn, path: sv.path, plan: plan.title});
+      return;
+    }
+    if (!sv.exists) { log('   ✗ 報告存檔失敗:' + (sv.error || '')); return; }
+  }
+  log('   ✗ 同名檔案太多,報告留在暫存資料夾:' + rep.result);
 }
 
 function waitDone() {
@@ -386,17 +1008,6 @@ function waitDone() {
   });
 }
 
-function waitBetween(plan, idx, total) {
-  return new Promise(res => {
-    $('#bt-meta').textContent = `佇列 ${idx} / ${total}`;
-    $('#bt-next').textContent = `${plan.title}(${plan.count} 項)`;
-    $('#btwov').classList.add('on');
-    beep();
-    const done = v => { $('#btwov').classList.remove('on'); res(v); };
-    $('#bt-go').onclick = () => done(true);
-    $('#bt-stop').onclick = () => done(false);
-  });
-}
 
 // 量測跑在伺服器的工作執行緒裡 —— 換頁、關頁都不會讓它停,右下角的進度
 // 視窗會跟著你到別的頁面。所以站內換頁完全不攔;只有真的要離開站台時才

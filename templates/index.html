@@ -177,6 +177,14 @@
   /* ── 標頭上的小按鈕 ── */
   header .hbtn { font-size:11px; padding:4px 10px; }
 
+  /* ── 存成計畫的確認清單 ── */
+  .pv-items { max-height:220px; overflow-y:auto; margin-top:6px;
+              border:1px solid var(--border); border-radius:8px;
+              padding:8px 10px; background:var(--bg2, #f6f6f8); }
+  .pv-items div { font-size:11px; padding:2px 0; }
+  .pv-items small { color:var(--muted); }
+  .pv-ok { color:var(--ok); font-weight:600; }
+
   /* ── 這一批的名稱 ── */
   .runname { display:block; margin:12px 0 4px; }
   .runname input { display:block; width:100%; box-sizing:border-box;
@@ -475,15 +483,28 @@
 </div>
 
 <!-- ── 硬體連接設定 ── -->
-<div id="hwov" class="ov">
+
+
+<!-- ── 存成計畫:先確認內容 ── -->
+<div id="planov" class="ov">
   <div class="rbx">
-    <h3>硬體連接設定</h3>
-    <div class="meta">對應 ACQUA「硬體連接設定」左上角的下拉選單。
-      同一個通道編號在不同設定下接的是不同設備 —— 選錯不會報錯,但數字會是錯的。</div>
-    <div id="hw-list" class="rlog" style="max-height:300px;overflow-y:auto"></div>
+    <h3 id="pv-h">存成計畫</h3>
+    <div class="meta" id="pv-src"></div>
+    <label class="runname">計畫名稱
+      <input type="text" id="pv-title" spellcheck="false"
+             placeholder="例:Kong 第一輪">
+    </label>
+    <label class="runname">說明(選填)
+      <input type="text" id="pv-desc" spellcheck="false"
+             placeholder="這一批是在什麼條件下挑的">
+    </label>
+    <div class="meta" style="margin-top:12px">
+      這一批的測項(<b id="pv-n">0</b> 項)</div>
+    <div id="pv-items" class="pv-items"></div>
+    <div class="meta" id="pv-msg"></div>
     <div class="acts2">
-      <button id="btn-hw-refresh">重新讀取</button>
-      <button class="primary" id="btn-hw-done">完成</button>
+      <button class="primary" id="btn-pv-save">確認儲存</button>
+      <button id="btn-pv-cancel">取消</button>
     </div>
   </div>
 </div>
@@ -636,32 +657,8 @@
 
   <!-- ── 中:測項勾選 ─────────────────────────── -->
   <section class="panel">
-    <h2>4. 執行設定</h2>
-    <p class="hint">測項一律<b>逐筆送給 ACQUA</b>,所以你勾幾項就跑幾項,
-      而且<b>中止是真的能停</b>。下面的 DUT 屬性是用來<b>幫你把該跑的勾起來</b>,
-      不是另一種執行方式。</p>
-
-    <div class="vsum">
-      <div class="vsum-txt">
-        <b id="hw-line">硬體設定:讀取中…</b>
-        <small id="hw-extra">執行前會記進 log,事後才查得到那批用什麼跑的</small>
-      </div>
-      <button id="btn-hw">切換…</button>
-    </div>
-
-    <div id="var-summary">
-      <div class="vsum">
-        <div class="vsum-txt">
-          <b id="vsum-line">—</b>
-          <small id="vsum-extra">設定後可以依條件自動勾選</small>
-        </div>
-        <button id="btn-var-open">設定…</button>
-        <button class="primary" id="btn-autopick">依條件勾選</button>
-      </div>
-    </div>
-
     <div class="hdr-row">
-      <h2>5. 選擇測項</h2>
+      <h2>4. 選擇測項</h2>
       <label class="sw"><input type="checkbox" id="sw-tree"><i></i>顯示階層架構</label>
     </div>
     <p class="hint" id="sel-hint">勾選的項目會照順序執行。
@@ -898,10 +895,6 @@ function render(s) {
   $('#btn-pause').textContent = paused ? '▶ 繼續' : '⏸ 暫停';
   $('#btn-pause').disabled  = !s.running;
   $('#btn-cancel').disabled = !s.running;
-  if (!hwActive && s.hardware_active) {
-    hwActive = s.hardware_active;
-    $('#hw-line').textContent = `硬體設定:${hwActive}`;
-  }
   $('#btn-run').disabled    = s.running;
   $('#btn-cancel').disabled = !s.running;
 
@@ -1250,7 +1243,6 @@ const openVarOv  = (scope = null) => {
   else renderWizard();
 };
 const closeVarOv = () => { $('#varov').classList.remove('on'); updateVarSummary(); };
-$('#btn-var-open').onclick = () => openVarOv(null);   // 上方按鈕 = 全部變數
 $('#btn-var-done').onclick = closeVarOv;
 $('#varov').addEventListener('click', e => { if (e.target.id === 'varov') closeVarOv(); });
 document.addEventListener('keydown', e => {
@@ -1270,11 +1262,9 @@ function updateVarSummary() {
     .filter(el => el.value.trim()).length;
   if (custom) parts.push(`自訂 ${custom} 個`);
 
-  $('#vsum-line').textContent = parts.join(' ・ ') || '尚未設定 DUT 屬性';
-  const p = $('#pred');
-  $('#vsum-extra').textContent = (p && p.style.display !== 'none')
-    ? `預覽:${$('#pred-n').textContent} ${$('#pred-total').textContent}`
-    : '設定後可以依條件自動勾選';
+  // 摘要列已經拿掉了(原本的「4. 執行設定」)—— 這裡只留 log,
+  // 讓「設定了什麼」還是查得到。
+  if (parts.length) addLog('DUT 屬性:' + parts.join(' ・ '));
 }
 
 $('#btn-var-add').onclick  = () => addVarRow();
@@ -1288,8 +1278,6 @@ $('#btn-wz-reload').onclick = (e) => { e.preventDefault(); loadWizard(); };
 $('#btn-wz-apply').onclick = async () => {
   await autoPick({closeAfter: true});
 };
-
-$('#btn-autopick').onclick = async () => { await autoPick({closeAfter: false}); };
 
 async function autoPick({closeAfter} = {}) {
   showBusy('依條件挑選測項');
@@ -1429,7 +1417,7 @@ async function startRun(comment) {
   $('#nameov').classList.remove('on');
   rnRemember(comment);
   showRunPending('正在送出…',
-    `已選 ${selected.size} 項 ・ ${comment || '(未命名)'} ・ 硬體 ${hwActive || '未知'}`);
+    `已選 ${selected.size} 項 ・ ${comment || '(未命名)'}`);
 
   // 帶上「我是在哪個上下文挑的」—— 後端會比對,不一致就拒絕。
   // 光靠 row_id 擋不住:不同資料庫的同一個 id 都存在,指的卻是不同測項。
@@ -1661,44 +1649,6 @@ async function askNotifyPermission() {
   } catch (e) { /* 忽略 */ }
 }
 
-// ── 硬體連接設定 ──────────────────────────────
-let hwActive = null;
-
-async function loadHardware() {
-  let r;
-  try { r = await (await fetch('/acqua/api/hardware')).json(); }
-  catch (e) { return; }
-  const list = r.state?.hardware_settings || [];
-  hwActive = r.state?.hardware_active || null;
-
-  $('#hw-line').textContent = hwActive
-    ? `硬體設定:${hwActive}`
-    : '硬體設定:讀不到(需先開啟專案)';
-
-  const box = $('#hw-list');
-  box.innerHTML = '';
-  if (!list.length) { box.textContent = '(讀不到設定清單)'; return; }
-  for (const h of list) {
-    const d = document.createElement('div');
-    d.className = 'hw' + (h.active ? ' on' : '');
-    d.innerHTML = '<span class="nm"></span><span class="dt"></span>';
-    d.querySelector('.nm').textContent = h.name || '(無名)';
-    d.querySelector('.dt').textContent = h.saved || '';
-    d.onclick = async () => {
-      if (h.active) return;
-      await post('/acqua/api/hardware', {name: h.name});
-      await loadHardware();
-    };
-    box.appendChild(d);
-  }
-}
-$('#btn-hw').onclick         = async () => { $('#hwov').classList.add('on'); await loadHardware(); };
-$('#btn-hw-done').onclick    = () => $('#hwov').classList.remove('on');
-$('#btn-hw-refresh').onclick = loadHardware;
-$('#hwov').addEventListener('click', e => {
-  if (e.target.id === 'hwov') $('#hwov').classList.remove('on');
-});
-
 // ── ACQUA 開了對話框在等人 ────────────────────
 let _lastBlockHwnd = null;
 function renderBlocking(b) {
@@ -1743,17 +1693,80 @@ function renderBlocking(b) {
 // 計畫清單與接續執行在 /acqua/plans 那一頁,這裡只負責「存」。
 $('#btn-plan-save').onclick = async () => {
   if (!selected.size) { addLog('沒有勾選任何測項,無法存成計畫', 'warn'); return; }
+  // 存「路徑 + 名稱」而不只是 row_id —— 計畫可能之後在別的資料庫執行,
+  // 而 row_id 跨庫必然重疊且指到別的測項(見 acqua/context.py)。
   const byId = new Map((S.smds || []).map(s => [s.row_id, s]));
-  const items = [...selected].map(id => ({row_id: id, title: byId.get(id)?.title || ''}));
+  const items = [...selected].map(id => {
+    const s = byId.get(id) || {};
+    return {row_id: id, title: s.title || '', path: s.path || '',
+            smd_type: s.smd_type};
+  });
+  // 先攤開來確認 —— 存了什麼、幾項、存去哪個專案,按下去之前就看得到
+  planItems = items;
+  $('#pv-title').value = $('#plan-title').value;
+  $('#pv-desc').value  = $('#plan-desc').value;
+  $('#pv-src').textContent =
+    [S.database, S.open_project, S.measurement_object].filter(Boolean).join(' / ');
+  $('#pv-n').textContent = items.length;
+  $('#pv-items').innerHTML = items.map(x =>
+    `<div>#${x.row_id} ${esc(x.title)}`
+    + (x.path ? `<br><small>${esc(x.path)}</small>` : '') + '</div>').join('');
+  $('#pv-msg').textContent = '';
+  $('#btn-pv-save').disabled = false;
+  $('#btn-pv-save').textContent = '確認儲存';
+  $('#planov').classList.add('on');
+  $('#pv-title').focus();
+  $('#pv-title').select();
+};
+
+let planItems = [], pvTimer = null;
+
+function closePlanOv() {
+  clearInterval(pvTimer);
+  pvTimer = null;
+  $('#planov').classList.remove('on');
+}
+$('#btn-pv-cancel').onclick = closePlanOv;
+$('#pv-title').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') $('#btn-pv-save').click();
+});
+
+$('#btn-pv-save').onclick = async () => {
+  $('#btn-pv-save').disabled = true;
   const r = await post('/acqua/api/plans', {
-    title: $('#plan-title').value,
-    description: $('#plan-desc').value,
-    items,
+    title: $('#pv-title').value,
+    description: $('#pv-desc').value,
+    items: planItems,
     variables: collectVars(),
   }, {quiet: true});
-  if (!r.ok) { addLog('儲存失敗:' + (r.error || ''), 'error'); return; }
+  if (!r.ok) {
+    $('#pv-msg').innerHTML = `<b style="color:var(--bad)">${esc(r.error || '儲存失敗')}</b>`;
+    $('#btn-pv-save').disabled = false;
+    addLog('儲存失敗:' + (r.error || ''), 'error');
+    return;
+  }
+
   addLog(`已存成計畫「${r.plan.title}」(${r.plan.count} 項)——`
        + ` 可以到「測試計畫」頁叫出來跑`);
+
+  // 存好就把輸入框與勾選清掉 —— 不清的話很容易把同一批重複存好幾次
+  $('#plan-title').value = '';
+  $('#plan-desc').value = '';
+  selected.clear();
+  renderSmds();
+  updCount();
+
+  $('#btn-pv-cancel').textContent = '關閉';
+  let left = 3;
+  const tick = () => {
+    $('#pv-msg').innerHTML =
+      `<span class="pv-ok">✓ 已存成計畫「${esc(r.plan.title)}」(${r.plan.count} 項)</span>`
+      + `<br><small>勾選與輸入框已清空 ・ ${left} 秒後自動關閉</small>`;
+    if (left-- <= 0) closePlanOv();
+  };
+  clearInterval(pvTimer);
+  tick();
+  pvTimer = setInterval(tick, 1000);
 };
 
 // 報告產生完不直接落地 —— 跳出視窗讓使用者決定檔名與位置。

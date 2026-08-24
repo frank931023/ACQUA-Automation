@@ -485,12 +485,27 @@ class ComBackend(AcquaBackend):
 
         if title not in titles:
             if not create_if_missing:
+                # 訊息要講「怎麼辦」而不是內部設定名 —— 而且 ACQUA 的
+                # AddMeasurementObject 實測建不起來(見下方),所以唯一的
+                # 出路就是去 ACQUA 裡建。
                 raise RuntimeError(
-                    f"找不到量測物件「{title}」,而且 create_mo_if_missing 是 false")
+                    f"這個專案裡沒有量測物件「{title}」。"
+                    + (f"現有的是:{'、'.join(titles)}。" if titles else "")
+                    + "請先在 ACQUA 裡建立它,再回來選。")
             if mos is None:
                 mos = self.project.MeasurementObjects   # 讓它再丟一次,錯誤才看得到
-            mos.AddMeasurementObject(title, "由自動化建立")
-            self.state.log(f"已新增量測物件:{title}")
+            # ⚠️ TypeLib 說它回傳「新物件的索引」,-1 = 失敗。
+            #    實測 2026-08-24:兩個資料庫、三種參數組合一律回 -1,
+            #    而且資料庫裡完全沒有新資料。以前沒檢查回傳值,還印了
+            #    「已新增量測物件」—— 那行 log 是假的,後面才在
+            #    SelectActiveMeasurementObject 回 None 時才炸,很難查。
+            idx = mos.AddMeasurementObject(title, "由自動化建立")
+            if idx is None or int(idx) < 0:
+                raise RuntimeError(
+                    f"ACQUA 不接受新增量測物件「{title}」"
+                    f"(AddMeasurementObject 回傳 {idx})。"
+                    "請先在 ACQUA 裡建立這個量測物件,再回來選它。")
+            self.state.log(f"已新增量測物件:{title}(索引 {idx})")
 
         # SelectActiveMeasurementObject 接受「索引或名稱」(Variant)
         self.mo = self.project.SelectActiveMeasurementObject(title)
@@ -584,6 +599,56 @@ class ComBackend(AcquaBackend):
                                self._project_id())
         self.state.set(ctx=key)
         return key
+
+    def resolve_items(self, items):
+        """把計畫裡存的測項對應到「目前這個專案」的 row_id。
+
+        計畫可能是在別的資料庫建立的。row_id 跨庫必然重疊、而且指到完全
+        不同的測項(見 acqua/context.py),所以絕不能直接拿來用 ——
+        這裡改用「路徑 + 標題」重新對應。
+
+        對不上的明白列出來,不猜、不自動略過:少跑一項比跑錯一項難發現。
+        """
+        smds = self.state.smds or []
+        if not smds:
+            raise RuntimeError("目前沒有載入任何測項,無法對應計畫內容")
+
+        by_key, by_title = {}, {}
+        for s in smds:
+            title = str(s.get("title") or "").strip()
+            path = str(s.get("path") or "").strip()
+            by_key.setdefault((path, title), s)
+            by_title.setdefault(title, []).append(s)
+
+        resolved, missing, ambiguous = [], [], []
+        for it in (items or []):
+            title = str(it.get("title") or "").strip()
+            path = str(it.get("path") or "").strip()
+            hit, how = by_key.get((path, title)), "路徑+名稱"
+            if hit is None:
+                cands = by_title.get(title) or []
+                if len(cands) == 1:
+                    hit, how = cands[0], "名稱"
+                elif len(cands) > 1:
+                    # 同名多筆又沒有路徑可分辨 —— 猜錯就是跑錯測項
+                    ambiguous.append({"title": title, "path": path,
+                                      "count": len(cands)})
+                    continue
+            if hit is None:
+                missing.append({"title": title, "path": path,
+                                "row_id": it.get("row_id")})
+                continue
+            resolved.append({"row_id": int(hit["row_id"]),
+                             "title": hit.get("title", ""),
+                             "path": hit.get("path", ""),
+                             "matched_by": how})
+
+        self.state.log(
+            "[計畫] 對應 %d 項:成功 %d ・ 找不到 %d ・ 同名無法分辨 %d"
+            % (len(items or []), len(resolved), len(missing), len(ambiguous)),
+            "info" if not (missing or ambiguous) else "warn")
+        return {"resolved": resolved, "missing": missing,
+                "ambiguous": ambiguous, "ctx": self.state.ctx}
 
     def check_rows(self, row_ids):
         """公開版的歸屬驗證,給 /api/run 在送出前同步呼叫。

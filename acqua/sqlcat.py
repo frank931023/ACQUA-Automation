@@ -27,6 +27,8 @@
 用 ADODB(pywin32 內建,不需要額外裝驅動)。因為是 COM 物件,
 **只能在已經 CoInitialize 的執行緒上使用** —— 也就是 AcquaWorker 那條。
 """
+import threading
+
 import win32com.client
 
 # ACQUA 的資料表都在 acqua schema 下,不是 dbo
@@ -42,8 +44,39 @@ def _val(x):
     return x
 
 
+_COM_READY = threading.local()
+
+
+def _ensure_com():
+    """確保這條執行緒有 COM 可用。
+
+    ADODB 是 COM。工作執行緒啟動時就 CoInitialize 過了,但 Flask 的請求
+    執行緒沒有 —— 直接 Dispatch 會失敗(2026-08-24:DUT 選單的路由就是
+    這樣回「連不上」)。
+
+    ⚠️ **初始化之後不要 CoUninitialize。**
+       試過「用完就收」,結果把 apartment 拆掉,連帶讓工作執行緒對 ACQUA
+       的 proxy 斷線,之後每個 COM 呼叫都丟
+       (-2147220995, '物件未連接到伺服器')。
+       Flask 的執行緒是長期重用的,留著 COM 沒有代價。
+    """
+    if getattr(_COM_READY, "done", False):
+        return
+    try:
+        import pythoncom
+        pythoncom.CoInitialize()
+    except Exception:                                       # noqa: BLE001
+        pass            # 已經初始化過就算了
+    _COM_READY.done = True
+
+
 def raw_query(server: str, database: str, sql: str) -> list:
-    """對指定的 server/database 執行查詢。ADODB 是 COM,只能在已 CoInitialize 的執行緒用。"""
+    """對指定的 server/database 執行查詢。任何執行緒都可以呼叫。"""
+    _ensure_com()
+    return _raw_query(server, database, sql)
+
+
+def _raw_query(server: str, database: str, sql: str) -> list:
     cn = win32com.client.Dispatch("ADODB.Connection")
     last = None
     for prov in _PROVIDERS:
@@ -195,6 +228,29 @@ class SqlCatalog:
         for r in rows:
             r["Title"] = (r.get("Title") or "").strip()
         return rows
+
+    def list_mobjects(self, project_id=None, project_title=None) -> list:
+        """某個專案底下現有的量測物件(DUT)標題。
+
+        走 SQL 而不是 COM —— 這是為了讓「選 DUT」這個動作不需要先把 ACQUA
+        切到那個專案。跨庫排序列時,使用者是在還沒切過去之前就要選的。
+        """
+        if project_id is not None:
+            where = "WHERE m.rProject = %d" % int(project_id)
+        elif project_title:
+            safe = str(project_title).replace("'", "''")
+            where = "WHERE p.Title = N'%s'" % safe
+        else:
+            return []
+        rows = self.query(f"""
+            SELECT m.Title, m.idMObject
+            FROM {_SCHEMA}.MObjects m
+            JOIN {_SCHEMA}.Projects p ON p.idProject = m.rProject
+            {where}
+            ORDER BY m.idMObject
+        """)
+        return [str(r["Title"] or "").strip() for r in rows
+                if str(r["Title"] or "").strip()]
 
     def list_smds(self, project_title=None, search="", project_id=None) -> list:
         """列出測項。回傳 [{row_id, title, smd_type, group, path,

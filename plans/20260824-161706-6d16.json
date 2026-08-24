@@ -1,0 +1,56 @@
+{
+  "id": "20260824-161706-6d16",
+  "created": "2026-08-24T16:17:06",
+  "title": "0824-finaltest-3",
+  "description": "",
+  "updated": "2026-08-24T16:17:06",
+  "items": [
+    {
+      "row_id": 4163,
+      "title": "Info: Use nominal playback volume of DUT",
+      "path": "MS Teams v5 Rev05 SP2 - Speakerphone / V5_Personal Space and Shared Space Devices - Desk Phone, Speakerphone / Primary requirements over E2E call / Speakerphone E2E call - Reverberant Room tests / P01R-P04R Send path tests - Reverberant room / P03R-P04R Send speech quality of alternating near-end talkers - Shared Space devices",
+      "smd_type": 34
+    },
+    {
+      "row_id": 4210,
+      "title": "Info: Use nominal playback volume of DUT",
+      "path": "MS Teams v5 Rev05 SP2 - Speakerphone / V5_Personal Space and Shared Space Devices - Desk Phone, Speakerphone / Primary requirements over E2E call / Speakerphone E2E call - Reverberant Room tests / P06R-P09R Echo path tests - Reverberant room - Nominal volume",
+      "smd_type": 34
+    },
+    {
+      "row_id": 4252,
+      "title": "Info: Tests must be repeated 6 times through 6 different calls",
+      "path": "MS Teams v5 Rev05 SP2 - Speakerphone / V5_Personal Space and Shared Space Devices - Desk Phone, Speakerphone / Primary requirements over E2E call / Speakerphone E2E call - Reverberant Room tests / P06R-P09R Echo path tests - Reverberant room - Nominal volume / P07R Echo during alternating SND-RCV - Nominal volume",
+      "smd_type": 34
+    },
+    {
+      "row_id": 4212,
+      "title": "Info: Tests must be repeated 6 times through 6 different calls",
+      "path": "MS Teams v5 Rev05 SP2 - Speakerphone / V5_Personal Space and Shared Space Devices - Desk Phone, Speakerphone / Primary requirements over E2E call / Speakerphone E2E call - Reverberant Room tests / P06R-P09R Echo path tests - Reverberant room - Nominal volume / P06R EQUEST WB MOS - Nominal volume",
+      "smd_type": 34
+    },
+    {
+      "row_id": 4162,
+      "title": "Info: 3QUEST test setup and hardware configuration - 2nd art. mouth as noise source",
+      "path": "MS Teams v5 Rev05 SP2 - Speakerphone / V5_Personal Space and Shared Space Devices - Desk Phone, Speakerphone / Primary requirements over E2E call / Speakerphone E2E call - Reverberant Room tests / P01R-P04R Send path tests - Reverberant room / P03R-P04R Send speech quality of alternating near-end talkers - Shared Space devices",
+      "smd_type": 34
+    }
+  ],
+  "count": 5,
+  "variables": {},
+  "source": {
+    "server": "AUTOMATION_ACQU\\ACQUADBSERVER",
+    "database": "51_MS_Teams_Rev05_SP2",
+    "group": "MS Teams v5 Rev05 SP2 - Speakerphone",
+    "project": "MS Teams v5 Rev05 SP2 - Speakerphone",
+    "measurement_object": "New Measurement Object",
+    "ctx": "AUTOMATION_ACQU\\ACQUADBSERVER|51_MS_Teams_Rev05_SP2|6"
+  },
+  "manual_excluded": [],
+  "setup": {
+    "name": "",
+    "note": "",
+    "params": {},
+    "_note": "尚未自動化:目前只會在序列中間停下來提示人工調整"
+  }
+}

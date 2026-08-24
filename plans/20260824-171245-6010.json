@@ -1,0 +1,50 @@
+{
+  "id": "20260824-171245-6010",
+  "created": "2026-08-24T17:12:45",
+  "title": "do not run",
+  "description": "",
+  "updated": "2026-08-24T17:12:45",
+  "items": [
+    {
+      "row_id": 5112,
+      "title": "Analysis P12R - SNDattn.during DT P1 - RRMax - Shared",
+      "path": "ZoomRooms_v2020Oct_v1 / COS_auto_Tiny / Basic Test_using Mouth only / Acoustics echo tests_max_auto / P12R Echo during alt. SND-RCV - Maximum volume - Shared Spa / Echo path - Double Talk - Reverberant room (Informative)",
+      "smd_type": 49
+    },
+    {
+      "row_id": 5113,
+      "title": "Analysis P12R - SNDattn.during DT P2 - RRMax - Shared",
+      "path": "ZoomRooms_v2020Oct_v1 / COS_auto_Tiny / Basic Test_using Mouth only / Acoustics echo tests_max_auto / P12R Echo during alt. SND-RCV - Maximum volume - Shared Spa / Echo path - Double Talk - Reverberant room (Informative)",
+      "smd_type": 49
+    },
+    {
+      "row_id": 5114,
+      "title": "P12R Echo path - SND atten. during DT- RRMax - Shared",
+      "path": "ZoomRooms_v2020Oct_v1 / COS_auto_Tiny / Basic Test_using Mouth only / Acoustics echo tests_max_auto / P12R Echo during alt. SND-RCV - Maximum volume - Shared Spa / Echo path - Double Talk - Reverberant room (Informative)",
+      "smd_type": 41
+    },
+    {
+      "row_id": 6030,
+      "title": "Analysis P12R - SNDattn.during DT P1 - RRMax - Shared",
+      "path": "ZoomRooms_v2020Oct_v1 / COS_auto_Lemmy / Basic Test_using Mouth only / Acoustics echo tests_max_auto / P12R Echo during alt. SND-RCV - Maximum volume - Shared Spa / Echo path - Double Talk - Reverberant room (Informative)",
+      "smd_type": 49
+    }
+  ],
+  "count": 4,
+  "variables": {},
+  "source": {
+    "server": "AUTOMATION_ACQU\\ACQUADBSERVER",
+    "database": "ACQUA_auto_v2026Aug",
+    "group": "(Unsorted Projects)",
+    "project": "ZoomRooms_v2020Oct_v1",
+    "measurement_object": "Front_of_Room",
+    "ctx": "AUTOMATION_ACQU\\ACQUADBSERVER|ACQUA_auto_v2026Aug|1"
+  },
+  "manual_excluded": [],
+  "setup": {
+    "name": "",
+    "note": "",
+    "params": {},
+    "_note": "尚未自動化:目前只會在序列中間停下來提示人工調整"
+  }
+}

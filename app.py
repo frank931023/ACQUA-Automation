@@ -23,7 +23,7 @@ from flask import (Blueprint, Flask, Response, jsonify, render_template,
 from acqua.prefs import Prefs
 from acqua.runlog import RunLog
 from acqua.state import SharedState
-from acqua.testplans import TestPlans
+from acqua.testplans import TestPlans, new_setup, source_of
 from acqua.worker import make_worker
 
 # 主控台預設是 cp950,印到非 CJK 符號會丟 UnicodeEncodeError 把程式打掛。
@@ -573,34 +573,180 @@ def api_plans():
     if not items:
         return jsonify(ok=False, error="沒有任何測項,不能存成計畫"), 400
     s = state.snapshot()
+    # source = 「這批測項是在哪裡挑的」。跨庫執行時要靠它知道切去哪,
+    # 也要靠 ctx 判斷能不能直接用 row_id(見 acqua/context.py)。
+    setup = body.get("setup")
     d = plans.save(
         plan_id=body.get("id"),
         title=body.get("title", ""),
         description=body.get("description", ""),
         items=items,
         variables=body.get("variables") or {},
-        database=s.get("database"),
-        project=s.get("open_project"),
-        # 計畫存的是裸 row_id —— 沒有這個就無法判斷它屬於哪個專案。
-        # 拿去別的專案跑會安靜地跑到別的測項(見 acqua/context.py)。
-        ctx=s.get("ctx"),
-        measurement_object=s.get("measurement_object"),
-        hardware_setting=s.get("hardware_active"),
+        source=source_of(s),
+        setup=(new_setup(**setup) if isinstance(setup, dict) else None),
         manual_excluded=body.get("manual_excluded") or [],
     )
     state.log(f"已儲存測試計畫「{d['title']}」({d['count']} 項)")
     return jsonify(ok=True, plan=d, plans=plans.list())
 
 
-@acqua_bp.route("/api/plans/<plan_id>", methods=["GET", "DELETE"])
+@acqua_bp.route("/api/plans/<plan_id>", methods=["GET", "DELETE", "POST"])
 def api_plan_one(plan_id):
     if request.method == "DELETE":
         ok = plans.delete(plan_id)
         return jsonify(ok=ok, plans=plans.list())
+
     d = plans.load(plan_id)
     if d is None:
         return jsonify(ok=False, error="找不到這個計畫"), 404
+
+    if request.method == "POST":
+        # 只改「描述性」欄位 —— 測項與 source 不在這裡動,
+        # 那些要重新挑一次才有意義(換了專案的 row_id 不能沿用)。
+        body = request.get_json(silent=True) or {}
+        setup = body.get("setup")
+        d = plans.save(
+            plan_id=plan_id,
+            title=body.get("title", d.get("title", "")),
+            description=body.get("description", d.get("description", "")),
+            items=d.get("items") or [],
+            variables=d.get("variables") or {},
+            source=d.get("source") or {},
+            setup=(new_setup(**setup) if isinstance(setup, dict) else d.get("setup")),
+        )
+        return jsonify(ok=True, plan=d, plans=plans.list())
+
     return jsonify(ok=True, plan=d)
+
+
+@acqua_bp.route("/api/plans/<plan_id>/mos")
+def api_plan_mos(plan_id):
+    """這個計畫的來源專案底下有哪些量測物件(DUT)可以選。
+
+    走 SQL 直接查,不碰 COM —— 使用者是在「還沒切過去」的時候要選的,
+    為了填一個下拉選單就把 ACQUA 切走太粗暴,而且序列可能正在跑。
+
+    ⚠️ 不提供「輸入新名稱自動建立」:實測 AddMeasurementObject 一律回傳
+       -1 且不寫任何資料(見 acqua/sqlcat.py 上方說明)。新 DUT 要在
+       ACQUA 裡建。
+    """
+    plan = plans.load(plan_id)
+    if plan is None:
+        return jsonify(ok=False, error="找不到這個計畫"), 404
+    src = plan.get("source") or {}
+    # 舊計畫沒記 server(那時候只存了 database)—— 退回目前連的那台。
+    # 實務上只有一台 SQL Server,真正決定內容的是 database。
+    server = (src.get("server") or state.snapshot().get("server")
+              or config.get("database", {}).get("server", ""))
+    database = src.get("database")
+    if not (server and database):
+        return jsonify(ok=True, mos=[], note="這個計畫沒有記來源資料庫(舊格式)")
+
+    # ctx = server|database|idProject
+    pid = None
+    parts = str(src.get("ctx") or "").split("|")
+    if len(parts) == 3 and parts[2].isdigit():
+        pid = int(parts[2])
+
+    from acqua.sqlcat import SqlCatalog
+    cat = SqlCatalog(state)
+    if not cat.connect(server, database):
+        return jsonify(ok=False, error=f"連不上 {server} / {database}"), 400
+    try:
+        mos = cat.list_mobjects(project_id=pid, project_title=src.get("project"))
+    except Exception as exc:                                # noqa: BLE001
+        return jsonify(ok=False, error=str(exc)[:160]), 400
+    return jsonify(ok=True, mos=mos, default=src.get("measurement_object") or "")
+
+
+@acqua_bp.route("/api/plans/<plan_id>/prepare", methods=["POST"])
+def api_plan_prepare(plan_id):
+    """把 ACQUA 切到這個計畫需要的位置,並算出它對應到哪些 row_id。
+
+    為什麼要有這一步
+    ────────────────
+    使用者的流程是「跑一串 → 移動治具 → 再跑一串」,而這幾串可能來自
+    **不同的資料庫**。所以執行序列的每一步都要先把 ACQUA 帶到對的地方:
+
+        換資料庫 → 開專案 → 選量測物件 → 載入測項 → 對應計畫內容
+
+    最後一步不能省:計畫存的 row_id 只在它被建立的那個專案有意義,
+    跨庫的 idTreeItem 必然重疊且指到別的測項(見 acqua/context.py)。
+    所以改用「路徑 + 名稱」重新對應,對不上的明白回報,不猜。
+
+    每一步都會回報成功與否,呼叫端可以直接顯示給人看。
+    """
+    plan = plans.load(plan_id)
+    if plan is None:
+        return jsonify(ok=False, error="找不到這個計畫"), 404
+    if state.running:
+        return jsonify(ok=False, error="已經有一批測試在執行中"), 409
+
+    src = plan.get("source") or {}
+    steps = []
+
+    # 這一步要把結果寫進哪個 DUT。跨庫/跨機跑同一批時,每台受測物的名稱
+    # 本來就不同 —— 所以允許呼叫端覆寫,而且覆寫時要能自動建立
+    #(新的 DUT 名稱在目標專案裡本來就還不存在)。
+    body = request.get_json(silent=True) or {}
+    mo_override = str(body.get("measurement_object") or "").strip()
+
+    def step(name, fn):
+        try:
+            fn()
+            steps.append({"name": name, "ok": True})
+            return True
+        except Exception as exc:                            # noqa: BLE001
+            steps.append({"name": name, "ok": False, "detail": str(exc)[:200]})
+            return False
+
+    snap = state.snapshot()
+    db = src.get("database")
+    if db and db != snap.get("database"):
+        db_cfg = config.get("database", {})
+        if not step(f"切換資料庫 → {db}", lambda: worker.submit(
+                "connect", server=src.get("server") or db_cfg.get("server", ""),
+                database=db,
+                win_auth=bool(db_cfg.get("use_windows_auth", True)),
+                username=db_cfg.get("username", ""),
+                password=db_cfg.get("password", "")).wait(timeout=300)):
+            return jsonify(ok=False, steps=steps, state=state.snapshot()), 400
+        step("讀取專案清單", lambda: worker.submit(
+            "refresh_groups").wait(timeout=120))
+
+    snap = state.snapshot()
+    proj = src.get("project")
+    if proj and proj != snap.get("open_project"):
+        if not step(f"開啟專案 {proj}", lambda: worker.submit(
+                "open_project", group=src.get("group") or "",
+                project=proj).wait(timeout=300)):
+            return jsonify(ok=False, steps=steps, state=state.snapshot()), 400
+
+    # 選單裡的名稱都是這個專案已經有的,所以不需要(也沒辦法)建立 ——
+    # AddMeasurementObject 實測回 -1 不動作,詳見 /api/plans/<id>/mos。
+    mo = mo_override or src.get("measurement_object")
+    if mo and mo != state.snapshot().get("measurement_object"):
+        if not step(f"選定量測物件 {mo}", lambda: worker.submit(
+                "select_mo", title=mo, create_if_missing=False).wait(timeout=120)):
+            return jsonify(ok=False, steps=steps, state=state.snapshot()), 400
+
+    if not step("載入測項", lambda: worker.submit(
+            "list_smds", search="").wait(timeout=300)):
+        return jsonify(ok=False, steps=steps, state=state.snapshot()), 400
+
+    try:
+        rep = worker.submit("resolve_items",
+                            items=plan.get("items") or []).wait(timeout=180)
+    except Exception as exc:                                # noqa: BLE001
+        steps.append({"name": "對應測項", "ok": False, "detail": str(exc)[:200]})
+        return jsonify(ok=False, steps=steps, state=state.snapshot()), 400
+
+    steps.append({"name": "對應測項", "ok": True,
+                  "detail": "%d / %d" % (len(rep["resolved"]),
+                                         len(plan.get("items") or []))})
+    return jsonify(ok=True, steps=steps, plan=plan, resolution=rep,
+                   row_ids=[x["row_id"] for x in rep["resolved"]],
+                   ctx=state.snapshot().get("ctx"), state=state.snapshot())
 
 
 @acqua_bp.route("/api/hardware", methods=["GET", "POST"])

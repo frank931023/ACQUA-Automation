@@ -37,6 +37,32 @@ from datetime import datetime
 _SAFE = re.compile(r"[^A-Za-z0-9_.-]")
 
 
+def new_setup(name="", note="", params=None) -> dict:
+    """一個「setup 位置」。
+
+    ⚠️ 細節尚未底定 —— 未來會對應 soundproofroom 的座標,由 Flask 發 HTTP
+       給 Raspberry Pi 驅動馬達。現在只存下來並在執行序列中間停下來等人,
+       等規格定了再把 params 接上去,不用改動計畫檔的結構。
+    """
+    return {"name": name or "", "note": note or "",
+            "params": dict(params or {}),
+            "_note": "尚未自動化:目前只會在序列中間停下來提示人工調整"}
+
+
+def source_of(snap) -> dict:
+    """從目前狀態記下「這批測項是在哪裡挑的」。
+
+    存 ctx 是為了判斷能不能直接用 row_id;存 database/project 是為了
+    跨庫執行時知道要切到哪裡。兩者缺一不可。
+    """
+    return {
+        "server": snap.get("server"), "database": snap.get("database"),
+        "group": snap.get("open_group"), "project": snap.get("open_project"),
+        "measurement_object": snap.get("measurement_object"),
+        "ctx": snap.get("ctx"),
+    }
+
+
 class TestPlans:
     def __init__(self, base_dir: str):
         self.dir = os.path.join(base_dir, "plans")
@@ -84,8 +110,34 @@ class TestPlans:
         for k, v in meta.items():
             if v is not None:
                 data[k] = v
+        # setup 沒給就保留原本的(編輯標題時不該把位置設定洗掉)
+        data.setdefault("setup", new_setup())
         self._write(data)
         return data
+
+    @staticmethod
+    def _migrate(d: dict) -> dict:
+        """把舊格式補成新格式。
+
+        舊檔把 database / project 攤在最上層,而且測項只有 row_id + title。
+        缺路徑就沒辦法跨庫對應 —— 但至少用名稱還能對,所以不丟掉舊檔,
+        只是把欄位搬到 source 底下,讓後面的程式只需要認一種形狀。
+        """
+        if not isinstance(d, dict):
+            return d
+        # 用 falsy 判斷而不是「有沒有這個鍵」—— 實測有計畫檔存成
+        # "source": null,那種情況一樣要從舊的扁平欄位補回來。
+        if not d.get("source"):
+            d["source"] = {
+                "server": d.get("server"), "database": d.get("database"),
+                "group": d.get("project_group"), "project": d.get("project"),
+                "measurement_object": d.get("measurement_object"),
+                "ctx": d.get("ctx"),
+            }
+        d.setdefault("setup", new_setup())
+        d["items"] = [dict(x) if isinstance(x, dict) else {"row_id": x}
+                      for x in (d.get("items") or [])]
+        return d
 
     def load(self, plan_id: str):
         path = self._path(plan_id)
@@ -93,7 +145,7 @@ class TestPlans:
             return None
         try:
             with io.open(path, encoding="utf-8") as f:
-                return json.load(f)
+                return self._migrate(json.load(f))
         except Exception:                                   # noqa: BLE001
             return None
 
@@ -108,17 +160,21 @@ class TestPlans:
                     d = json.load(f)
             except Exception:                               # noqa: BLE001
                 continue
+            d = self._migrate(d)
+            src = d.get("source") or {}
             out.append({
                 "id": d.get("id", name[:-5]),
+                "source": src,
+                "setup": d.get("setup") or {},
                 "title": d.get("title", ""),
                 "description": d.get("description", ""),
                 "created": d.get("created", ""),
                 "updated": d.get("updated", ""),
                 "count": d.get("count", len(d.get("items") or [])),
-                "project": d.get("project", ""),
-                "database": d.get("database", ""),
-                "ctx": d.get("ctx", ""),      # 用來判斷能不能在目前專案跑
-                "hardware_setting": d.get("hardware_setting", ""),
+                # 這三個保留扁平欄位 —— 舊頁面與舊計畫檔都還在讀
+                "project": src.get("project") or "",
+                "database": src.get("database") or "",
+                "ctx": src.get("ctx") or "",
             })
         out.sort(key=lambda x: x.get("updated") or x.get("created") or "", reverse=True)
         return out

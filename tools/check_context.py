@@ -85,15 +85,23 @@ check("ctx 變動時清空結果對照", re.search(r"s\.ctx !== ctxKey[\s\S]{0,2
 check("ctx 變動時清空精靈選項", re.search(r"s\.ctx !== ctxKey[\s\S]{0,260}wizGroups = \[\]", idx) is not None)
 
 pl = read("templates/plans.html")
-check("計畫頁會比對 ctx", "plansMismatch" in pl)
-check("存計畫時記下 ctx", 'ctx=s.get("ctx")' in read("app.py"))
+# 計畫現在可以跨資料庫執行 —— 不是「對不上就擋」,而是「先切過去再對應」。
+# 保證沒有變:送去執行的 row_ids 一定屬於當下這個上下文。
+check("存計畫時記下來源(含 ctx)", "source=source_of(s)" in read("app.py")
+      and '"ctx": snap.get("ctx")' in read("acqua/testplans.py"))
+check("計畫執行前先切到它自己的位置", '"/api/plans/<plan_id>/prepare"' in read("app.py"))
+check("跨庫時用路徑+名稱重新對應,不沿用 row_id",
+      "def resolve_items" in read("acqua/backend_com.py")
+      and "by_key.get((path, title))" in read("acqua/backend_com.py"))
+check("對應不到的明白回報,不猜", '"missing": missing' in read("acqua/backend_com.py")
+      and '"ambiguous": ambiguous' in read("acqua/backend_com.py"))
 
 print()
 print("=== 4b. 開跑時有聲明上下文嗎 ===")
 # 存在性檢查擋不住跨庫重疊:實測同一個 idTreeItem 在兩個庫都存在,
 # 指的卻是完全不同的測項。所以呼叫端必須聲明 ctx,由伺服器比對。
 check("index 送出 row_ids 時帶 ctx", "ctx: S.ctx" in idx)
-check("plans 送出 row_ids 時帶 ctx", "ctx: plan.ctx" in pl)
+check("plans 送出 row_ids 時帶 prepare 回來的 ctx", "ctx: prep.ctx" in pl)
 check("run 路由比對 ctx", "want_ctx != cur_ctx" in read("app.py"))
 
 print("\n=== 5. 換頁不該中斷測試 ===")
@@ -168,6 +176,25 @@ check("前端有清除按鈕", 'id="btn-clear-run"' in idx)
 # 三個點只該出現在需人工的測項 —— 其他測項沒有精靈可設定
 check("三個點只給需人工的測項",
       "${s.manual ? `<button class=" + chr(34) + "dots" + chr(34) in idx)
+
+
+print("=== 9. 跨資料庫執行序列 ===")
+ap = read("app.py")
+pl2 = read("templates/plans.html")
+tp = read("acqua/testplans.py")
+
+check("計畫存 source(庫/專案/MO/ctx)", "def source_of(snap)" in tp)
+check("計畫存 setup 位置(未來接 Raspberry Pi)", "def new_setup(" in tp)
+check("舊格式計畫會被補成新格式", "def _migrate(d: dict)" in tp)
+check("存計畫時帶路徑(跨庫才對得回來)", "path: s.path" in idx)
+check("prepare 會切庫 / 開專案 / 選 MO / 載入 / 對應",
+      all(k in ap for k in ('"切換資料庫', '"開啟專案', '"選定量測物件',
+                            '"載入測項"', '"resolve_items"')))
+check("序列頁有 setup 編輯", 'id="setupov"' in pl2 and "su-save" in pl2)
+check("序列頁會標出要切換資料庫", "會自動切換到資料庫" in pl2)
+check("步驟之間停下來提示 setup", "waitSetup(" in pl2)
+check("序列存在瀏覽器,重整不會不見", "acqua.sequence" in pl2)
+check("對應不到會問過使用者才繼續", "對應不到,只會跑" in pl2)
 
 
 print("\n" + ("結論:全部通過" if not fails

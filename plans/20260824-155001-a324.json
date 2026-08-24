@@ -1,0 +1,62 @@
+{
+  "id": "20260824-155001-a324",
+  "created": "2026-08-24T15:50:01",
+  "title": "0824-2",
+  "description": "",
+  "updated": "2026-08-24T15:50:01",
+  "items": [
+    {
+      "row_id": 4879,
+      "title": "Rec for 4.4.2 Send path- alternating talkers  - Pos1",
+      "path": "ZoomRooms_v2020Oct_v1 / COS_auto_Tiny / Basic Test_using Mouth only / 4.4.2 - 4.4.3 Send path - alternating talkers- Normal speec",
+      "smd_type": 17
+    },
+    {
+      "row_id": 4881,
+      "title": "Calc 4.4.2 - Send path - alternating talker1-2 - pos1",
+      "path": "ZoomRooms_v2020Oct_v1 / COS_auto_Tiny / Basic Test_using Mouth only / 4.4.2 - 4.4.3 Send path - alternating talkers- Normal speec",
+      "smd_type": 44
+    },
+    {
+      "row_id": 4880,
+      "title": "Calc 4.4.2 - Send path - alternating talker1-1 - pos1",
+      "path": "ZoomRooms_v2020Oct_v1 / COS_auto_Tiny / Basic Test_using Mouth only / 4.4.2 - 4.4.3 Send path - alternating talkers- Normal speec",
+      "smd_type": 44
+    },
+    {
+      "row_id": 4882,
+      "title": "Calc 4.4.2 - Send path - alternating talker2-1 - pos1",
+      "path": "ZoomRooms_v2020Oct_v1 / COS_auto_Tiny / Basic Test_using Mouth only / 4.4.2 - 4.4.3 Send path - alternating talkers- Normal speec",
+      "smd_type": 44
+    },
+    {
+      "row_id": 4883,
+      "title": "Calc 4.4.2 - Send path - alternating talker2-2 - pos1",
+      "path": "ZoomRooms_v2020Oct_v1 / COS_auto_Tiny / Basic Test_using Mouth only / 4.4.2 - 4.4.3 Send path - alternating talkers- Normal speec",
+      "smd_type": 44
+    },
+    {
+      "row_id": 4884,
+      "title": "Calc 4.4.3 Send p.- speech lvl altern. talkers - P1 T1",
+      "path": "ZoomRooms_v2020Oct_v1 / COS_auto_Tiny / Basic Test_using Mouth only / 4.4.2 - 4.4.3 Send path - alternating talkers- Normal speec",
+      "smd_type": 7
+    }
+  ],
+  "count": 6,
+  "variables": {},
+  "source": {
+    "server": "AUTOMATION_ACQU\\ACQUADBSERVER",
+    "database": "ACQUA_auto_v2026Aug",
+    "group": "(Unsorted Projects)",
+    "project": "ZoomRooms_v2020Oct_v1",
+    "measurement_object": "Front_of_Room",
+    "ctx": "AUTOMATION_ACQU\\ACQUADBSERVER|ACQUA_auto_v2026Aug|1"
+  },
+  "manual_excluded": [],
+  "setup": {
+    "name": "",
+    "note": "",
+    "params": {},
+    "_note": "尚未自動化:目前只會在序列中間停下來提示人工調整"
+  }
+}

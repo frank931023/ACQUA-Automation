@@ -1,0 +1,56 @@
+{
+  "id": "20260824-154946-6856",
+  "created": "2026-08-24T15:49:46",
+  "title": "0824-1",
+  "description": "",
+  "updated": "2026-08-24T15:49:46",
+  "items": [
+    {
+      "row_id": 5920,
+      "title": "switch devices",
+      "path": "ZoomRooms_v2020Oct_v1",
+      "smd_type": 43
+    },
+    {
+      "row_id": 6857,
+      "title": "7.1.1 Send path - delay",
+      "path": "ZoomRooms_v2020Oct_v1 / COS_auto_Tiny / Basic Test_using Mouth only",
+      "smd_type": 12
+    },
+    {
+      "row_id": 6858,
+      "title": "7.1.5 Send path - frequency response_Conf",
+      "path": "ZoomRooms_v2020Oct_v1 / COS_auto_Tiny / Basic Test_using Mouth only",
+      "smd_type": 1
+    },
+    {
+      "row_id": 6859,
+      "title": "7.2.1 Receive path - delay",
+      "path": "ZoomRooms_v2020Oct_v1 / COS_auto_Tiny / Basic Test_using Mouth only",
+      "smd_type": 12
+    },
+    {
+      "row_id": 6860,
+      "title": "7.2.3 Receive path - frequency response_Conf",
+      "path": "ZoomRooms_v2020Oct_v1 / COS_auto_Tiny / Basic Test_using Mouth only",
+      "smd_type": 1
+    }
+  ],
+  "count": 5,
+  "variables": {},
+  "source": {
+    "server": "AUTOMATION_ACQU\\ACQUADBSERVER",
+    "database": "ACQUA_auto_v2026Aug",
+    "group": "(Unsorted Projects)",
+    "project": "ZoomRooms_v2020Oct_v1",
+    "measurement_object": "Front_of_Room",
+    "ctx": "AUTOMATION_ACQU\\ACQUADBSERVER|ACQUA_auto_v2026Aug|1"
+  },
+  "manual_excluded": [],
+  "setup": {
+    "name": "",
+    "note": "",
+    "params": {},
+    "_note": "尚未自動化:目前只會在序列中間停下來提示人工調整"
+  }
+}

@@ -155,6 +155,11 @@ class MockBackend(AcquaBackend):
         self.state.set(smds=smds)
         return smds
 
+    def resolve_items(self, items):
+        """模擬模式:照原樣回傳,不做對應。"""
+        return {"resolved": [dict(x) for x in (items or [])],
+                "missing": [], "ambiguous": [], "ctx": self.state.ctx}
+
     def check_rows(self, row_ids):
         """模擬模式沒有真的資料庫,一律放行。"""
         return True
