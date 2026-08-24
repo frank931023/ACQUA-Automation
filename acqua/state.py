@@ -122,10 +122,19 @@ class SharedState:
                 setattr(self, k, v)
         self.emit("state")
 
-    def add_result(self, title, row_id, status, passed, retries=0):
+    def add_result(self, title, row_id, status, passed, retries=0,
+                   code=None, path=""):
+        """記一筆結果。
+
+        `code` 是數值狀態碼:ACQUA 的 0-8,或我們自己標的負數
+        (見 acqua/constants.py 的 EMEResult)。只存名稱是不夠的 ——
+        UI 要能按狀態碼分組統計,名稱字串沒辦法穩定對應。
+        """
         with self._lock:
             self.results.append({
                 "title": title, "row_id": row_id, "status": status,
+                "code": (int(code) if code is not None else None),
+                "path": path or "",
                 "passed": bool(passed), "retries": retries, "ts": time.time(),
             })
         self.emit("result", title=title, passed=bool(passed), status=status)

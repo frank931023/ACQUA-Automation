@@ -121,6 +121,55 @@ need = [m for m in ("check_rows", "run_smds", "list_smds")
 check("mock 後端有實作同樣的介面", not need, "缺少:" + ", ".join(need))
 
 
+print("=== 7. 換庫的使用體驗 / 報告另存 ===")
+ap = read("app.py")
+check("換庫後有接回上次狀態的路由", '"/api/restore"' in ap)
+check("開專案會被記住", "prefs.remember" in ap)
+check("前端連線後會呼叫 restore", "/acqua/api/restore" in idx)
+check("報告另存路由存在", '"/api/report/save"' in ap)
+check("另存只接受 reports/ 底下的來源",
+      "src.startswith(stage" in ap)
+check("同名會先問再覆蓋", "exists=True" in ap and 'body.get("overwrite")' in ap)
+check("前端有另存視窗", 'id="repov"' in idx and "saveReport(" in idx)
+check("記住上次的報告資料夾", "set_report_dir" in ap)
+
+
+print("=== 8. 批次命名 / 執行紀錄 / 清除殘留 ===")
+ap = read("app.py")
+be = read("acqua/backend_com.py")
+cs = read("acqua/constants.py")
+
+check("run_smds 收得到批次名稱", "def run_smds(self, row_ids, comment=None)" in be)
+check("run 路由把名稱傳下去", 'comment=comment' in ap)
+check("mock 後端簽名一致",
+      "def run_smds(self, row_ids, comment=None)" in read("acqua/backend_mock.py"))
+check("前端開跑前會先問名稱", "openNameOv()" in idx and 'id="nameov"' in idx)
+check("runlog 記下批次名稱", '"comment": comment' in read("acqua/runlog.py"))
+
+# 結果要帶數值狀態碼 —— 只存名稱字串沒辦法穩定分組統計
+check("結果帶 code 欄位", '"code": (int(code)' in read("acqua/state.py"))
+check("ACQUA 回報的狀態碼有記下", "code=status" in be)
+check("我們自標的狀態用負數(不跟 0-8 撞號)",
+      "NO_RESULT = -1" in cs and "EXCEPTION = -3" in cs)
+check("狀態碼字典由後端提供", '"/api/status-codes"' in ap)
+check("字典的 passing 跟實際記錄一致",
+      "(not EMEResult.is_ours(c)) and c in EMEResult.PASSING" in ap)
+check("NoResult 不再算通過",
+      '"NoResult", False, EMEResult.NO_RESULT' in be)
+check("自標狀態也寫進 runlog(不再只寫 state)", "def _record(self, smd" in be)
+check("前端有執行紀錄視窗", 'id="recov"' in idx and "renderRecords" in idx)
+check("紀錄可按狀態碼展開看是哪些 SMD", "rcGroups(" in idx and "rc-items" in idx)
+
+check("清除殘留路由存在", '"/api/clear-run"' in ap)
+check("能分辨真忙與殘留旗標", "def busy(self)" in read("acqua/worker.py"))
+check("清除不動 ACQUA 資料庫", "不會動 ACQUA 資料庫" in ap)
+check("前端有清除按鈕", 'id="btn-clear-run"' in idx)
+
+# 三個點只該出現在需人工的測項 —— 其他測項沒有精靈可設定
+check("三個點只給需人工的測項",
+      "${s.manual ? `<button class=" + chr(34) + "dots" + chr(34) in idx)
+
+
 print("\n" + ("結論:全部通過" if not fails
               else "結論:%d 項未通過 —— %s" % (len(fails), "、".join(fails))))
 sys.exit(1 if fails else 0)

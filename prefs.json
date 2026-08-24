@@ -1,0 +1,17 @@
+{
+  "by_database": {
+    "AUTOMATION_ACQU\\ACQUADBSERVER|ACQUA_auto_v2026Aug": {
+      "group": "(Unsorted Projects)",
+      "project": "ZoomRooms_v2020Oct_v1",
+      "used": "2026-08-24T14:29:23",
+      "mo": "Front_of_Room"
+    },
+    "AUTOMATION_ACQU\\ACQUADBSERVER|51_MS_Teams_Rev05_SP2": {
+      "group": "MS Teams v5 Rev05 SP2 - Speakerphone",
+      "project": "MS Teams v5 Rev05 SP2 - Speakerphone",
+      "used": "2026-08-24T14:34:36",
+      "mo": "New Measurement Object"
+    }
+  },
+  "report_dir": "C:\\Users\\autom\\OneDrive\\Desktop"
+}

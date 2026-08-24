@@ -1,26 +1,85 @@
 {
   "state": "finished",
   "mode": "selected",
-  "database": "ACQUA_auto_v2026Aug",
-  "project_group": "(Unsorted Projects)",
-  "project": "ZoomRooms_v2020Oct_v1",
-  "measurement_object": "Front_of_Room",
-  "started_at": 1787304837.67963,
-  "updated_at": 1787304902.8006637,
+  "comment": "test_0824_2",
+  "database": "51_MS_Teams_Rev05_SP2",
+  "project_group": "MS Teams v5 Rev05 SP2 - Speakerphone",
+  "project": "MS Teams v5 Rev05 SP2 - Speakerphone",
+  "measurement_object": "New Measurement Object",
+  "started_at": 1787553296.8564444,
+  "updated_at": 1787553327.0797148,
   "planned": [
     {
-      "row_id": 5920,
-      "title": "switch devices"
+      "row_id": 3579,
+      "title": "Info: MS Teams Information"
+    },
+    {
+      "row_id": 3580,
+      "title": "Info: Setting up the RME soundcard for MS Teams testing"
+    },
+    {
+      "row_id": 3581,
+      "title": "Info: Setting up the Reference (REF) PC - MS Teams"
+    },
+    {
+      "row_id": 3582,
+      "title": "Info: Setting up the Device Under Test (DUT) PC - MS Teams"
+    },
+    {
+      "row_id": 3583,
+      "title": "Info: Measurement settings"
     }
   ],
   "done": [
     {
-      "row_id": 5920,
-      "title": "switch devices",
+      "row_id": 3579,
+      "title": "Info: MS Teams Information",
       "status": "Done",
+      "code": 1,
+      "path": "MS Teams v5 Rev05 SP2 - Speakerphone / V5_Personal Space and Shared Space Devices - Desk Phone, Speakerphone / Information and preparation",
       "passed": true,
       "retries": 0,
-      "ts": 1787304901.3673332
+      "ts": 1787553301.4338205
+    },
+    {
+      "row_id": 3580,
+      "title": "Info: Setting up the RME soundcard for MS Teams testing",
+      "status": "Done",
+      "code": 1,
+      "path": "MS Teams v5 Rev05 SP2 - Speakerphone / V5_Personal Space and Shared Space Devices - Desk Phone, Speakerphone / Information and preparation",
+      "passed": true,
+      "retries": 0,
+      "ts": 1787553308.394242
+    },
+    {
+      "row_id": 3581,
+      "title": "Info: Setting up the Reference (REF) PC - MS Teams",
+      "status": "Done",
+      "code": 1,
+      "path": "MS Teams v5 Rev05 SP2 - Speakerphone / V5_Personal Space and Shared Space Devices - Desk Phone, Speakerphone / Information and preparation",
+      "passed": true,
+      "retries": 0,
+      "ts": 1787553314.494168
+    },
+    {
+      "row_id": 3582,
+      "title": "Info: Setting up the Device Under Test (DUT) PC - MS Teams",
+      "status": "Done",
+      "code": 1,
+      "path": "MS Teams v5 Rev05 SP2 - Speakerphone / V5_Personal Space and Shared Space Devices - Desk Phone, Speakerphone / Information and preparation",
+      "passed": true,
+      "retries": 0,
+      "ts": 1787553320.1752079
+    },
+    {
+      "row_id": 3583,
+      "title": "Info: Measurement settings",
+      "status": "Done",
+      "code": 1,
+      "path": "MS Teams v5 Rev05 SP2 - Speakerphone / V5_Personal Space and Shared Space Devices - Desk Phone, Speakerphone / Information and preparation",
+      "passed": true,
+      "retries": 0,
+      "ts": 1787553325.5727062
     }
   ]
 }

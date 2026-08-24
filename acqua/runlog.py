@@ -38,11 +38,16 @@ class RunLog:
                 raise
 
     def start(self, *, mode, database, project_group, project,
-              measurement_object, planned):
-        """開跑時建立紀錄。planned = [{row_id, title}]"""
+              measurement_object, planned, comment=""):
+        """開跑時建立紀錄。planned = [{row_id, title}]
+
+        `comment` 是這一批的名稱(使用者自己取的)—— 它同時是傳給 ACQUA 的
+        ResultComment,所以事後能拿它去 ACQUA 對照同一批結果。
+        """
         self._write({
             "state": "running",
             "mode": mode,
+            "comment": comment,
             "database": database,
             "project_group": project_group,
             "project": project,
@@ -53,14 +58,18 @@ class RunLog:
             "done": [],
         })
 
-    def record(self, row_id, title, status_name, passed, retries=0):
+    def record(self, row_id, title, status_name, passed, retries=0,
+               code=None, path=""):
         """每完成一筆就寫一次 —— 這樣任何時間點斷掉都知道跑到哪。"""
         d = self.load() or {}
         if not d:
             return
         d["done"].append({
             "row_id": int(row_id), "title": title,
-            "status": status_name, "passed": bool(passed),
+            "status": status_name,
+            "code": (int(code) if code is not None else None),
+            "path": path or "",
+            "passed": bool(passed),
             "retries": retries, "ts": time.time(),
         })
         d["updated_at"] = time.time()

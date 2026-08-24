@@ -12,12 +12,15 @@ import csv
 import io
 import json
 import os
+import shutil
+import subprocess
 import sys
 import time
 
 from flask import (Blueprint, Flask, Response, jsonify, render_template,
                    request, send_from_directory)
 
+from acqua.prefs import Prefs
 from acqua.runlog import RunLog
 from acqua.state import SharedState
 from acqua.testplans import TestPlans
@@ -39,6 +42,7 @@ worker = None
 config = {}
 # 測試計畫存在本地 plans/ 資料夾,不寫回 ACQUA 資料庫
 plans = TestPlans(BASE_DIR)
+prefs = Prefs(BASE_DIR)
 
 # ACQUA 測試自動化整組掛在 /acqua 底下 —— 頁面與 API 都是。
 # 好處:網址一看就知道屬於哪個子系統,以後要再加別的模組也不會打架。
@@ -206,6 +210,63 @@ def api_databases():
                 server=body.get("server") or config.get("database", {}).get("server", ""))
 
 
+@acqua_bp.route("/api/restore", methods=["POST"])
+def api_restore():
+    """換庫之後把上次在這個資料庫用的專案 / 量測物件 / 測項接回來。
+
+    換資料庫會把繫於舊上下文的東西全部作廢(見 acqua/context.py)—— 那是
+    對的,但作廢不該讓使用者每次重點四遍。所以記住「這個庫上次用什麼」,
+    連上就接回去。
+
+    接回去的每一步都重新驗證:專案不在了、MO 不見了就跳過那一步並說明,
+    絕不硬套 —— 記的是標題(意圖),不是 row_id。
+    """
+    s = state.snapshot()
+    want = prefs.recall(s.get("server"), s.get("database"))
+    steps = []
+
+    def step(name, fn):
+        try:
+            fn()
+            steps.append({"name": name, "ok": True})
+            return True
+        except Exception as exc:                            # noqa: BLE001
+            steps.append({"name": name, "ok": False, "detail": str(exc)[:160]})
+            state.log(f"[接回] {name} 跳過:{exc}", "warn")
+            return False
+
+    if not want.get("project"):
+        return jsonify(ok=True, restored=False,
+                       note="這個資料庫還沒有用過,請自己選一次 —— 之後就會記住",
+                       steps=steps, state=state.snapshot())
+
+    # 專案還在不在?不在就不要嘗試,直接說清楚
+    groups = {g["name"]: set(g["projects"]) for g in (s.get("project_groups") or [])}
+    grp, proj = want.get("group"), want["project"]
+    if proj not in groups.get(grp, set()):
+        hit = next((g for g, ps in groups.items() if proj in ps), None)
+        if hit is None:
+            return jsonify(ok=True, restored=False,
+                           note=f"上次用的專案「{proj}」不在這個資料庫裡了",
+                           steps=steps, state=state.snapshot())
+        grp = hit                                # 群組換了名字,專案還在
+
+    if not step(f"開啟專案 {proj}", lambda: worker.submit(
+            "open_project", group=grp, project=proj).wait(timeout=300)):
+        return jsonify(ok=True, restored=False, steps=steps, state=state.snapshot())
+
+    if want.get("mo"):
+        step(f"選定量測物件 {want['mo']}", lambda: worker.submit(
+            "select_mo", title=want["mo"], create_if_missing=False).wait(timeout=120))
+
+    step("載入測項", lambda: worker.submit("list_smds", search="").wait(timeout=180))
+
+    done = [x["name"] for x in steps if x["ok"]]
+    state.log("[接回] " + ("、".join(done) if done else "沒有可接回的項目"))
+    return jsonify(ok=True, restored=bool(done), steps=steps,
+                   state=state.snapshot())
+
+
 @acqua_bp.route("/api/refresh-groups", methods=["POST"])
 def api_refresh_groups():
     return _cmd("refresh_groups", timeout=120)
@@ -214,8 +275,13 @@ def api_refresh_groups():
 @acqua_bp.route("/api/open-project", methods=["POST"])
 def api_open_project():
     body = request.get_json(silent=True) or {}
-    return _cmd("open_project", timeout=300,
-                group=body.get("group", ""), project=body.get("project", ""))
+    group, project = body.get("group", ""), body.get("project", "")
+    resp = _cmd("open_project", timeout=300, group=group, project=project)
+    if not isinstance(resp, tuple):          # tuple = 失敗(response, status)
+        s = state.snapshot()
+        prefs.remember(s.get("server"), s.get("database"),
+                       group=group, project=project)
+    return resp
 
 
 @acqua_bp.route("/api/select-mo", methods=["POST"])
@@ -238,6 +304,9 @@ def api_select_mo():
             worker.submit("write_metadata", props=meta).wait(timeout=60)
         except Exception:                               # noqa: BLE001
             pass    # metadata 寫入失敗不該擋住主流程,錯誤已經記進日誌
+
+    s = state.snapshot()
+    prefs.remember(s.get("server"), s.get("database"), mo=title)
     return resp
 
 
@@ -349,8 +418,12 @@ def api_run():
     except Exception as exc:                                # noqa: BLE001
         return jsonify(ok=False, error=str(exc)), 409
 
+    # 這一批的名稱 —— 會變成每筆結果在 ACQUA 裡的 Description
+    # (實測:同一批的每一筆都拿到同一個字串,見 backend_com.run_smds)
+    comment = str(body.get("comment") or "").strip()[:250]
+
     state.set(run_mode="selected", blocking_window=None)
-    cmd = worker.submit("run_smds", row_ids=row_ids)
+    cmd = worker.submit("run_smds", row_ids=row_ids, comment=comment)
 
     # 給它一下下,萬一一送出就失敗,直接把錯誤回給前端而不是讓它空等
     try:
@@ -361,6 +434,55 @@ def api_run():
         return jsonify(ok=False, error=str(exc)), 400
 
     return jsonify(ok=True, queued=len(row_ids))
+
+
+@acqua_bp.route("/api/status-codes")
+def api_status_codes():
+    """狀態碼字典 —— 讓前端不用自己抄一份 0-8 的對應表。
+
+    負數是我們自己標的(ACQUA 沒發結果事件時),見 acqua/constants.py。
+    """
+    from acqua.constants import EMEResult
+    names = EMEResult.all_names()
+    return jsonify(ok=True, codes=[
+        {"code": c, "name": names[c],
+         "ours": EMEResult.is_ours(c),
+         # unknown = 「沒有回報」,不是「判定失敗」。它算在未通過那一側,
+         # 但要讓 UI 能分開講,否則會被當成受測物不合格。
+         "unknown": c in EMEResult.UNKNOWN,
+         "passing": (not EMEResult.is_ours(c)) and c in EMEResult.PASSING}
+        for c in sorted(names)])
+
+
+@acqua_bp.route("/api/clear-run", methods=["POST"])
+def api_clear_run():
+    """清掉這個服務裡殘留的執行紀錄與狀態。
+
+    為什麼需要:同一台機器可能有好幾個 port 各跑過一輪,或上一輪跑到一半
+    行程就掛了 —— 於是 running 一直是 True,新的一批送不出去,畫面上還
+    掛著別人的進度。這支就是把「我們這邊的殘留」歸零。
+
+    ⚠️ 不會動 ACQUA 資料庫裡的量測結果 —— 那是破壞性操作,要刪請在
+       ACQUA 裡自己刪。這裡只清本服務的狀態與 runs/current.json。
+    """
+    body = request.get_json(silent=True) or {}
+    busy = bool(worker is not None and worker.busy())
+    if state.running and busy and not body.get("force"):
+        return jsonify(ok=False, running=True,
+                       error="真的有一批測試正在執行 —— 請先按中止"), 409
+
+    stale = state.running and not busy
+    state.clear_results()
+    state.set(running=False, cancel_requested=False, paused=False,
+              current=None, progress=None, blocking_window=None)
+    if state.runlog:
+        try:
+            state.runlog.finish(canceled=True)
+        except Exception:                                   # noqa: BLE001
+            pass
+    state.log("已清除本服務的執行紀錄"
+              + ("(原本卡在執行中,但工作執行緒其實是閒的)" if stale else ""), "warn")
+    return jsonify(ok=True, was_stale=stale, state=state.snapshot())
 
 
 @acqua_bp.route("/api/cancel", methods=["POST"])
@@ -499,17 +621,104 @@ def api_hardware():
     return _cmd("set_hardware", timeout=60, name=name)
 
 
+def _report_stage_dir() -> str:
+    """報告的暫存資料夾。ACQUA 一律先產到這裡,再由使用者決定存去哪。"""
+    d = os.path.join(BASE_DIR, (config.get("report") or {}).get("output_dir", "reports"))
+    os.makedirs(d, exist_ok=True)
+    return os.path.abspath(d)
+
+
+def _suggest_report_name(snap, ext=".doc") -> str:
+    """建議檔名:專案_量測物件_日期時間。檔名安全字元以外一律換成底線。"""
+    parts = [snap.get("open_project") or "report",
+             snap.get("measurement_object") or "",
+             time.strftime("%Y%m%d_%H%M")]
+    stem = "_".join(p for p in parts if p)
+    # Windows 不允許的檔名字元一律換成底線(chr(92) 是反斜線,
+    # 直接寫在字串裡容易在各層跳脫中被吃掉)
+    bad = chr(92) + '<>:"/|?*'
+    stem = "".join("_" if c in bad else c for c in stem)
+    return stem[:120] + ext
+
+
 @acqua_bp.route("/api/report", methods=["POST"])
 def api_report():
+    """產生報告到暫存資料夾,並回傳「建議檔名 + 上次存放位置」。
+
+    產生完不直接落在最終位置 —— 因為 ACQUA 的 CreateReportForMO 要先有
+    確定的路徑才能輪詢判斷寫完沒(見 backend_com.create_report)。
+    所以流程是:先產到 reports/,再由前端跳出另存視窗決定去哪。
+    """
     body = request.get_json(silent=True) or {}
     rep = config.get("report", {})
-    out_dir = os.path.join(BASE_DIR, rep.get("output_dir", "reports"))
-    os.makedirs(out_dir, exist_ok=True)
+    stage = _report_stage_dir()
     name = body.get("filename") or f"report_{time.strftime('%Y%m%d_%H%M%S')}.doc"
-    return _cmd("create_report", timeout=900,
-                output_path=os.path.join(out_dir, name),
+    resp = _cmd("create_report", timeout=900,
+                output_path=os.path.join(stage, name),
                 selection_type=int(body.get("selection_type", rep.get("selection_type", 3))),
                 result_index=int(body.get("result_index", 0)))
+    if isinstance(resp, tuple):                 # tuple = 失敗
+        return resp
+
+    d = resp.get_json() or {}
+    path = d.get("result") or ""
+    snap = state.snapshot()
+    return jsonify(
+        ok=True, result=path, state=d.get("state"),
+        size=(os.path.getsize(path) if path and os.path.exists(path) else 0),
+        suggest_name=_suggest_report_name(snap, os.path.splitext(path)[1] or ".doc"),
+        suggest_dir=prefs.report_dir() or stage)
+
+
+@acqua_bp.route("/api/report/save", methods=["POST"])
+def api_report_save():
+    """把剛產生的報告另存到使用者指定的位置。
+
+    ⚠️ 來源限定在 reports/ 底下 —— 這支 API 會把檔案寫到任意路徑,
+       來源不設限就等於開放「複製本機任意檔案到任意位置」。
+    """
+    body = request.get_json(silent=True) or {}
+    src = os.path.abspath(body.get("src") or "")
+    stage = _report_stage_dir()
+    if not (src.startswith(stage + os.sep) and os.path.isfile(src)):
+        return jsonify(ok=False, error="找不到剛產生的報告檔,請重新產生一次"), 400
+
+    directory = (body.get("directory") or "").strip()
+    filename = (body.get("filename") or "").strip()
+    if not directory or not filename:
+        return jsonify(ok=False, error="請填寫檔名與存放資料夾"), 400
+    if os.path.basename(filename) != filename:
+        return jsonify(ok=False, error="檔名不能包含路徑分隔符號"), 400
+    if not os.path.splitext(filename)[1]:
+        filename += os.path.splitext(src)[1] or ".doc"
+
+    dst = os.path.join(os.path.abspath(directory), filename)
+    if os.path.exists(dst) and not body.get("overwrite"):
+        return jsonify(ok=False, exists=True, path=dst,
+                       error=f"「{filename}」已經存在,要覆蓋嗎?"), 409
+    try:
+        os.makedirs(os.path.dirname(dst), exist_ok=True)
+        shutil.copy2(src, dst)      # 先複製再刪 —— 中途失敗暫存檔還在
+        os.unlink(src)
+    except Exception as exc:                                # noqa: BLE001
+        return jsonify(ok=False, error=f"存檔失敗:{exc}"), 400
+
+    prefs.set_report_dir(os.path.dirname(dst))
+    state.log(f"報告已存到 {dst}")
+    return jsonify(ok=True, path=dst, size=os.path.getsize(dst))
+
+
+@acqua_bp.route("/api/report/reveal", methods=["POST"])
+def api_report_reveal():
+    """在檔案總管裡選取這個檔案。伺服器就跑在使用者自己的機器上。"""
+    path = os.path.abspath((request.get_json(silent=True) or {}).get("path") or "")
+    if not os.path.exists(path):
+        return jsonify(ok=False, error="檔案不存在"), 400
+    try:
+        subprocess.Popen(["explorer", "/select,", path])
+    except Exception as exc:                                # noqa: BLE001
+        return jsonify(ok=False, error=str(exc)), 400
+    return jsonify(ok=True)
 
 
 @acqua_bp.route("/api/values", methods=["POST"])

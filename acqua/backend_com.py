@@ -302,6 +302,30 @@ class ComBackend(AcquaBackend):
                     raise last_exc
                 raise TimeoutError(f"等待逾時({timeout}s):{what}")
 
+    def _record(self, smd, status_name, passed, code):
+        """記一筆「我們自己判定」的結果 —— state 與 runlog 都要寫。
+
+        以前這幾處只寫 state,所以 runs/current.json 漏掉 NoResult / Busy /
+        Exception(2026-08-21 實測:219 筆結果只對上 191 筆紀錄)。
+        """
+        rid, title = smd["row_id"], smd["title"]
+        path = smd.get("path", "")
+        self.state.add_result(title, rid, status_name, passed,
+                              code=code, path=path)
+        rl = self.state.runlog
+        if rl:
+            try:
+                rl.record(rid, title, status_name, passed, code=code, path=path)
+            except Exception:                               # noqa: BLE001
+                pass
+
+    def _path_of(self, row_id):
+        """這個測項在專案樹裡的位置。給結果報表鑽進去看是哪幾筆用的。"""
+        for s in (self.state.smds or []):
+            if s.get("row_id") == row_id:
+                return s.get("path") or s.get("group") or ""
+        return ""
+
     def _on_single_finished(self, title, status):
         """記下一筆結果。
 
@@ -315,11 +339,13 @@ class ComBackend(AcquaBackend):
         desc = EMEResult.describe(status)
 
         rid = getattr(self, "_current_row_id", None) or self._batch_index
-        self.state.add_result(title, rid, desc, passed)
+        self.state.add_result(title, rid, desc, passed,
+                              code=status, path=self._path_of(rid))
         rl = self.state.runlog
         if rl:
             try:
-                rl.record(rid, title, desc, passed)
+                rl.record(rid, title, desc, passed,
+                          code=status, path=self._path_of(rid))
             except Exception:                               # noqa: BLE001
                 pass
         self.state.log(f"    → {'PASS' if passed else 'FAIL'}({desc})",
@@ -366,26 +392,79 @@ class ComBackend(AcquaBackend):
         self.state.set(project_groups=groups)
         return groups
 
+    def _find_project(self, group, project):
+        """在 ProjectGroups 裡找這個專案的 IProject。
+
+        ⚠️ ProjectGroups 是活的 COM 集合 —— 連續開好幾個專案之後,
+           用索引走訪會偶發抓不到(2026-08-24 全專案掃描時 Speakerphone
+           就這樣消失過)。所以找不到時重讀一次再找。
+
+        ⚠️ 標題比對要去頭尾空白 —— 實測群組標題有
+           'MS Teams v5 Rev05 SP2 - Handset '(尾巴帶空格)這種。
+        """
+        want_g, want_p = str(group or "").strip(), str(project or "").strip()
+        for attempt in (1, 2):
+            pgs = self.app.ProjectGroups
+            for i in range(pgs.Count):
+                pg = pgs.Item(i)
+                if str(pg.Title).strip() != want_g:
+                    continue
+                projects = pg.Projects
+                for j in range(projects.Count):
+                    pj = projects.Item(j)
+                    if str(pj.Title).strip() == want_p:
+                        return pj
+            if attempt == 1:
+                self.state.log("[專案] 第一次沒找到,重讀 ProjectGroups 再試", "warn")
+                self.pump()
+        return None
+
     def open_project(self, group, project):
-        pgs = self.app.ProjectGroups
-        target = None
-        for i in range(pgs.Count):
-            pg = pgs.Item(i)
-            if str(pg.Title) != group:
-                continue
-            for j in range(pg.Projects.Count):
-                pj = pg.Projects.Item(j)
-                if str(pj.Title) == project:
-                    target = pj
-                    break
+        target = self._find_project(group, project)
         if target is None:
-            raise RuntimeError(f"找不到專案:{group} / {project}")
+            raise RuntimeError(
+                f"找不到專案:{group} / {project} —— "
+                "請按「重新讀取」更新專案清單")
 
         # 開新專案前先作廢舊專案的一切(含 COM 的 MO 物件)
         self._reset_context("project", "切換專案至 %s" % project)
-        target.SelectAsActive()                     # 這裡拿到的是 IProject,只能做這件事
-        self._wait_until(lambda: self.app.SelectedProjectLoaded,
-                         timeout=300, what="SelectedProjectLoaded")
+        try:
+            target.SelectAsActive()                 # 這裡拿到的是 IProject,只能做這件事
+        except Exception as exc:                    # noqa: BLE001
+            msg = str(exc)
+            if "cannot be modified" in msg or "is a standard" in msg:
+                raise RuntimeError(
+                    f"「{project}」是 Standards 群組裡的標準範本,ACQUA 不允許直接執行。"
+                    "請在 ACQUA 裡把它複製成一個實際專案,再回來選那一個。") from exc
+            raise
+
+        # ⚠️ SelectAsActive 是非同步的。SelectedProjectLoaded 在「上一個專案
+        #    還開著」時就已經是 True —— 只等它會讀到舊專案,而且完全不報錯。
+        #    2026-08-24 實測:要求 Headset 拿到 Handset,API 還回 ok=True。
+        #    所以要等到標題真的變成我們要的那一個。
+        want = str(project or "").strip()
+
+        def arrived():
+            if not self.app.SelectedProjectLoaded:
+                return False
+            try:
+                return str(self.app.SelectedProject.Title).strip() == want
+            except Exception:                       # noqa: BLE001
+                return False
+
+        try:
+            self._wait_until(arrived, timeout=300, what=f"專案切換到 {want}")
+        except Exception:                           # noqa: BLE001
+            got = ""
+            try:
+                got = str(self.app.SelectedProject.Title).strip()
+            except Exception:                       # noqa: BLE001
+                pass
+            raise RuntimeError(
+                f"ACQUA 沒有切到「{project}」"
+                + (f",目前仍是「{got}」" if got else "")
+                + " —— 請到 ACQUA 視窗看看有沒有對話框在等人")
+
         self.project = self.app.SelectedProject     # ⭐ 現在才是 IProjectSelected
         self.state.set(open_group=group, open_project=str(self.project.Title))
         self._update_context()
@@ -925,7 +1004,7 @@ class ComBackend(AcquaBackend):
             time.sleep(0.05)
         return False
 
-    def run_smds(self, row_ids):
+    def run_smds(self, row_ids, comment=None):
         """⭐ 逐項執行勾選的測項。
 
         跟 run_measurements 的差別:
@@ -944,7 +1023,11 @@ class ComBackend(AcquaBackend):
 
         run_cfg = self.config.get("run", {})
         use_mmd = bool(run_cfg.get("use_mmd_settings", True))
-        result_comment = str(run_cfg.get("result_comment", ""))
+        # 這一批的名字。傳進 StartSingleMeasurement 的 ResultComment,
+        # ACQUA 會存成每筆結果的 Description —— 也就是你們在 ACQUA 裡看到的
+        # run 名稱(實測:同一批的每一筆都拿到同一個字串)。
+        result_comment = (str(comment).strip() if comment
+                          else str(run_cfg.get("result_comment", "")))
         timeout = float(run_cfg.get("item_timeout_sec", 900))
 
         by_id = {s["row_id"]: s for s in self.state.smds}
@@ -960,11 +1043,13 @@ class ComBackend(AcquaBackend):
         self.state.set(running=True, cancel_requested=False, paused=False, current=None)
         hw = self.active_hardware_setting()
         self.state.log(f"=== 開始逐項執行:共 {total} 筆 ===")
+        self.state.log(f"    這批的名稱:{result_comment or '(未命名)'}")
         self.state.log(f"    硬體設定:{hw or '(讀不到)'}")
 
         rl = self.state.runlog
         if rl:
-            rl.start(mode="selected", database=self.state.database,
+            rl.start(mode="selected", comment=result_comment,
+                     database=self.state.database,
                      project_group=self.state.open_group,
                      project=self.state.open_project,
                      measurement_object=self.state.measurement_object,
@@ -1024,7 +1109,7 @@ class ComBackend(AcquaBackend):
 
                     if not sent:
                         self.state.log("    ✗ ACQUA 持續忙碌,跳過這一筆", "error")
-                        self.state.add_result(smd["title"], smd["row_id"], "Busy", False)
+                        self._record(smd, "Busy", False, EMEResult.BUSY)
                         continue
 
                     self._wait_item(smd["title"], timeout)
@@ -1032,14 +1117,16 @@ class ComBackend(AcquaBackend):
                     if self._last_result is None:
                         # ACQUA 對某些測項(例如純文件的 Info)不發結果事件。
                         # 這不代表失敗 —— 標成 NoResult 讓它跟真正的 FAIL 分開。
+                        # ⚠️ 這裡以前記成 passed=True —— 那是過度樂觀。
+                        #    「沒收到結果」不等於「通過」,它是「不知道」。
+                        #    算成通過會讓總結數字虛高(2026-08-21 那批 28 筆)。
                         self.state.log(
                             "    → ACQUA 沒有回報結果(這類測項通常不產生資料)", "warn")
-                        self.state.add_result(smd["title"], smd["row_id"],
-                                              "NoResult", True)
+                        self._record(smd, "NoResult", False, EMEResult.NO_RESULT)
                 except Exception as exc:                    # noqa: BLE001
                     self.state.log(
                         f"    ✗ 這一筆出錯:{self._explain_com_error(exc)}", "error")
-                    self.state.add_result(smd["title"], smd["row_id"], "Error", False)
+                    self._record(smd, "Exception", False, EMEResult.EXCEPTION)
         finally:
             if watcher:
                 watcher.stop()

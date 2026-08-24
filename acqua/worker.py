@@ -61,6 +61,9 @@ class AcquaWorker(threading.Thread):
         self._stop = threading.Event()
         self.ready = threading.Event()
         self.init_error = None
+        #: 正在執行的命令名稱(閒置時為 None)。
+        #: 用來分辨「state.running 是真的在跑」還是「上一輪死掉留下的旗標」。
+        self._running_cmd = None
 
     # ── 給 Flask 執行緒呼叫 ──────────────────────────
     def submit(self, _name: str, **kwargs) -> Command:
@@ -72,6 +75,17 @@ class AcquaWorker(threading.Thread):
         cmd = Command(_name, kwargs)
         self._q.put(cmd)
         return cmd
+
+    def busy(self) -> bool:
+        """工作執行緒現在真的在執行命令嗎?
+
+        state.running 是 backend 自己設的旗標 —— 行程被砍或例外沒收乾淨時
+        會留下 True。要判斷「殘留」還是「真的在跑」得看這裡。
+        """
+        return self._running_cmd is not None
+
+    def running_command(self):
+        return self._running_cmd
 
     def request_cancel(self):
         """中止不走佇列 —— 因為 run 正在阻塞工作執行緒,佇列排不進去。
@@ -139,7 +153,11 @@ class AcquaWorker(threading.Thread):
                     self.state.log(f"訊息幫浦錯誤:{exc}", "error")
                 continue
 
-            self._dispatch(cmd)
+            self._running_cmd = cmd.name
+            try:
+                self._dispatch(cmd)
+            finally:
+                self._running_cmd = None
 
         # 收工時如果還在跑,講清楚 —— 事件接收端一死,ACQUA 會卡在
         # IsMeasuring=True 回不來(2026-08-17 實測過)。

@@ -63,7 +63,8 @@
          white-space:pre-wrap; word-break:break-word; }
   .l-warn  { color:var(--warn); }
   .l-error { color:var(--fail); }
-  .stats { display:flex; gap:8px; margin-top:10px; }
+  .stats { display:flex; gap:8px; margin-top:10px; cursor:pointer; }
+  .stats:hover .stat { border-color:#c9ced6; }
   .stat { flex:1; text-align:center; padding:9px; border-radius:8px; border:1px solid var(--border); }
   .stat b { display:block; font-size:20px; font-variant-numeric:tabular-nums; }
   .stat.ok b   { color:var(--ok); }
@@ -165,6 +166,50 @@
   #busy.err  .bx  { border-color:var(--fail); }
 
   /* ── 執行中 / 續跑 對話框 ── */
+  /* ── 報告另存 ── */
+  .rep-src { font-size:11px; color:var(--muted); word-break:break-all;
+             background:var(--bg2, #f6f6f8); border-radius:7px;
+             padding:8px 10px; margin:10px 0 4px; }
+  .rep-f { display:block; font-size:12px; color:var(--muted); margin-top:10px; }
+  .rep-f input { display:block; width:100%; margin-top:4px; font-size:13px;
+                 padding:7px 9px; box-sizing:border-box; }
+
+  /* ── 標頭上的小按鈕 ── */
+  header .hbtn { font-size:11px; padding:4px 10px; }
+
+  /* ── 這一批的名稱 ── */
+  .runname { display:block; margin:12px 0 4px; }
+  .runname input { display:block; width:100%; box-sizing:border-box;
+                   margin-top:5px; font-size:14px; padding:8px 10px; }
+  .rn-recent { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+  .rn-recent button { font-size:11px; padding:3px 9px; max-width:100%;
+                      overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+  /* ── 執行紀錄:PASS / FAIL 兩大類,各自按狀態碼分組 ── */
+  .rc-sum { display:flex; gap:10px; margin:10px 0 6px; }
+  .rc-sum div { flex:1; text-align:center; border-radius:9px; padding:9px 6px;
+                border:1px solid var(--border); }
+  .rc-sum b { display:block; font-size:20px; font-variant-numeric:tabular-nums; }
+  .rc-sum .p b { color:var(--ok); }
+  .rc-sum .f b { color:var(--bad); }
+  .rc-sum small { font-size:11px; color:var(--muted); }
+  .rc-grp { margin-top:12px; }
+  .rc-grp > h4 { font-size:12px; margin:0 0 6px; }
+  .rc-row { display:flex; align-items:center; gap:9px; padding:7px 10px;
+            border:1px solid var(--border); border-radius:8px; margin-bottom:5px;
+            cursor:pointer; font-size:12px; }
+  .rc-row:hover { border-color:#c9ced6; }
+  .rc-row .code { font-family:ui-monospace,Menlo,monospace; font-size:11px;
+                  color:var(--muted); min-width:26px; }
+  .rc-row .nm { flex:1; }
+  .rc-row .n { font-variant-numeric:tabular-nums; font-weight:600; }
+  .rc-row .ours { font-size:10px; color:#c2410c; border:1px solid #c2410c55;
+                  border-radius:20px; padding:1px 7px; }
+  .rc-items { margin:0 0 8px 12px; padding:8px 10px; border-left:2px solid var(--border);
+              max-height:240px; overflow-y:auto; }
+  .rc-items div { font-size:11px; padding:2px 0; color:var(--fg); }
+  .rc-items small { color:var(--muted); }
+
   .ov { position:fixed; inset:0; background:#000a; backdrop-filter:blur(3px);
         display:none; align-items:center; justify-content:center; z-index:120; }
   .ov.on { display:flex; }
@@ -243,10 +288,13 @@
   .smd.dimmed .title { text-decoration:line-through; }
 
   /* ── 每列的「⋯」 ── */
-  .smd .dots { margin-left:auto; opacity:0; font-size:13px; color:var(--muted);
-               padding:0 6px; cursor:pointer; border:none; background:none; }
-  .smd:hover .dots { opacity:1; }
-  .smd .dots:hover { color:var(--accent); }
+  /* 三個點只出現在「需人工」的測項,所以要一直看得到 ——
+     藏起來等游標經過的話,使用者不會知道那裡可以點。 */
+  .smd .dots { margin-left:auto; font-size:15px; line-height:1;
+               color:var(--fg); font-weight:700; letter-spacing:1px;
+               padding:2px 8px; cursor:pointer; border:1px solid var(--border);
+               border-radius:7px; background:var(--panel); }
+  .smd .dots:hover { color:#fff; background:var(--accent); border-color:var(--accent); }
 
   .mtag { display:inline-block; font-size:10px; padding:1px 6px; border-radius:9px;
           background:#f0883e22; color:var(--warn); border:1px solid #f0883e55;
@@ -440,6 +488,69 @@
   </div>
 </div>
 
+<!-- ── ① 開跑前:為這一批命名 ── -->
+<div id="nameov" class="ov">
+  <div class="rbx">
+    <h3>為這一批測試命名</h3>
+    <div class="meta">這個名稱會變成每一筆結果在 ACQUA 裡的
+      <b>Description</b>(也就是你們平常看到的 run 名稱)。
+      <b>整批共用同一個名稱</b> —— ACQUA 就是這樣設計的。</div>
+    <label class="runname">名稱
+      <input type="text" id="run-name" spellcheck="false"
+             placeholder="例如 Kong_PVT#05Y2_FW923.149_vol100%_USB_direct_ETSI">
+    </label>
+    <div class="meta" id="rn-info"></div>
+    <div class="rn-recent" id="rn-recent"></div>
+    <div class="acts2">
+      <button class="primary" id="btn-name-go">開始執行</button>
+      <button id="btn-name-cancel">取消</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── ② 執行紀錄:PASS / FAIL 各自按狀態碼分組 ── -->
+<div id="recov" class="ov">
+  <div class="rbx" style="max-width:680px">
+    <h3>執行紀錄</h3>
+    <div class="meta" id="rc-head"></div>
+    <div class="rc-sum">
+      <div class="p"><b id="rc-p">0</b><small>PASS</small></div>
+      <div class="f"><b id="rc-f">0</b><small>FAIL</small></div>
+      <div><b id="rc-t">0</b><small>合計</small></div>
+    </div>
+    <div id="rc-body" style="max-height:52vh;overflow-y:auto"></div>
+    <div class="acts2">
+      <button class="primary" id="btn-rec-close">關閉</button>
+      <span style="flex:1"></span>
+      <button id="btn-rec-csv">下載 CSV</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── 報告產生完成 → 決定存到哪裡 ── -->
+<div id="repov" class="ov">
+  <div class="rbx">
+    <h3>報告已產生</h3>
+    <div class="meta">ACQUA 已經把報告寫到暫存資料夾。填好檔名與位置按「存檔」,
+      就會搬到你要的地方。</div>
+    <div class="rep-src" id="rep-src"></div>
+    <label class="rep-f">檔名
+      <input type="text" id="rep-name" spellcheck="false">
+    </label>
+    <label class="rep-f">存放資料夾
+      <input type="text" id="rep-dir" spellcheck="false"
+             placeholder="例如 D:/報告/2026">
+    </label>
+    <div class="meta" id="rep-msg"></div>
+    <div class="acts2">
+      <button class="primary" id="btn-rep-save">存檔</button>
+      <button id="btn-rep-later">稍後再說</button>
+      <span style="flex:1"></span>
+      <button id="btn-rep-open" style="display:none">開啟所在資料夾</button>
+    </div>
+  </div>
+</div>
+
 <!-- ── 變數驅動設定(取代原本內嵌的一長串表單)── -->
 <div id="varov" class="ov">
   <div class="rbx vbx">
@@ -488,6 +599,9 @@
   <span class="badge" id="badge-proj">未開啟專案</span>
   <a href="/acqua/plans" style="font-size:12px;color:var(--accent);text-decoration:none">測試計畫 →</a>
   <a href="/" style="font-size:12px;color:var(--muted);text-decoration:none">← 首頁</a>
+  <button id="btn-records" class="hbtn">執行紀錄</button>
+  <button id="btn-clear-run" class="hbtn"
+          title="清掉這個服務殘留的執行紀錄與狀態(不會動 ACQUA 資料庫)">清除殘留</button>
   <span class="badge live" id="badge-live"><i class="dot" id="live-dot"></i><span id="live-txt">連線中…</span></span>
 </header>
 
@@ -589,10 +703,16 @@
     </div>
     <progress id="prog" value="0" max="100" style="display:none"></progress>
 
-    <div class="stats">
+    <!-- 這三塊本來只是數字。使用者會盯著它們找明細,所以直接讓它們能點,
+         再補一顆明顯的按鈕 —— 標頭那顆太容易被忽略。 -->
+    <div class="stats" id="stats" title="點一下看明細(依狀態碼分組)">
       <div class="stat"><b id="s-total">0</b>總計</div>
       <div class="stat ok"><b id="s-pass">0</b>PASS</div>
       <div class="stat fail"><b id="s-fail">0</b>FAIL</div>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <button class="primary" id="btn-detail" style="flex:1">
+        看明細 —— PASS / FAIL 各自依狀態碼分組</button>
     </div>
   </section>
 
@@ -812,7 +932,8 @@ function smdRow(s, indent) {
       <input type="checkbox" data-id="${s.row_id}" ${selected.has(s.row_id) ? 'checked' : ''}>
       <span class="title">${esc(s.title)}${s.manual ? '<span class="mtag">需人工</span>' : ''}</span>
       ${res ? `<span class="res ${res}">${res}</span>` : ''}
-      <button class="dots" data-wiz="${s.row_id}" title="設定 DUT 屬性(會重新決定要跑哪些)">⋯</button>
+      ${s.manual ? `<button class="dots" data-wiz="${s.row_id}"
+          title="設定這個精靈要問的 DUT 屬性(會重新決定要跑哪些)">⋯</button>` : ''}
       <span class="rid">#${s.row_id}</span>
     </label>`;
 }
@@ -936,7 +1057,21 @@ $('#btn-scan').onclick = async () => {
 $('#btn-connect').onclick = async () => {
   const r = await post('/acqua/api/connect',
                        {server: $('#server').value, database: $('#database').value});
-  if (r.ok) await post('/acqua/api/refresh-groups');
+  if (!r.ok) return;
+  await post('/acqua/api/refresh-groups');
+
+  // 換庫會把繫於舊上下文的東西全部作廢(見 acqua/context.py)—— 那是對的,
+  // 但不該讓人每次重點四遍。伺服器記得這個庫上次用什麼,這裡把它接回來。
+  const s = await post('/acqua/api/restore', {}, {quiet: true});
+  if (!s.ok) return;
+  if (s.restored) {
+    addLog('已接回上次的設定:' + (s.steps || []).filter(x => x.ok)
+             .map(x => x.name).join('、'));
+    (s.steps || []).filter(x => !x.ok).forEach(x =>
+      addLog(`接回「${x.name}」失敗:${x.detail || ''}`, 'warn'));
+  } else if (s.note) {
+    addLog(s.note, 'warn');
+  }
 };
 $('#btn-open').onclick = () =>
   post('/acqua/api/open-project', {group: $('#group').value, project: $('#project').value});
@@ -1247,12 +1382,59 @@ $('#btn-run').onclick = async () => {
          + manual.map(s => s.title).join('、'), 'warn');
   }
 
+  openNameOv();               // 先問這一批叫什麼,再真的送出
+};
+
+// ── ① 為這一批命名 ─────────────────────────────
+// ACQUA 的 ResultComment 是「整批一個名字」—— 每筆 StartSingleMeasurement
+// 都帶同一個字串,存成結果的 Description。所以這裡問一次就夠。
+const RN_KEY = 'acqua.runNames';
+const rnRecent = () => {
+  try { return JSON.parse(localStorage.getItem(RN_KEY) || '[]'); }
+  catch (e) { return []; }
+};
+function rnRemember(name) {
+  if (!name) return;
+  const list = [name, ...rnRecent().filter(x => x !== name)].slice(0, 8);
+  try { localStorage.setItem(RN_KEY, JSON.stringify(list)); } catch (e) {}
+}
+
+function openNameOv() {
+  const recent = rnRecent();
+  $('#run-name').value = recent[0] || '';
+  $('#rn-info').textContent =
+    `這一批 ${selected.size} 項 ・ ${S.open_project || ''} / ${S.measurement_object || ''}`;
+  $('#rn-recent').innerHTML = recent.length
+    ? '<span class="hint" style="align-self:center">最近用過:</span>'
+      + recent.map(x => `<button data-rn="${esc(x)}" title="${esc(x)}">${esc(x)}</button>`).join('')
+    : '';
+  $('#nameov').classList.add('on');
+  $('#run-name').focus();
+  $('#run-name').select();
+}
+
+$('#rn-recent').onclick = (e) => {
+  const b = e.target.closest('button[data-rn]');
+  if (!b) return;
+  $('#run-name').value = b.dataset.rn;
+  $('#run-name').focus();
+};
+$('#btn-name-cancel').onclick = () => $('#nameov').classList.remove('on');
+$('#btn-name-go').onclick = () => startRun($('#run-name').value.trim());
+$('#run-name').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') startRun($('#run-name').value.trim());
+});
+
+async function startRun(comment) {
+  $('#nameov').classList.remove('on');
+  rnRemember(comment);
   showRunPending('正在送出…',
-    `已選 ${selected.size} 項 ・ 硬體 ${hwActive || '未知'}`);
+    `已選 ${selected.size} 項 ・ ${comment || '(未命名)'} ・ 硬體 ${hwActive || '未知'}`);
 
   // 帶上「我是在哪個上下文挑的」—— 後端會比對,不一致就拒絕。
   // 光靠 row_id 擋不住:不同資料庫的同一個 id 都存在,指的卻是不同測項。
-  const j = await post('/acqua/api/run', {row_ids: [...selected], ctx: S.ctx},
+  const j = await post('/acqua/api/run',
+                       {row_ids: [...selected], ctx: S.ctx, comment},
                        {quiet: true, timeout: 30});
   if (!j.ok) {
     showRunFail(j.error || '送出失敗');
@@ -1262,7 +1444,112 @@ $('#btn-run').onclick = async () => {
 
   $('#r-title').textContent = 'ACQUA 準備中…';
   $('#r-meta').textContent  = `已送出 ${j.queued} 項`;
-  addLog(`已送出 ${j.queued} 項`, 'info');
+  addLog(`已送出 ${j.queued} 項 ・ 這批的名稱:${comment || '(未命名)'}`, 'info');
+}
+
+// ── ② 執行紀錄:PASS / FAIL 兩大類,各自按狀態碼分組 ────
+// 狀態碼名稱由後端給(/api/status-codes),前端不自己抄一份 ——
+// 抄了就有兩份真相,而 0-8 的語意是從 TypeLib 來的。
+let codeInfo = null;          // {code: {name, ours, passing}}
+let rcOpen = new Set();       // 展開了哪些狀態碼
+
+async function loadCodes() {
+  if (codeInfo) return codeInfo;
+  const r = await (await fetch('/acqua/api/status-codes')).json();
+  codeInfo = {};
+  (r.codes || []).forEach(c => { codeInfo[c.code] = c; });
+  return codeInfo;
+}
+
+/** 依狀態碼分組。回傳 [{code, name, ours, items}] */
+function rcGroups(results) {
+  const by = new Map();
+  results.forEach(r => {
+    const code = (r.code === null || r.code === undefined) ? 'x' : r.code;
+    if (!by.has(code)) by.set(code, []);
+    by.get(code).push(r);
+  });
+  const ord = c => (c === 'x' ? 99 : Number(c));
+  return [...by.entries()]
+    .sort((a, b) => ord(a[0]) - ord(b[0]))
+    .map(([code, items]) => {
+      const info = codeInfo[code] || {};
+      return {code, items, ours: !!info.ours, unknown: !!info.unknown,
+              name: info.name || (code === 'x' ? '沒有狀態碼' : 'Unknown(' + code + ')')};
+    });
+}
+
+function renderRecords() {
+  const res = S.results || [];
+  const pass = res.filter(r => r.passed), fail = res.filter(r => !r.passed);
+  $('#rc-p').textContent = pass.length;
+  $('#rc-f').textContent = fail.length;
+  $('#rc-t').textContent = res.length;
+  $('#rc-head').textContent = res.length
+    ? `${S.open_project || ''} / ${S.measurement_object || ''}`
+    : '這一輪還沒有任何結果';
+
+  const block = (label, list, cls) => {
+    if (!list.length) return '';
+    return `<div class="rc-grp"><h4>${label}(${list.length} 項)</h4>`
+      + rcGroups(list).map(g => {
+          const key = cls + ':' + g.code;
+          const open = rcOpen.has(key);
+          return `<div class="rc-row" data-k="${esc(key)}">
+              <span class="code">${g.code === 'x' ? '—' : g.code}</span>
+              <span class="nm">${esc(g.name)}</span>
+              ${g.unknown ? '<span class="ours">沒有回報,不是判定失敗</span>'
+                 : (g.ours ? '<span class="ours">我們標的</span>' : '')}
+              <span class="n">${g.items.length}</span>
+              <span class="hint">${open ? '▲' : '▼'}</span>
+            </div>`
+            + (open
+               ? '<div class="rc-items">' + g.items.map(x =>
+                   `<div>#${x.row_id} ${esc(x.title || '')}`
+                   + (x.path ? `<br><small>${esc(x.path)}</small>` : '')
+                   + '</div>').join('') + '</div>'
+               : '');
+        }).join('')
+      + '</div>';
+  };
+
+  const html = block('PASS', pass, 'p') + block('FAIL', fail, 'f');
+  $('#rc-body').innerHTML = html || '<div class="empty">還沒有結果 —— 跑一批看看</div>';
+}
+
+$('#rc-body').onclick = (e) => {
+  const row = e.target.closest('.rc-row');
+  if (!row) return;
+  const k = row.dataset.k;
+  if (rcOpen.has(k)) rcOpen.delete(k); else rcOpen.add(k);
+  renderRecords();
+};
+async function openRecords() {
+  await loadCodes();
+  renderRecords();
+  $('#recov').classList.add('on');
+}
+$('#btn-records').onclick = openRecords;
+$('#btn-detail').onclick  = openRecords;
+$('#stats').onclick       = openRecords;
+$('#btn-rec-close').onclick = () => $('#recov').classList.remove('on');
+$('#btn-rec-csv').onclick   = () => { location.href = '/acqua/api/results.csv'; };
+
+// ── ③ 清除殘留 ─────────────────────────────────
+// 同一台機器可能有好幾個 port 各跑過一輪,或上一輪跑到一半就掛了 ——
+// running 卡在 True,新的一批就送不出去。這顆把我們這邊歸零。
+$('#btn-clear-run').onclick = async () => {
+  if (!confirm('清掉這個服務殘留的執行紀錄與狀態?(不會動 ACQUA 資料庫裡的結果)')) return;
+  let r = await post('/acqua/api/clear-run', {}, {quiet: true});
+  if (!r.ok && r.running) {
+    if (!confirm(r.error + ' —— 仍要強制清除嗎?')) return;
+    r = await post('/acqua/api/clear-run', {force: true}, {quiet: true});
+  }
+  if (!r.ok) { addLog('清除失敗:' + (r.error || ''), 'error'); return; }
+  resultMap = {};
+  rcOpen.clear();
+  addLog('已清除殘留的執行紀錄'
+       + (r.was_stale ? '(原本卡在執行中,但工作執行緒是閒的)' : ''), 'warn');
 };
 
 let paused = false;
@@ -1469,7 +1756,86 @@ $('#btn-plan-save').onclick = async () => {
        + ` 可以到「測試計畫」頁叫出來跑`);
 };
 
-$('#btn-report').onclick   = () => post('/acqua/api/report', {});
+// 報告產生完不直接落地 —— 跳出視窗讓使用者決定檔名與位置。
+// (伺服器就跑在本機,所以「存到 D:\...」是真的存到那裡)
+let repSrc = '';
+$('#btn-report').onclick = async () => {
+  const r = await post('/acqua/api/report', {});
+  if (!r.ok) return;
+  repSrc = r.result || '';
+  $('#rep-src').textContent = `暫存:${repSrc}`
+      + (r.size ? `(${(r.size / 1024).toFixed(0)} KB)` : '');
+  $('#rep-name').value = r.suggest_name || '';
+  $('#rep-dir').value  = r.suggest_dir || '';
+  $('#rep-msg').textContent = '';
+  $('#btn-rep-open').style.display = 'none';
+  $('#btn-rep-save').disabled = false;
+  $('#repov').classList.add('on');
+  $('#rep-name').focus();
+  $('#rep-name').select();
+};
+
+async function saveReport(overwrite) {
+  const body = {src: repSrc, filename: $('#rep-name').value,
+                directory: $('#rep-dir').value, overwrite: !!overwrite};
+  const r = await post('/acqua/api/report/save', body, {quiet: true});
+  if (r.ok) {
+    $('#rep-src').textContent = '';
+    $('#btn-rep-save').disabled = true;
+    $('#btn-rep-open').style.display = '';
+    $('#btn-rep-open').dataset.path = r.path;
+    addLog('報告已存到 ' + r.path);
+    NOTIFY.desktop('報告已存檔', r.path);
+    repSrc = '';                       // 已經搬走了,別再說「留在暫存」
+
+    // 事情做完了就該收起來。留三秒讓人看清楚存到哪,
+    // 但只要動到這個視窗(想按開啟資料夾)就取消自動關閉。
+    $('#btn-rep-later').textContent = '關閉視窗';
+    let left = 3;
+    const tick = () => {
+      $('#rep-msg').innerHTML = `已存到 <b>${esc(r.path)}</b>`
+        + `<br><small>${left} 秒後自動關閉</small>`;
+      if (left-- <= 0) { clearInterval(repTimer); repTimer = null; closeRepOv(); }
+    };
+    clearInterval(repTimer);
+    tick();
+    repTimer = setInterval(tick, 1000);
+    return;
+  }
+  if (r.exists && !overwrite) {
+    if (confirm(`${r.error}
+
+${r.path}`)) return saveReport(true);
+    return;
+  }
+  $('#rep-msg').innerHTML = `<b style="color:var(--bad)">${esc(r.error || '存檔失敗')}</b>`;
+}
+
+let repTimer = null;
+
+function closeRepOv() {
+  clearInterval(repTimer);
+  repTimer = null;
+  $('#repov').classList.remove('on');
+  if (repSrc) addLog('報告留在暫存資料夾:' + repSrc, 'warn');
+}
+
+// 使用者一動這個視窗就別自動關 —— 他可能正要按「開啟所在資料夾」
+$('#repov').addEventListener('mousemove', () => {
+  if (!repTimer) return;
+  clearInterval(repTimer);
+  repTimer = null;
+  const m = $('#rep-msg').querySelector('small');
+  if (m) m.textContent = '（已取消自動關閉）';
+}, {passive: true});
+
+$('#btn-rep-save').onclick  = () => saveReport(false);
+$('#btn-rep-later').onclick = closeRepOv;
+$('#btn-rep-open').onclick = (e) =>
+  post('/acqua/api/report/reveal', {path: e.target.dataset.path}, {quiet: true});
+$('#rep-name').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') saveReport(false);
+});
 $('#btn-csv').onclick      = () => location.href = '/acqua/api/results.csv';
 $('#btn-clearlog').onclick = () => $('#log').innerHTML = '';
 

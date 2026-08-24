@@ -159,7 +159,7 @@ class MockBackend(AcquaBackend):
         """模擬模式沒有真的資料庫,一律放行。"""
         return True
 
-    def run_smds(self, row_ids):
+    def run_smds(self, row_ids, comment=None):
         """逐項執行(模擬)。中止/暫停的語意跟真機一致。"""
         return self._run_titles(row_ids)
 

@@ -64,6 +64,32 @@ class EMEResult:
     PASSING = frozenset({MEAS_DONE, MEAS_DONE_OK, IGNORE,
                          MEAS_DONE_NOT_OK_NOT_REQUIRED})
 
+    # ── 我們自己標的狀態 ────────────────────────────
+    #: ACQUA 沒有發結果事件時,由 run_smds 自己補的狀態。
+    #: 刻意用負數 —— 跟 ACQUA 的 0-8 混在同一個號碼空間會分不出誰說的。
+    NO_RESULT = -1        # 等到逾時都沒收到結果事件(純文件類的 Info 常這樣)
+    BUSY      = -2        # ACQUA 持續忙碌,這一筆根本沒送出去
+    EXCEPTION = -3        # 送出或等待時我們這邊丟了例外
+
+    _OURS = {
+        -1: "NoResult", -2: "Busy", -3: "Exception",
+    }
+
+    #: 「不知道」而不是「沒過」。NoResult 先前被算成 PASS —— 那是過度樂觀,
+    #: 現在歸在未通過那一側,但用這個集合讓 UI 能標明它不是判定失敗。
+    UNKNOWN = frozenset({NO_RESULT})
+
+    @classmethod
+    def is_ours(cls, status) -> bool:
+        return int(status) < 0
+
+    @classmethod
+    def all_names(cls) -> dict:
+        """{狀態碼: 名稱} —— ACQUA 的 0-8 加上我們自己標的負數。"""
+        d = dict(cls._NAMES)
+        d.update(cls._OURS)
+        return d
+
     @classmethod
     def is_resolved(cls) -> bool:
         return True        # 數值已確認,保留此方法供舊呼叫端相容
@@ -79,7 +105,10 @@ class EMEResult:
 
     @classmethod
     def describe(cls, status) -> str:
-        return cls._NAMES.get(int(status), f"Unknown({status})")
+        s = int(status)
+        if s in cls._OURS:
+            return cls._OURS[s]
+        return cls._NAMES.get(s, f"Unknown({status})")
 
 
 class ESingleValueCheckState:
