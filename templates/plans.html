@@ -26,15 +26,15 @@
   /* ── 執行序列 ── */
   .stepwrap { border:1px solid var(--line); border-radius:var(--r);
               margin-bottom:8px; overflow:hidden; }
-  .stepwrap.cur { border-color:var(--accent); }
+  .stepwrap.cur { border-color:var(--brand); }
   .stepwrap.done { opacity:.5; }
   .step { display:flex; align-items:center; gap:11px; padding:11px 13px; }
-  .stepwrap.cur .step { background:var(--accent-soft); }
+  .stepwrap.cur .step { background:var(--brand-soft); }
   .step .no { flex:none; width:22px; height:22px; border-radius:50%;
               background:var(--sunk); font-size:11px; display:flex;
               align-items:center; justify-content:center;
               font-variant-numeric:tabular-nums; color:var(--muted); }
-  .stepwrap.cur .step .no { background:var(--accent); color:#fff; }
+  .stepwrap.cur .step .no { background:var(--brand); color:#fff; }
   .step .t { flex:1; min-width:0; }
   .step .t b { display:block; font-size:13px; font-weight:600; }
   .step .t .src { font-size:11px; color:var(--faint);
@@ -46,12 +46,12 @@
                 padding:0 2px; user-select:none; }
   .step .grip:active { cursor:grabbing; }
   .stepwrap.dragging { opacity:.4; }
-  .stepwrap.over-top { box-shadow:0 -2px 0 0 var(--accent) inset; }
-  .stepwrap.over-bottom { box-shadow:0 2px 0 0 var(--accent) inset; }
+  .stepwrap.over-top { box-shadow:0 -2px 0 0 var(--brand) inset; }
+  .stepwrap.over-bottom { box-shadow:0 2px 0 0 var(--brand) inset; }
   /* 前後兩步的資料庫不同 —— 中間會自己切,先標出來 */
   .between { display:flex; gap:10px; align-items:center; padding:5px 13px 5px 46px;
              font-size:11px; color:var(--faint); }
-  .between .sw { color:var(--accent); }
+  .between .sw { color:var(--brand); }
 
   .ov { position:fixed; inset:0; background:#0006; backdrop-filter:blur(2px);
         display:none; align-items:center; justify-content:center; z-index:100; }
@@ -64,7 +64,7 @@
   .big { font-size:34px; font-weight:600; font-variant-numeric:tabular-nums; margin:10px 0 2px; }
   .big small { font-size:14px; font-weight:400; color:var(--muted); }
   .pbar { height:8px; border-radius:5px; background:var(--line); overflow:hidden; margin:10px 0; }
-  .pbar i { display:block; height:100%; background:var(--accent); transition:width .3s; }
+  .pbar i { display:block; height:100%; background:var(--brand); transition:width .3s; }
   .cur2 { padding:10px 12px; border:1px solid var(--line); border-radius:8px;
           background:var(--bg); margin-top:10px; }
   .cur2 .p { font-size:11px; color:var(--muted); }
@@ -89,8 +89,8 @@
 
   /* 兩步之間的「移動治具」階段 */
   .setupph { margin-top:12px; padding:11px 13px; border-radius:9px;
-             border:1px solid var(--accent); background:#2f6fed0d; }
-  .setupph .h { font-size:12px; font-weight:600; color:var(--accent);
+             border:1px solid var(--brand); background:#2f6fed0d; }
+  .setupph .h { font-size:12px; font-weight:600; color:var(--brand);
                 margin-bottom:5px; }
 
   /* 跑完的摘要 */

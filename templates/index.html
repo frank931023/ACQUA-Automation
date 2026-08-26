@@ -24,13 +24,13 @@
          border-bottom:1px solid var(--line); }
   .smd:last-child { border-bottom:none; }
   .smd:hover { background:#7f8faa14; }
-  .smd input { width:16px; height:16px; accent-color:var(--accent); flex:none; }
+  .smd input { width:16px; height:16px; accent-color:var(--brand); flex:none; }
   .smd .title { flex:1; }
   .smd .rid { font-size:11px; color:var(--muted); font-variant-numeric:tabular-nums; }
   .smd .res { font-size:11px; font-weight:700; padding:2px 7px; border-radius:4px; }
   .res.PASS { background:#3fb95022; color:var(--ok); }
   .res.FAIL { background:#f8514922; color:var(--fail); }
-  .smd.active { background:#4f8ef71f; box-shadow:inset 3px 0 0 var(--accent); }
+  .smd.active { background:#4f8ef71f; box-shadow:inset 3px 0 0 var(--brand); }
   /* 日誌填滿面板剩下的高度,Clear 永遠貼在底部 ——
      固定高度會讓面板底下留一塊空白,而且視窗高度一變就不對。 */
   #log { flex:1; min-height:0; overflow-y:auto;
@@ -51,8 +51,8 @@
   .modes { display:flex; gap:8px; }
   .mode { flex:1; display:flex; align-items:flex-start; gap:8px; padding:9px 11px;
           border:1px solid var(--line); border-radius:8px; cursor:pointer; margin:0; }
-  .mode:has(input:checked) { border-color:var(--accent); background:#4f8ef714; }
-  .mode input { margin-top:3px; accent-color:var(--accent); flex:none; }
+  .mode:has(input:checked) { border-color:var(--brand); background:#4f8ef714; }
+  .mode input { margin-top:3px; accent-color:var(--brand); flex:none; }
   .mode b { display:block; font-size:13px; color:var(--fg); }
   .mode small { display:block; font-size:11px; color:var(--muted); margin-top:2px; }
   /* ── 變數表單 ── */
@@ -64,12 +64,12 @@
   .opts { display:flex; flex-wrap:wrap; gap:6px 16px; }
   .opt { display:flex; align-items:center; gap:6px; font-size:13px; cursor:pointer;
          color:var(--fg); margin:0; }
-  .opt input { width:15px; height:15px; accent-color:var(--accent); flex:none; margin:0; }
+  .opt input { width:15px; height:15px; accent-color:var(--brand); flex:none; margin:0; }
   .opt.dim { opacity:.42; cursor:not-allowed; }
   .vhint { font-size:11px; color:var(--muted); margin-left:auto; font-variant-numeric:tabular-nums; }
   .pred { margin-top:12px; padding:11px 13px; border-radius:9px;
-          border:1px solid var(--accent); background:#4f8ef714; }
-  .pred b { font-size:19px; font-variant-numeric:tabular-nums; color:var(--accent); }
+          border:1px solid var(--brand); background:#4f8ef714; }
+  .pred b { font-size:19px; font-variant-numeric:tabular-nums; color:var(--brand); }
   .pred .sub2 { font-size:12px; color:var(--muted); margin-top:3px; }
   .var { display:flex; gap:6px; align-items:center; margin-top:6px; }
   .var input[type=text] { flex:1; }
@@ -81,19 +81,21 @@
   .sw { display:inline-flex; align-items:center; gap:7px; cursor:pointer;
         font-size:12px; color:var(--muted); user-select:none; }
   .sw input { display:none; }
-  .sw i { width:34px; height:19px; border-radius:19px; background:var(--line);
+  .sw i { width:34px; height:19px; border-radius:19px; background:var(--line-2);
           position:relative; transition:background .15s; flex:none; }
   .sw i::after { content:''; position:absolute; top:2px; left:2px; width:15px; height:15px;
-                 border-radius:50%; background:var(--panel); transition:transform .15s;
-                 box-shadow:0 1px 3px #0004; }
-  .sw input:checked + i { background:var(--accent); }
+                 border-radius:50%; background:#fff; transition:transform .15s;
+                 box-shadow:0 1px 3px #00000026; }
+  /* 開 = 品牌綠,關 = 灰。標籤文字跟著變,一眼就看得出狀態。 */
+  .sw input:checked + i { background:var(--brand); }
   .sw input:checked + i::after { transform:translateX(15px); }
+  .sw:has(input:checked) { color:var(--brand); }
 
   /* ── 測項樹 ── */
   .grp { display:flex; align-items:center; gap:6px; padding:6px 11px;
          background:#7f8faa10; border-bottom:1px solid var(--line);
          font-size:12px; font-weight:600; color:var(--muted); }
-  .grp input { width:15px; height:15px; accent-color:var(--accent); flex:none; }
+  .grp input { width:15px; height:15px; accent-color:var(--brand); flex:none; }
   .grp .tog { flex:1; display:flex; align-items:center; gap:7px; cursor:pointer;
               user-select:none; padding:2px 0; }
   .grp .tog:hover { color:var(--fg); }
@@ -118,14 +120,14 @@
         box-shadow:0 12px 40px #0006; }
   .bx h3 { margin:0 0 4px; font-size:15px; display:flex; align-items:center; gap:9px; }
   .spin { width:15px; height:15px; border:2px solid var(--line); flex:none;
-          border-top-color:var(--accent); border-radius:50%; animation:sp .8s linear infinite; }
+          border-top-color:var(--brand); border-radius:50%; animation:sp .8s linear infinite; }
   @keyframes sp { to { transform:rotate(360deg); } }
   .bx .t { font-size:34px; font-variant-numeric:tabular-nums; margin:10px 0 2px;
            font-weight:600; letter-spacing:-.02em; }
   .bx .sub { font-size:12px; color:var(--muted); }
   .bx .bar { height:4px; border-radius:3px; background:var(--line);
              overflow:hidden; margin:14px 0 10px; }
-  .bx .bar i { display:block; height:100%; width:34%; background:var(--accent);
+  .bx .bar i { display:block; height:100%; width:34%; background:var(--brand);
                border-radius:3px; animation:sl 1.3s ease-in-out infinite; }
   @keyframes sl { 0%{margin-left:-34%} 100%{margin-left:100%} }
   .bx .tail { font:11px/1.5 Consolas,monospace; color:var(--muted); max-height:76px;
@@ -207,7 +209,7 @@
                     letter-spacing:0; }
   .pbar { height:9px; border-radius:5px; background:var(--line); overflow:hidden;
           margin:12px 0 6px; }
-  .pbar i { display:block; height:100%; background:var(--accent); border-radius:5px;
+  .pbar i { display:block; height:100%; background:var(--brand); border-radius:5px;
             transition:width .3s ease; }
   .rbx .cur { margin-top:12px; padding:11px 13px; border-radius:9px;
               background:var(--bg); border:1px solid var(--line); }
@@ -237,7 +239,7 @@
   .plans .pl { display:flex; align-items:center; gap:9px; padding:7px 9px;
                border-radius:7px; font-size:12px; }
   .plans .pl:hover { background:var(--panel); }
-  .plans .pl.queued { background:#4f8ef71a; border:1px solid var(--accent); }
+  .plans .pl.queued { background:#4f8ef71a; border:1px solid var(--brand); }
   .plans .pl .t { flex:1; min-width:0; }
   .plans .pl .t b { display:block; font-weight:600; }
   .plans .pl .t small { color:var(--muted); font-size:10px; }
@@ -248,7 +250,7 @@
   .wzlinks { display:flex; gap:14px; align-items:center; }
   .wzlinks a { font-size:11px; color:var(--muted); text-decoration:none;
                border-bottom:1px dashed transparent; }
-  .wzlinks a:hover { color:var(--accent); border-bottom-color:var(--accent); }
+  .wzlinks a:hover { color:var(--brand); border-bottom-color:var(--brand); }
 
   /* ── 精靈:目前只顯示某一個精靈的變數 ── */
   .wzscope { display:flex; align-items:center; gap:10px; margin:10px 0 2px;
@@ -275,12 +277,12 @@
   /* 三個點只出現在「需人工」的測項,所以要一直看得到 ——
      藏起來等游標經過的話,使用者不會知道那裡可以點。 */
   .stag { font-size:10px; margin-left:6px; padding:1px 6px; border-radius:20px;
-          color:var(--accent); border:1px solid var(--accent); opacity:.7; }
+          color:var(--brand); border:1px solid var(--brand); opacity:.7; }
   .smd .dots { margin-left:auto; font-size:15px; line-height:1;
                color:var(--fg); font-weight:700; letter-spacing:1px;
                padding:2px 8px; cursor:pointer; border:1px solid var(--line);
                border-radius:7px; background:var(--panel); }
-  .smd .dots:hover { color:#fff; background:var(--accent); border-color:var(--accent); }
+  .smd .dots:hover { color:#fff; background:var(--brand); border-color:var(--brand); }
 
   .mtag { display:inline-block; font-size:10px; padding:1px 6px; border-radius:9px;
           background:#f0883e22; color:var(--warn); border:1px solid #f0883e55;
@@ -303,7 +305,7 @@
   #hw-list .hw { display:flex; align-items:center; gap:9px; padding:6px 8px;
                  border-radius:7px; cursor:pointer; }
   #hw-list .hw:hover { background:var(--bg); }
-  #hw-list .hw.on { background:#4f8ef71f; border:1px solid var(--accent); }
+  #hw-list .hw.on { background:#4f8ef71f; border:1px solid var(--brand); }
   #hw-list .hw .nm { flex:1; word-break:break-all; }
   #hw-list .hw .dt { font-size:10px; color:var(--muted); flex:none; }
 
@@ -327,7 +329,7 @@
 
   /* ── 縮小到右下角的小視窗 ── */
   #mini { position:fixed; right:18px; bottom:18px; z-index:110; display:none;
-          width:290px; background:var(--panel); border:1px solid var(--accent);
+          width:290px; background:var(--panel); border:1px solid var(--brand);
           border-radius:12px; box-shadow:0 10px 34px #0006; overflow:hidden; }
   #mini.on { display:block; }
   #mini .mh { display:flex; align-items:center; gap:8px; padding:10px 12px 8px;

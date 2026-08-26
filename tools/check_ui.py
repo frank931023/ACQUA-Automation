@@ -73,6 +73,19 @@ for page in PAGES:
     check("%s 的 <div> 平衡(%d/%d)" % (os.path.basename(page), op, cl), op == cl)
 
 
+
+print("=== 0b. CSS 變數 ===")
+_tokens = set(re.findall(r"--([a-z0-9-]+):", read("templates/_ui.html")))
+for _p in PAGES:
+    _t = read(_p)
+    _used = set(re.findall(r"var\(--([a-z0-9-]+)", _t))
+    _own = set(re.findall(r"--([a-z0-9-]+):", _t))
+    _miss = sorted(_used - _tokens - _own)
+    check("%s 沒有懸空的 CSS 變數" % os.path.basename(_p), not _miss,
+          "未定義:" + ", ".join(_miss))
+check("切換開關:開=品牌色", ".sw input:checked + i { background:var(--brand); }"
+      in read("templates/index.html"))
+
 print("\n=== A. JS 取用的元素,HTML 裡都有嗎 ===")
 for page in PAGES:
     html = read(page)
