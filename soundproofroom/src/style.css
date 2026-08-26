@@ -4,7 +4,7 @@
   --border: #262d36;
   --fg: #e6e9ef;
   --muted: #8b93a1;
-  --accent: #4f8ef7;
+  --accent: #009B85;
 }
 * { box-sizing: border-box; }
 html, body { height: 100%; margin: 0; }
@@ -85,6 +85,6 @@ button.wide { width: 100%; margin-top: 4px; }
 }
 
 button.on {
-  border-color: var(--accent); background: #4f8ef71f; color: var(--accent);
+  border-color: var(--accent); background: #009B851f; color: var(--accent);
   font-weight: 600;
 }

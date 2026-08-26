@@ -1,0 +1,67 @@
+{
+  "id": "20260826-155746-7d16",
+  "created": "2026-08-26T15:57:46",
+  "title": "0826-test2",
+  "description": "0826-test0826-test0826-test0826-test0826-test",
+  "updated": "2026-08-26T15:57:46",
+  "items": [
+    {
+      "row_id": 4886,
+      "title": "SND latency - sweep V4",
+      "path": "ZoomRooms_v2020Oct_v1 / COS_auto_Tiny / Basic Test_using Mouth only / 4.4.2 - 4.4.3 Send path - alternating talkers- Normal speec_3.5m",
+      "occ": 0,
+      "sig": "6d1701c4",
+      "smd_type": 12
+    },
+    {
+      "row_id": 4887,
+      "title": "Rec for 4.4.2 Send path- alternating talkers  - Pos1",
+      "path": "ZoomRooms_v2020Oct_v1 / COS_auto_Tiny / Basic Test_using Mouth only / 4.4.2 - 4.4.3 Send path - alternating talkers- Normal speec_3.5m",
+      "occ": 0,
+      "sig": "20f766f4",
+      "smd_type": 17
+    },
+    {
+      "row_id": 4888,
+      "title": "Calc 4.4.2 - Send path - alternating talker1-1 - pos1",
+      "path": "ZoomRooms_v2020Oct_v1 / COS_auto_Tiny / Basic Test_using Mouth only / 4.4.2 - 4.4.3 Send path - alternating talkers- Normal speec_3.5m",
+      "occ": 0,
+      "sig": "0039a1d0",
+      "smd_type": 44
+    },
+    {
+      "row_id": 4889,
+      "title": "Calc 4.4.2 - Send path - alternating talker1-2 - pos1",
+      "path": "ZoomRooms_v2020Oct_v1 / COS_auto_Tiny / Basic Test_using Mouth only / 4.4.2 - 4.4.3 Send path - alternating talkers- Normal speec_3.5m",
+      "occ": 0,
+      "sig": "0ec34c39",
+      "smd_type": 44
+    },
+    {
+      "row_id": 4890,
+      "title": "Calc 4.4.2 - Send path - alternating talker2-1 - pos1",
+      "path": "ZoomRooms_v2020Oct_v1 / COS_auto_Tiny / Basic Test_using Mouth only / 4.4.2 - 4.4.3 Send path - alternating talkers- Normal speec_3.5m",
+      "occ": 0,
+      "sig": "f56c1701",
+      "smd_type": 44
+    }
+  ],
+  "count": 5,
+  "variables": {},
+  "source": {
+    "server": "AUTOMATION_ACQU\\ACQUADBSERVER",
+    "database": "ACQUA_auto_v2026Aug",
+    "group": "(Unsorted Projects)",
+    "project": "ZoomRooms_v2020Oct_v1",
+    "measurement_object": "Front_of_Room",
+    "ctx": "AUTOMATION_ACQU\\ACQUADBSERVER|ACQUA_auto_v2026Aug|1",
+    "tree_fingerprint": "7e10c14f931b52fa:1477"
+  },
+  "manual_excluded": [],
+  "setup": {
+    "name": "",
+    "note": "",
+    "params": {},
+    "_note": "尚未自動化:目前只會在序列中間停下來提示人工調整"
+  }
+}

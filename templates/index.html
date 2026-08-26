@@ -3,19 +3,22 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ACQUA 測試自動化</title>
+<title>Test run — ACQUA Automation</title>
 {% include '_ui.html' %}
 <style>
   /* ── 這一頁特有 ── */
-  main { display:grid; grid-template-columns:320px 1fr 360px; gap:16px;
-         padding:18px; align-items:start; max-width:1600px; margin:0 auto; }
-  @media (max-width:1280px) { main { grid-template-columns:1fr; } }
-  .panel + .panel { margin-top:14px; }
-  h1 { font-size:15px; margin:0; font-weight:600; }
-  .hdr-row { display:flex; align-items:center; gap:12px; }
+  /* 三欄:設定 ・ 測項 ・ 日誌。各自在自己的格子裡捲,版面不跳。 */
+  .work { grid-template-columns:300px minmax(0,1fr) 330px; }
+  @media (max-width:1280px) { .work { grid-template-columns:1fr; } }
+  .stack { display:flex; flex-direction:column; gap:12px;
+           min-height:0; overflow-y:auto; }
+  /* 欄裡只有一張卡時讓它撐滿整欄高度 —— 卡片下面留一塊灰底會像沒對齊。
+     內容比欄短就靠上排,多的空間留白。 */
+  .stack > .panel { flex:1 0 auto; }
+  .hdr-row { display:flex; align-items:center; gap:10px; flex:none; }
   .hdr-row h2 { margin:0; flex:1; }
 
-  .smd-list { max-height:44vh; overflow-y:auto; border:1px solid var(--line);
+  .smd-list { border:1px solid var(--line);
               border-radius:8px; margin-top:8px; }
   .smd { display:flex; align-items:center; gap:9px; padding:8px 11px;
          border-bottom:1px solid var(--line); }
@@ -28,7 +31,10 @@
   .res.PASS { background:#3fb95022; color:var(--ok); }
   .res.FAIL { background:#f8514922; color:var(--fail); }
   .smd.active { background:#4f8ef71f; box-shadow:inset 3px 0 0 var(--accent); }
-  #log { height:52vh; overflow-y:auto; background:var(--bg); border:1px solid var(--line);
+  /* 日誌填滿面板剩下的高度,Clear 永遠貼在底部 ——
+     固定高度會讓面板底下留一塊空白,而且視窗高度一變就不對。 */
+  #log { flex:1; min-height:0; overflow-y:auto;
+         background:var(--bg); border:1px solid var(--line);
          border-radius:8px; padding:10px; font:12px/1.55 Consolas,"Cascadia Mono",monospace;
          white-space:pre-wrap; word-break:break-word; }
   .l-warn  { color:var(--warn); }
@@ -363,14 +369,14 @@
 
 <div id="busy">
   <div class="bx">
-    <h3><span class="spin"></span><span id="b-title">處理中</span></h3>
+    <h3><span class="spin"></span><span id="b-title">Working</span></h3>
     <div class="sub" id="b-sub"></div>
     <div class="t" id="b-time">0.0s</div>
     <div class="bar"><i></i></div>
     <div class="tail" id="b-tail"></div>
     <div class="acts">
-      <button id="b-close" style="display:none">關閉</button>
-      <button id="b-abort">停止等待</button>
+      <button id="b-close" style="display:none">Close</button>
+      <button id="b-abort">Stop waiting</button>
     </div>
   </div>
 </div>
@@ -378,21 +384,21 @@
 <!-- 執行中:鎖住整個畫面 -->
 <div id="runov" class="ov">
   <div class="rbx">
-    <h3><span class="spin"></span><span id="r-title">測試進行中</span></h3>
+    <h3><span class="spin"></span><span id="r-title">Running</span></h3>
     <div class="meta" id="r-meta"></div>
 
-    <div class="big"><span id="r-idx">0</span><small> / <span id="r-total">0</span> 項</small></div>
+    <div class="big"><span id="r-idx">0</span><small> / <span id="r-total">0</span></small></div>
     <div class="pbar"><i id="r-bar" style="width:0%"></i></div>
     <div class="meta" id="r-eta"></div>
 
     <div class="cur">
       <div class="path" id="r-path"></div>
-      <div class="name" id="r-name">準備中…</div>
+      <div class="name" id="r-name">Preparing…</div>
     </div>
 
     <!-- ACQUA 開了對話框在等人 —— 這是量測停住的唯一原因 -->
     <div class="blockbox" id="r-block" style="display:none">
-      <div class="bt">⏸ ACQUA 開了視窗在等你</div>
+      <div class="bt">ACQUA is waiting for you</div>
       <div class="bw" id="rb-title"></div>
       <div class="bm" id="rb-msg"></div>
       <div class="bbtns" id="rb-btns"></div>
@@ -401,26 +407,26 @@
     <div class="cnt">
       <div class="p"><b id="r-pass">0</b>PASS</div>
       <div class="f"><b id="r-fail">0</b>FAIL</div>
-      <div><b id="r-left">0</b>剩餘</div>
+      <div><b id="r-left">0</b>Left</div>
     </div>
 
     <div id="r-fail-msg"></div>
     <div class="rlog" id="r-log"></div>
 
     <div class="acts2">
-      <button class="danger" id="r-stop">■ 停止整批測試</button>
-      <button id="r-hide">縮小到右下角</button>
-      <button id="r-close">關閉</button>
+      <button class="danger" id="r-stop">Stop</button>
+      <button id="r-hide">Minimise</button>
+      <button id="r-close">Close</button>
     </div>
   </div>
 </div>
 
 <!-- 縮小後的右下角小視窗 -->
 <div id="mini">
-  <div class="mh" id="mini-head" title="點一下展開">
+  <div class="mh" id="mini-head" title="Click to expand">
     <span class="spin"></span>
-    <b id="m-title">測試進行中</b>
-    <span class="x">展開 ▲</span>
+    <b id="m-title">Running</b>
+    <span class="x">Expand</span>
   </div>
   <div class="mbody">
     <div class="mcount"><span id="m-idx">0</span><small> / <span id="m-total">0</span></small></div>
@@ -437,19 +443,19 @@
 <!-- 續跑:載入時偵測到上次沒跑完 -->
 <div id="resumeov" class="ov">
   <div class="rbx">
-    <h3>偵測到未完成的測試</h3>
+    <h3>Unfinished run found</h3>
     <div class="meta" id="rs-meta"></div>
-    <div class="big"><span id="rs-done">0</span><small> / <span id="rs-total">0</span> 已完成</small></div>
+    <div class="big"><span id="rs-done">0</span><small> / <span id="rs-total">0</span> done</small></div>
     <div class="pbar"><i id="rs-bar" style="width:0%"></i></div>
     <div class="cnt">
       <div class="p"><b id="rs-pass">0</b>PASS</div>
       <div class="f"><b id="rs-fail">0</b>FAIL</div>
-      <div><b id="rs-left">0</b>還沒跑</div>
+      <div><b id="rs-left">0</b>Remaining</div>
     </div>
     <div class="rlog" id="rs-detail"></div>
     <div class="acts2">
-      <button class="primary" id="rs-go">接續跑剩下的</button>
-      <button id="rs-drop">不用了,清除紀錄</button>
+      <button class="primary" id="rs-go">Run the rest</button>
+      <button id="rs-drop">Discard</button>
     </div>
   </div>
 </div>
@@ -460,23 +466,23 @@
 <!-- ── 存成計畫:先確認內容 ── -->
 <div id="planov" class="ov">
   <div class="rbx">
-    <h3 id="pv-h">存成計畫</h3>
+    <h3 id="pv-h">Save as plan</h3>
     <div class="meta" id="pv-src"></div>
-    <label class="runname">計畫名稱
+    <label class="runname">Plan name
       <input type="text" id="pv-title" spellcheck="false"
-             placeholder="例:Kong 第一輪">
+             placeholder="e.g. Kong round 1">
     </label>
-    <label class="runname">說明(選填)
+    <label class="runname">Description
       <input type="text" id="pv-desc" spellcheck="false"
-             placeholder="這一批是在什麼條件下挑的">
+             placeholder="Under what conditions this batch was picked">
     </label>
     <div class="meta" style="margin-top:12px">
-      這一批的測項(<b id="pv-n">0</b> 項)</div>
+      Items in this batch (<b id="pv-n">0</b>)</div>
     <div id="pv-items" class="pv-items"></div>
     <div class="meta" id="pv-msg"></div>
     <div class="acts2">
-      <button class="primary" id="btn-pv-save">確認儲存</button>
-      <button id="btn-pv-cancel">取消</button>
+      <button class="primary" id="btn-pv-save">Save</button>
+      <button id="btn-pv-cancel">Cancel</button>
     </div>
   </div>
 </div>
@@ -484,17 +490,17 @@
 <!-- ── ① 開跑前:為這一批命名 ── -->
 <div id="nameov" class="ov">
   <div class="rbx">
-    <h3>為這一批測試命名</h3>
-    <div class="meta">會寫進每一筆結果的 Description ・ 整批共用一個名稱</div>
-    <label class="runname">名稱
+    <h3>Name this run</h3>
+    <div class="meta">Written to each result's Description · one name for the whole batch</div>
+    <label class="runname">Name
       <input type="text" id="run-name" spellcheck="false"
-             placeholder="例如 Kong_PVT#05Y2_FW923.149_vol100%_USB_direct_ETSI">
+             placeholder="e.g. Kong_PVT#05Y2_FW923.149_vol100%_USB_direct_ETSI">
     </label>
     <div class="meta" id="rn-info"></div>
     <div class="rn-recent" id="rn-recent"></div>
     <div class="acts2">
-      <button class="primary" id="btn-name-go">開始執行</button>
-      <button id="btn-name-cancel">取消</button>
+      <button class="primary" id="btn-name-go">Run</button>
+      <button id="btn-name-cancel">Cancel</button>
     </div>
   </div>
 </div>
@@ -502,18 +508,18 @@
 <!-- ── ② 執行紀錄:PASS / FAIL 各自按狀態碼分組 ── -->
 <div id="recov" class="ov">
   <div class="rbx" style="max-width:680px">
-    <h3>執行紀錄</h3>
+    <h3>Run history</h3>
     <div class="meta" id="rc-head"></div>
     <div class="rc-sum">
-      <div class="p"><b id="rc-p">0</b><small>PASS</small></div>
-      <div class="f"><b id="rc-f">0</b><small>FAIL</small></div>
-      <div><b id="rc-t">0</b><small>合計</small></div>
+      <div class="p"><b id="rc-p">0</b><small>Pass</small></div>
+      <div class="f"><b id="rc-f">0</b><small>Fail</small></div>
+      <div><b id="rc-t">0</b><small>Total</small></div>
     </div>
     <div id="rc-body" style="max-height:52vh;overflow-y:auto"></div>
     <div class="acts2">
-      <button class="primary" id="btn-rec-close">關閉</button>
+      <button class="primary" id="btn-rec-close">Close</button>
       <span style="flex:1"></span>
-      <button id="btn-rec-csv">下載 CSV</button>
+      <button id="btn-rec-csv">Download CSV</button>
     </div>
   </div>
 </div>
@@ -521,22 +527,22 @@
 <!-- ── 報告產生完成 → 決定存到哪裡 ── -->
 <div id="repov" class="ov">
   <div class="rbx">
-    <h3>報告已產生</h3>
-    <div class="meta">填好檔名與位置,按存檔搬到你要的地方</div>
+    <h3>Report generated</h3>
+    <div class="meta">Set a name and folder, then save it where you want</div>
     <div class="rep-src" id="rep-src"></div>
-    <label class="rep-f">檔名
+    <label class="rep-f">File name
       <input type="text" id="rep-name" spellcheck="false">
     </label>
-    <label class="rep-f">存放資料夾
+    <label class="rep-f">Folder
       <input type="text" id="rep-dir" spellcheck="false"
-             placeholder="例如 D:/報告/2026">
+             placeholder="e.g. D:/reports/2026">
     </label>
     <div class="meta" id="rep-msg"></div>
     <div class="acts2">
-      <button class="primary" id="btn-rep-save">存檔</button>
-      <button id="btn-rep-later">稍後再說</button>
+      <button class="primary" id="btn-rep-save">Save</button>
+      <button id="btn-rep-later">Later</button>
       <span style="flex:1"></span>
-      <button id="btn-rep-open" style="display:none">開啟所在資料夾</button>
+      <button id="btn-rep-open" style="display:none">Open folder</button>
     </div>
   </div>
 </div>
@@ -544,24 +550,22 @@
 <!-- ── 變數驅動設定(取代原本內嵌的一長串表單)── -->
 <div id="varov" class="ov">
   <div class="rbx vbx">
-    <h3 id="wz-h">DUT 與量測設定</h3>
-    <div class="meta">設定屬性後按「套用」,會自動勾好該跑的測項</div>
+    <h3 id="wz-h">DUT properties</h3>
+    <div class="meta">Set the properties, then Apply to tick the items that should run</div>
     <div class="wzscope" id="wz-scope" style="display:none">
       <span id="wz-scope-txt"></span>
-      <button id="btn-wz-all">顯示全部變數</button>
+      <button id="btn-wz-all">Show all variables</button>
     </div>
 
     <div id="var-panel">
-      <div id="wz-body"><div class="empty">尚未載入 —— 需要先開啟專案</div></div>
+      <div id="wz-body" class="grow"><div class="empty">Not loaded — open a project first</div></div>
 
-      <fieldset class="fs"><legend>自訂變數</legend>
+      <fieldset class="fs"><legend>Custom variables</legend>
         <div id="vars"></div>
-        <div class="row"><button id="btn-var-add">+ 新增一列</button></div>
+        <div class="row"><button id="btn-var-add">+ Add row</button></div>
       </fieldset>
 
-      <p class="hint">預覽由本程式讀 <code>ConditionalExecution</code> 自己算,
-        語意已於 2026-08-20 以 69 筆樣本校準(正確率 97%)。剩下的誤差來自
-        帶有數值比較條件的項目 —— 那些會被標成「沒把握」單獨列出。</p>
+      <p class="hint">The preview is computed here from <code>ConditionalExecution</code>. Items whose conditions compare numbers are listed separately as low-confidence.</p>
 
       <div class="pred" id="pred" style="display:none">
         <div><b id="pred-n">—</b> <span id="pred-total"></span></div>
@@ -570,125 +574,121 @@
     </div>
 
     <div class="acts2">
-      <button class="primary" id="btn-wz-apply">套用 —— 勾好要跑的測項</button>
-      <button id="btn-var-done">取消</button>
+      <button class="primary" id="btn-wz-apply">Apply — tick the items to run</button>
+      <button id="btn-var-done">Cancel</button>
       <span style="flex:1"></span>
       <span class="wzlinks">
-        <a href="#" id="btn-var-push">寫入 ACQUA</a>
-        <a href="#" id="btn-var-read">讀回目前值</a>
-        <a href="#" id="btn-wz-reload">重讀選項</a>
+        <a href="#" id="btn-var-push">Write to ACQUA</a>
+        <a href="#" id="btn-var-read">Read current</a>
+        <a href="#" id="btn-wz-reload">Reload</a>
       </span>
     </div>
   </div>
 </div>
 
-<header>
-  <h1>ACQUA 測試自動化</h1>
-  <span class="badge" id="badge-backend">—</span>
-  <span class="badge" id="badge-conn">未連線</span>
-  <span class="badge" id="badge-proj">未開啟專案</span>
-  <a href="/acqua/plans" style="font-size:12px;color:var(--accent);text-decoration:none">測試計畫 →</a>
-  <a href="/" style="font-size:12px;color:var(--muted);text-decoration:none">← 首頁</a>
-  <button id="btn-records" class="hbtn">執行紀錄</button>
-  <button id="btn-clear-run" class="hbtn"
-          title="清掉這個服務殘留的執行紀錄與狀態(不會動 ACQUA 資料庫)">清除殘留</button>
-  <span class="badge live" id="badge-live"><i class="dot" id="live-dot"></i><span id="live-txt">連線中…</span></span>
-</header>
-
-<main>
-  <!-- ── 左:連線與選取 ────────────────────────── -->
+<script>window.__navPage = 'run';</script>
+<div class="shell">
+{% include '_nav.html' %}
+<main class="work">
+  <!-- ── 左欄:連線 → 專案 → DUT。整欄在自己裡面捲 ── -->
+  <div class="stack">
   <section class="panel">
-    <h2>1. 連線</h2>
+    <h2>1 · Connection</h2>
     <label>SQL Server</label>
     <input type="text" id="server" value="{{ config.get('database',{}).get('server','') }}">
-    <label>資料庫</label>
+    <label>Database</label>
     <div class="dbrow">
-      <select id="database"><option value="{{ config.get('database',{}).get('name','') }}">{{ config.get('database',{}).get('name','') or '(按掃描)' }}</option></select>
-      <button id="btn-scan" title="掃描伺服器上的 ACQUA 資料庫">掃描</button>
+      <select id="database"><option value="{{ config.get('database',{}).get('name','') }}">{{ config.get('database',{}).get('name','') or '(scan first)' }}</option></select>
+      <button id="btn-scan" title="Scan the server for ACQUA databases">Scan</button>
     </div>
     <p class="hint" id="db-hint"></p>
-    <div class="row"><button class="primary" id="btn-connect">連線</button></div>
+    <div class="row"><button class="primary" id="btn-connect">Connect</button></div>
 
-    <h2 style="margin-top:20px">2. 選擇專案</h2>
-    <label>專案群組</label>
+    <h2>2 · Project</h2>
+    <label>Group</label>
     <select id="group"></select>
-    <label>專案</label>
+    <label>Project</label>
     <select id="project"></select>
-    <div class="row"><button id="btn-open">開啟專案</button></div>
+    <div class="row"><button id="btn-open">Open</button></div>
 
-    <h2 style="margin-top:20px">3. 受測物 (DUT)</h2>
-    <label>量測物件</label>
-    <select id="mo"><option value="">(先開啟專案)</option></select>
+    <h2>3 · DUT</h2>
+    <label>Measurement object</label>
+    <select id="mo"><option value="">(open a project first)</option></select>
     <div class="row" style="margin-top:10px">
-      <button id="btn-mo">選定</button>
-      <button class="ghost" id="btn-mo-reload">重讀</button>
+      <button id="btn-mo">Select</button>
+      <button class="ghost" id="btn-mo-reload">Reload</button>
     </div>
-    <p class="hint" id="mo-hint">新的 DUT 要在 ACQUA 裡建立。</p>
+    <p class="hint" id="mo-hint">New DUTs must be created inside ACQUA.</p>
   </section>
 
-  <!-- ── 中:測項勾選 ─────────────────────────── -->
+  </div><!-- /stack -->
+
+  <!-- ── 中欄:測項 ── -->
   <section class="panel">
     <div class="hdr-row">
-      <h2>4. 選擇測項</h2>
-      <label class="sw"><input type="checkbox" id="sw-tree"><i></i>顯示階層架構</label>
+      <h2>4 · Test items</h2>
+      <label class="sw"><input type="checkbox" id="sw-tree"><i></i>Tree view</label>
     </div>
-    <p class="hint" id="sel-hint">標<span class="mtag">需人工</span>的會開視窗等人操作;
-      標<span class="stag">腳本</span>的可能會。</p>
+    <p class="hint" id="sel-hint">Items tagged <span class="mtag">manual</span> open a window and wait;
+      <span class="stag">script</span> items might.</p>
     <div class="row">
-      <input type="text" id="search" placeholder="關鍵字過濾(留空 = 全部)" style="flex:1">
-      <button id="btn-list">載入測項</button>
+      <input type="text" id="search" placeholder="Filter by keyword" style="flex:1">
+      <button id="btn-list">Load items</button>
     </div>
     <div class="row">
-      <button id="btn-expand">全部展開</button>
-      <button id="btn-collapse">全部收合</button>
-      <button id="btn-all">全選</button>
-      <button id="btn-none">全不選</button>
-      <button id="btn-failed">只選失敗的</button>
+      <button id="btn-expand">Expand</button>
+      <button id="btn-collapse">Collapse</button>
+      <button id="btn-all">All</button>
+      <button id="btn-none">None</button>
+      <button id="btn-failed">Failed only</button>
       <span style="flex:1"></span>
-      <span class="hint" id="sel-count">已選 0 項</span>
+      <span class="hint" id="sel-count">0 selected</span>
     </div>
 
-    <div class="smd-list" id="smds"><div class="empty">尚未載入測項</div></div>
+    <div class="smd-list grow" id="smds"><div class="empty">No items loaded</div></div>
 
     <!-- ── 把這一批存成計畫,之後在「測試計畫」頁可以叫出來接續跑 ── -->
     <div class="planbox">
       <div class="row">
-        <input type="text" id="plan-title" placeholder="計畫名稱(例:Kong 第一輪)" style="flex:1">
-        <button id="btn-plan-save">存成計畫</button>
+        <input type="text" id="plan-title" placeholder="Plan name" style="flex:1">
+        <button id="btn-plan-save">Save as plan</button>
       </div>
-      <input type="text" id="plan-desc" placeholder="說明(選填)">
-      <p class="hint">到 <a href="/acqua/plans">執行序列</a> 可以把多個計畫接起來跑。</p>
+      <input type="text" id="plan-desc" placeholder="Description (optional)">
+      <p class="hint">Chain plans together on the <a href="/acqua/plans">Sequence</a> page.</p>
     </div>
 
     <div class="row">
-      <button class="primary" id="btn-run">▶ 開始執行</button>
-      <button id="btn-pause" disabled>⏸ 暫停</button>
-      <button class="danger" id="btn-cancel" disabled>■ 中止</button>
-      <button id="btn-report">產生報告</button>
-      <button id="btn-csv">匯出 CSV</button>
+      <button class="primary" id="btn-run">▶ Run</button>
+      <button id="btn-pause" disabled>Pause</button>
+      <button class="danger" id="btn-cancel" disabled>Stop</button>
+      <button id="btn-report">Word report</button>
+      <button id="btn-csv">CSV</button>
     </div>
     <progress id="prog" value="0" max="100" style="display:none"></progress>
 
     <!-- 這三塊本來只是數字。使用者會盯著它們找明細,所以直接讓它們能點,
          再補一顆明顯的按鈕 —— 標頭那顆太容易被忽略。 -->
-    <div class="stats" id="stats" title="點一下看明細(依狀態碼分組)">
-      <div class="stat"><b id="s-total">0</b>總計</div>
-      <div class="stat ok"><b id="s-pass">0</b>PASS</div>
-      <div class="stat fail"><b id="s-fail">0</b>FAIL</div>
+    <div class="stats" id="stats" title="Click for the breakdown by status code">
+      <div class="stat"><b id="s-total">0</b>Total</div>
+      <div class="stat ok"><b id="s-pass">0</b>Pass</div>
+      <div class="stat fail"><b id="s-fail">0</b>Fail</div>
     </div>
     <div class="row" style="margin-top:8px">
-      <button class="primary" id="btn-detail" style="flex:1">
-        看明細 —— PASS / FAIL 各自依狀態碼分組</button>
+      <button class="primary" id="btn-detail" style="flex:1">Details by status</button>
+      <button id="btn-records">History</button>
     </div>
   </section>
 
   <!-- ── 右:日誌 ─────────────────────────────── -->
   <section class="panel">
-    <h2>執行日誌</h2>
+    <h2>Log</h2>
     <div id="log"></div>
-    <div class="row"><button id="btn-clearlog">清除畫面</button></div>
+    <div class="row" style="margin-top:10px">
+      <button class="ghost" id="btn-clearlog">Clear</button>
+    </div>
   </section>
 </main>
+</div>
 
 <script>
 window.__hasRunMini = true;   // 這一頁自己有 #mini,不要再疊共用的那個
@@ -699,26 +699,26 @@ let dimmed = new Set();
 
 // 每個操作的顯示名稱與「正常大概要多久」—— 超過就轉黃警告
 const OPS = {
-  '/acqua/api/connect':        ['連線資料庫',   10, 'ACQUA 正在連 SQL Server'],
-  '/acqua/api/refresh-groups': ['讀取專案群組',  5, ''],
-  '/acqua/api/open-project':   ['開啟專案',     25, 'ACQUA 要載入整個專案樹,這步最慢'],
-  '/acqua/api/select-mo':      ['選定受測物',    8, '找不到同名的會自動建立'],
-  '/acqua/api/list-smds':      ['載入測項',     10, '查 SQL 取得測項清單'],
-  '/acqua/api/variables':      ['變數讀寫',      8, ''],
-  '/acqua/api/values':         ['讀取數值結果', 15, ''],
-  '/acqua/api/report':         ['產生報告',     90, 'ACQUA 會開 Word,可能很久'],
+  '/acqua/api/connect':        ['Connecting',      10, 'ACQUA is contacting SQL Server'],
+  '/acqua/api/refresh-groups': ['Reading groups',  5, ''],
+  '/acqua/api/open-project':   ['Opening project', 25, 'ACQUA loads the whole tree — the slowest step'],
+  '/acqua/api/select-mo':      ['Selecting DUT',   8, ''],
+  '/acqua/api/list-smds':      ['Loading items',  10, 'Reading the item list from SQL'],
+  '/acqua/api/variables':      ['Variables',       8, ''],
+  '/acqua/api/values':         ['Reading values', 15, ''],
+  '/acqua/api/report':         ['Report',         90, 'ACQUA opens Word — this can take a while'],
 };
 
 let busyT = null, busyT0 = 0, busyAbort = null, busyExpect = 0, busyUserStop = false;
 
 function showBusy(url) {
-  const [label, expect, hint] = OPS[url] || ['處理中', 20, ''];
+  const [label, expect, hint] = OPS[url] || ['Working', 20, ''];
   busyExpect = expect;
   busyUserStop = false;
   busyT0 = performance.now();
   $('#busy').className = 'on';
   $('#b-title').textContent = label;
-  $('#b-sub').textContent = hint ? hint + `(一般約 ${expect} 秒)` : `一般約 ${expect} 秒`;
+  $('#b-sub').textContent = hint ? hint + ` (usually ~${expect}s)` : `usually ~${expect}s`;
   $('#b-time').textContent = '0.0s';
   $('#b-tail').textContent = '';
   $('#b-close').style.display = 'none';
@@ -732,7 +732,7 @@ function tickBusy() {
   $('#b-time').textContent = s.toFixed(1) + 's';
   if (s > busyExpect) {
     $('#busy').classList.add('slow');
-    $('#b-sub').textContent = `已超過預期的 ${busyExpect} 秒 —— ACQUA 可能正忙,或彈出了對話框擋住。`;
+    $('#b-sub').textContent = `Over the expected ${busyExpect}s — ACQUA may be busy or showing a dialog.`;
   }
   // 把最近幾行日誌顯示在框裡,讓人看得到「有在動」
   const lines = [...$('#log').childNodes].slice(-3).map(n => n.textContent);
@@ -758,7 +758,7 @@ $('#b-close').onclick = hideBusy;
 $('#b-abort').onclick = () => {
   busyUserStop = true;                 // 讓 catch 知道這是使用者主動停的,別再跳錯誤框
   if (busyAbort) busyAbort.abort();
-  addLog('已停止等待 —— 注意:ACQUA 那邊的動作還在跑,只是瀏覽器不等了', 'warn');
+  addLog('Stopped waiting — ACQUA is still working, the browser just stopped watching', 'warn');
   hideBusy();
 };
 
@@ -776,11 +776,11 @@ async function post(url, body, opts = {}) {
       body: JSON.stringify(body || {}), signal: busyAbort.signal,
     });
     clearTimeout(killer);
-    const j = await r.json().catch(() => ({ok: false, error: '回應不是合法的 JSON'}));
+    const j = await r.json().catch(() => ({ok: false, error: 'Response was not valid JSON'}));
     if (j.state) render(j.state);
     if (!j.ok) {
-      addLog('✗ ' + (j.error || '未知錯誤'), 'error');
-      if (!quiet) failBusy('失敗', j.error || '未知錯誤');
+      addLog('x ' + (j.error || 'Unknown error'), 'error');
+      if (!quiet) failBusy('Failed', j.error || 'Unknown error');
     } else if (!quiet) {
       hideBusy();
     }
@@ -790,12 +790,12 @@ async function post(url, body, opts = {}) {
     if (busyUserStop) return {ok: false, error: 'aborted by user'};
     const timedOut = busyAbort && busyAbort.signal.reason === 'timeout';
     const msg = timedOut
-      ? `等了 ${(hardTimeout / 1000).toFixed(0)} 秒還沒回應。\n` +
-        'ACQUA 可能彈出對話框在等人回應,或量測引擎忙碌中。\n' +
-        '請切到 ACQUA 視窗看看有沒有跳出東西。'
-      : ('連線中斷:' + (e.message || e));
+      ? `No response after ${(hardTimeout / 1000).toFixed(0)}s.\n` +
+        'ACQUA may be showing a dialog, or the engine is busy.\n' +
+        'Switch to the ACQUA window and check.'
+      : ('Connection lost: ' + (e.message || e));
     addLog('✗ ' + msg.replace(/\n/g, ' '), 'error');
-    if (!quiet) failBusy(timedOut ? '逾時' : '錯誤', msg);
+    if (!quiet) failBusy(timedOut ? 'Timed out' : 'Error', msg);
     return {ok: false, error: msg};
   } finally {
     busyAbort = null;
@@ -821,18 +821,14 @@ function render(s) {
     selected.clear();
     resultMap = {};
     wizGroups = []; wizScope = null; wizLoaded = false;
-    addLog('專案或資料庫已切換 —— 已清空勾選與快取', 'warn');
+    addLog('Project or database changed — selection and caches cleared', 'warn');
   }
   if (s.ctx) ctxKey = s.ctx;
 
   S = s;
   loadMos();                 // ctx 沒變就不會真的去打 API
-  $('#badge-backend').textContent = s.backend === 'com' ? 'COM(真實 ACQUA)' : '模擬模式';
-  $('#badge-backend').className = 'badge ' + (s.backend === 'com' ? 'com' : 'mock');
-  $('#badge-conn').textContent = s.connected ? `${s.server} / ${s.database}` : '未連線';
-  $('#badge-proj').textContent = s.open_project
-      ? `${s.open_group} / ${s.open_project}` + (s.measurement_object ? ` · ${s.measurement_object}` : '')
-      : '未開啟專案';
+  // 連線 / 專案狀態改由側邊欄與 drawer 顯示(見 _nav.html)——
+  // 原本那排會隨專案名稱長短換行,版面高度就跟著跳。
 
   // 專案群組下拉
   const g = $('#group');
@@ -856,13 +852,13 @@ function render(s) {
   if (s.running && s.current) NOTIFY.progress(s.current.index, s.current.total);
   if (_wasRunning && !s.running) {
     const sm = s.summary || {};
-    NOTIFY.done('測試結束', `${sm.passed || 0} PASS / ${sm.failed || 0} FAIL`);
+    NOTIFY.done('Run finished', `${sm.passed || 0} pass / ${sm.failed || 0} fail`);
     NOTIFY.progress(0, 0);
   }
   _wasRunning = !!s.running;
   // 暫停/繼續是同一顆按鈕 —— 暫停的實作是停掉視窗監看器,可以再開回來
   paused = !!s.paused;
-  $('#btn-pause').textContent = paused ? '▶ 繼續' : '⏸ 暫停';
+  $('#btn-pause').textContent = paused ? 'Resume' : 'Pause';
   $('#btn-pause').disabled  = !s.running;
   $('#btn-cancel').disabled = !s.running;
   $('#btn-run').disabled    = s.running;
@@ -894,12 +890,12 @@ function smdRow(s, indent) {
   return `<label class="smd${active ? ' active' : ''}${s.manual ? ' manual' : ''}${dim}" style="padding-left:${indent}px">
       <input type="checkbox" data-id="${s.row_id}" ${selected.has(s.row_id) ? 'checked' : ''}>
       <span class="title">${esc(s.title)}${
-        s.kind === 'manual' ? '<span class="mtag">需人工</span>'
-        : (s.kind === 'script' ? '<span class="stag" title="腳本測項 —— 可能會開視窗">腳本</span>' : '')
+        s.kind === 'manual' ? '<span class="mtag">manual</span>'
+        : (s.kind === 'script' ? '<span class="stag" title="Script item — may open a window">script</span>' : '')
       }</span>
       ${res ? `<span class="res ${res}">${res}</span>` : ''}
       ${s.manual ? `<button class="dots" data-wiz="${s.row_id}"
-          title="設定這個精靈要問的 DUT 屬性(會重新決定要跑哪些)">⋯</button>` : ''}
+          title="Set the DUT properties this wizard asks for">...</button>` : ''}
       <span class="rid">#${s.row_id}</span>
     </label>`;
 }
@@ -929,7 +925,7 @@ function allGroupPaths() {
 function renderSmds() {
   const box = $('#smds');
   const list = S.smds || [];
-  if (!list.length) { box.innerHTML = '<div class="empty">尚未載入測項</div>'; updCount(); return; }
+  if (!list.length) { box.innerHTML = '<div class="empty">No items loaded</div>'; updCount(); return; }
 
   if (!$('#sw-tree').checked) {
     box.innerHTML = list.map(s => smdRow(s, 11)).join('');
@@ -950,7 +946,7 @@ function renderSmds() {
               <span class="chev">▼</span>
               <span class="gname">${esc(segs[d])}</span>
             </span>
-            <span class="gcount">${kidsOf(prefix).length} 項</span>
+            <span class="gcount">${kidsOf(prefix).length}</span>
           </div>`;
       }
       prev = segs;
@@ -995,7 +991,7 @@ function syncGroupBoxes() {
 
 $('#sw-tree').onchange = renderSmds;
 
-const updCount = () => $('#sel-count').textContent = `已選 ${selected.size} 項`;
+const updCount = () => $('#sel-count').textContent = `${selected.size} selected`;
 
 // ── 事件繫結 ──────────────────────────────────
 $('#group').onchange = syncProjects;
@@ -1006,13 +1002,13 @@ function fillDatabases(list) {
   const acqua = list.filter(d => d.is_acqua);
   const other = list.filter(d => !d.is_acqua);
   sel.innerHTML =
-    acqua.map(d => `<option value="${d.name}">${d.name} — ${d.smds} 測項 / ${d.results} 筆結果</option>`).join('') +
-    (other.length ? '<optgroup label="非 ACQUA 資料庫(不能用)">' +
-      other.map(d => `<option value="${d.name}" disabled>${d.name}${d.online ? '' : ' — ' + (d.state || '離線')}</option>`).join('') +
+    acqua.map(d => `<option value="${d.name}">${d.name} — ${d.smds} items / ${d.results} results</option>`).join('') +
+    (other.length ? '<optgroup label="Not ACQUA databases">' +
+      other.map(d => `<option value="${d.name}" disabled>${d.name}${d.online ? '' : ' — ' + (d.state || 'offline')}</option>`).join('') +
       '</optgroup>' : '');
   if ([...sel.options].some(o => o.value === keep)) sel.value = keep;
   $('#db-hint').textContent =
-    `找到 ${acqua.length} 個 ACQUA 資料庫` + (other.length ? `,另有 ${other.length} 個不是` : '');
+    `${acqua.length} ACQUA database(s)` + (other.length ? `, ${other.length} other(s)` : '');
 }
 
 $('#btn-scan').onclick = async () => {
@@ -1031,10 +1027,10 @@ $('#btn-connect').onclick = async () => {
   const s = await post('/acqua/api/restore', {}, {quiet: true});
   if (!s.ok) return;
   if (s.restored) {
-    addLog('已接回上次的設定:' + (s.steps || []).filter(x => x.ok)
+    addLog('Restored previous setup: ' + (s.steps || []).filter(x => x.ok)
              .map(x => x.name).join('、'));
     (s.steps || []).filter(x => !x.ok).forEach(x =>
-      addLog(`接回「${x.name}」失敗:${x.detail || ''}`, 'warn'));
+      addLog(`Restore step "${x.name}" failed: ${x.detail || ''}`, 'warn'));
   } else if (s.note) {
     addLog(s.note, 'warn');
   }
@@ -1042,7 +1038,7 @@ $('#btn-connect').onclick = async () => {
 $('#btn-open').onclick = () =>
   post('/acqua/api/open-project', {group: $('#group').value, project: $('#project').value});
 $('#btn-mo').onclick = () => {
-  if (!$('#mo').value) { addLog('請先選一個量測物件', 'warn'); return; }
+  if (!$('#mo').value) { addLog('Select a measurement object first', 'warn'); return; }
   post('/acqua/api/select-mo', {title: $('#mo').value});
 };
 $('#btn-mo-reload').onclick = () => loadMos(true);
@@ -1064,13 +1060,13 @@ async function loadMos(force) {
   const keep = sel.value;
   sel.innerHTML = list.length
     ? list.map(m => `<option value="${esc(m)}">${esc(m)}</option>`).join('')
-    : `<option value="">${esc(r.note || '這個專案還沒有量測物件')}</option>`;
+    : `<option value="">${esc(r.note || 'No measurement objects in this project')}</option>`;
   // 已經選定的優先;否則沿用使用者剛剛挑的
   const want = S.measurement_object || keep;
   if (want && list.includes(want)) sel.value = want;
   $('#mo-hint').textContent = list.length
-    ? '新的 DUT 要在 ACQUA 裡建立。'
-    : '這個專案底下沒有量測物件 —— 請先在 ACQUA 裡建一個。';
+    ? 'New DUTs must be created inside ACQUA.'
+    : 'This project has no measurement objects — create one in ACQUA first.';
 }
 $('#btn-list').onclick = async () => {
   selected.clear();
@@ -1078,7 +1074,7 @@ $('#btn-list').onclick = async () => {
   // 測項多的時候(例如 MS Teams 那 4300 項)預設全部收起來,不然畫面爆掉
   if (r.ok && (r.state.smds || []).length > 150) {
     collapsed = allGroupPaths();
-    addLog(`測項較多(${r.state.smds.length} 項),已預設收合 —— 點資料夾展開`, 'warn');
+    addLog(`${r.state.smds.length} items — groups collapsed by default`, 'warn');
   } else {
     collapsed.clear();
   }
@@ -1116,12 +1112,12 @@ function renderWizard() {
   const box = $('#wz-body');
   if (!wizGroups.length) {
     $('#wz-scope').style.display = 'none';
-    $('#wz-h').textContent = 'DUT 與量測設定';
+    $('#wz-h').textContent = 'DUT properties';
     box.innerHTML = wizLoaded
-      ? '<div class="empty">這個專案沒有條件式。<br>'
-        + '<b>' + esc(S.open_project || '') + '</b> 的測項不是用變數挑的 —— '
-        + '直接回上一頁在清單上勾要跑的就好。</div>'
-      : '<div class="empty">尚未載入 —— 請先開啟專案,再按右下角「重讀選項」</div>';
+      ? '<div class="empty">This project has no conditional execution.<br>'
+        + '<b>' + esc(S.open_project || '') + '</b> does not pick items by variables — '
+        + 'just tick the items you want.</div>'
+      : '<div class="empty">Not loaded — open a project, then press Reload</div>';
     return;
   }
 
@@ -1132,22 +1128,22 @@ function renderWizard() {
     .filter(g => g.items.length);
 
   // 標題與提示列
-  $('#wz-h').textContent = wizScope || 'DUT 與量測設定';
+  $('#wz-h').textContent = wizScope || 'DUT properties';
   const bar = $('#wz-scope');
   if (wizScope) {
     const n = groups.reduce((a, g) => a + g.items.length, 0);
     const all = wizGroups.reduce((a, g) => a + g.items.length, 0);
     bar.style.display = '';
     $('#wz-scope-txt').innerHTML =
-      `只顯示「<b>${esc(wizScope)}</b>」管的 ${n} 個變數(全部共 ${all} 個)。`
-      + `<br><small>這個對應是從變數命名推的 —— 找不到想設的變數就按右邊。</small>`;
+      `Showing the ${n} variable(s) for <b>${esc(wizScope)}</b> (of ${all}).`
+      + `<br><small>Mapped by naming convention — press the button if something is missing.</small>`;
   } else {
     bar.style.display = 'none';
   }
 
   if (!groups.length) {
-    box.innerHTML = '<div class="empty">這個精靈沒有對應到任何變數 —— '
-                  + '按上面的「顯示全部變數」看看</div>';
+    box.innerHTML = '<div class="empty">No variables map to this wizard — '
+                  + 'try Show all variables</div>';
     return;
   }
   box.innerHTML = groups.map(g => `
@@ -1168,7 +1164,7 @@ function wizItem(it) {
     ).join('');
     return `<div class="wzi"><span class="nm">${esc(it.name)}</span>
               <span class="opts2">${opts}
-                <label><input type="radio" name="wz_${esc(it.name)}" value="" checked>不指定</label>
+                <label><input type="radio" name="wz_${esc(it.name)}" value="" checked>unset</label>
               </span></div>`;
   }
   if (it.kind === 'bool') {
@@ -1176,27 +1172,27 @@ function wizItem(it) {
               <span class="nm">${esc(it.name)}</span></label></div>`;
   }
   return `<div class="wzi"><span class="nm">${esc(it.name)}</span>
-            <input type="text" data-num="${esc(it.name)}" placeholder="數值(留空 = 不指定)"
+            <input type="text" data-num="${esc(it.name)}" placeholder="value (blank = unset)"
                    style="flex:1;min-width:120px"></div>`;
 }
 
 async function loadWizard() {
   let r;
   try { r = await (await fetch('/acqua/api/wizard-options')).json(); }
-  catch (e) { addLog('讀取精靈選項失敗:' + e, 'warn'); return; }
+  catch (e) { addLog('Loading wizard options failed: ' + e, 'warn'); return; }
   wizGroups = r.state?.wizard_groups || [];
   wizScopes = r.state?.wizard_scopes || {};
   wizLoaded = true;
   renderWizard();
   const n = wizGroups.reduce((a, g) => a + g.items.length, 0);
-  addLog(`精靈選項:從條件式反推出 ${n} 個變數,${wizGroups.length} 組`);
+  addLog(`Wizard: ${n} variable(s) in ${wizGroups.length} group(s)`);
 }
 
 function addVarRow(name = '', value = '') {
   const d = document.createElement('div');
   d.className = 'var';
-  d.innerHTML = `<input type="text" class="vname" placeholder="變數名稱" value="${name}">
-                 <input type="text" class="vval" placeholder="值" value="${value}">
+  d.innerHTML = `<input type="text" class="vname" placeholder="variable" value="${name}">
+                 <input type="text" class="vval" placeholder="value" value="${value}">
                  <button class="del">✕</button>`;
   d.querySelector('.del').onclick = () => d.remove();
   $('#vars').appendChild(d);
@@ -1229,10 +1225,10 @@ function showPrediction(p) {
   if (!p) { $('#pred').style.display = 'none'; return; }
   $('#pred').style.display = '';
   $('#pred-n').textContent = p.will_run;
-  $('#pred-total').textContent = `/ ${p.total} 個測項會執行(略過 ${p.skipped} 個)`;
+  $('#pred-total').textContent = `of ${p.total} will run (${p.skipped} skipped)`;
   const pct = p.total ? Math.round(p.will_run / p.total * 100) : 0;
-  let s = `約佔 ${pct}%`;
-  if (p.uncertain) s += ` ・ ⚠️ ${p.uncertain} 個判定沒把握(條件用到量測產生的變數)`;
+  let s = `${pct}%`;
+  if (p.uncertain) s += ` · ${p.uncertain} low-confidence (conditions use measured variables)`;
   $('#pred-sub').textContent = s;
   updateVarSummary();
 }
@@ -1260,14 +1256,14 @@ function updateVarSummary() {
   });
   const on = [...document.querySelectorAll('#wz-body input[data-var]:checked')]
     .map(el => el.dataset.var);
-  if (on.length) parts.push(on.length <= 2 ? on.join('、') : `${on.slice(0,2).join('、')} 等 ${on.length} 項`);
+  if (on.length) parts.push(on.length <= 2 ? on.join(', ') : `${on.slice(0,2).join(', ')} +${on.length - 2}`);
   const custom = [...document.querySelectorAll('#vars .var .vname')]
     .filter(el => el.value.trim()).length;
-  if (custom) parts.push(`自訂 ${custom} 個`);
+  if (custom) parts.push(`${custom} custom`);
 
   // 摘要列已經拿掉了(原本的「4. 執行設定」)—— 這裡只留 log,
   // 讓「設定了什麼」還是查得到。
-  if (parts.length) addLog('DUT 屬性:' + parts.join(' ・ '));
+  if (parts.length) addLog('DUT properties: ' + parts.join(' · '));
 }
 
 $('#btn-var-add').onclick  = () => addVarRow();
@@ -1283,17 +1279,17 @@ $('#btn-wz-apply').onclick = async () => {
 };
 
 async function autoPick({closeAfter} = {}) {
-  showBusy('依條件挑選測項');
+  showBusy('Picking items');
   let r;
   try { r = await post('/acqua/api/predict', {variables: collectVars()}, {quiet: true}); hideBusy(); }
-  catch (e) { failBusy('錯誤', String(e)); return; }
-  if (!r.ok) { failBusy('挑選失敗', r.error || ''); return; }
+  catch (e) { failBusy('Error', String(e)); return; }
+  if (!r.ok) { failBusy('Pick failed', r.error || ''); return; }
 
   const p = r.state?.prediction;
-  if (!p || !p.run_ids) { addLog('預測沒有回傳可勾選的項目', 'warn'); return; }
+  if (!p || !p.run_ids) { addLog('The prediction returned nothing to tick', 'warn'); return; }
 
   if (!(S.smds || []).length) {
-    addLog('請先按「載入測項」,不然沒有東西可以勾', 'warn');
+    addLog('Load the items first', 'warn');
     return;
   }
 
@@ -1308,15 +1304,15 @@ async function autoPick({closeAfter} = {}) {
   renderSmds();
   showPrediction(p);
 
-  let msg = `已勾選 ${selected.size} 項`;
+  let msg = `${selected.size} ticked`;
   const mex = (p.manual_excluded || []).length;
-  if (mex) msg += `,排除 ${mex} 個需人工操作的項目`;
-  if (p.uncertain) msg += `,另有 ${p.uncertain} 項判定沒把握(已勾,請自行確認)`;
-  if (missed) msg += `。有 ${missed} 項不在目前的清單裡(可能被關鍵字過濾掉了)`;
+  if (mex) msg += `, ${mex} manual item(s) excluded`;
+  if (p.uncertain) msg += `, ${p.uncertain} low-confidence (ticked — please check)`;
+  if (missed) msg += `. ${missed} not in the current list (filtered out?)`;
   addLog(msg, mex || missed ? 'warn' : 'info');
 
   if (mex) {
-    addLog('排除的項目:' + (p.manual_excluded || []).map(x => x.title).join('、'), 'warn');
+    addLog('Excluded: ' + (p.manual_excluded || []).map(x => x.title).join(', '), 'warn');
   }
   if (closeAfter) closeVarOv();
 }
@@ -1328,10 +1324,10 @@ $('#btn-var-read').onclick = async (e) => {
   showBusy('/acqua/api/variables');
   let r;
   try { r = await (await fetch('/acqua/api/variables')).json(); hideBusy(); }
-  catch (e) { failBusy('錯誤', String(e)); return; }
+  catch (e) { failBusy('Error', String(e)); return; }
 
   const vs = r.state?.variables || [];
-  if (!vs.length) { addLog('ACQUA 目前沒有任何變數', 'warn'); return; }
+  if (!vs.length) { addLog('ACQUA has no variables set', 'warn'); return; }
 
   // 通用回填:不認得任何特定變數名,照精靈生出來的控制項對。
   const known = new Set();
@@ -1354,31 +1350,31 @@ $('#btn-var-read').onclick = async (e) => {
 
   $('#pred').style.display = 'none';
   updateVarSummary();
-  addLog(`已讀回 ${vs.length} 個變數(${vs.length - extra.length} 個回填表單,`
-         + `${extra.length} 個放進自訂列)`);
+  addLog(`Read ${vs.length} variable(s) (${vs.length - extra.length} into the form,`
+         + `${extra.length} as custom rows)`);
 };
 
 
 $('#btn-run').onclick = async () => {
   askNotifyPermission();          // 借這一下使用者動作去要通知授權
   if (!selected.size) {
-    addLog('✗ 沒有勾選任何測項', 'error');
-    showRunFail('沒有勾選任何測項。\n\n可以用「依條件勾選」依 DUT 屬性自動挑,'
-              + '或在下方清單手動勾。');
+    addLog('x Nothing selected', 'error');
+    showRunFail('Nothing selected.\n\nUse the DUT properties wizard to pick automatically,'
+              + ' or tick items in the list below.');
     return;
   }
   const picked = (S.smds || []).filter(s => selected.has(s.row_id));
   const manual = picked.filter(s => s.kind === 'manual');
   const script = picked.filter(s => s.kind === 'script');
   if (manual.length) {
-    addLog(`⚠️ 勾選中有 ${manual.length} 個需人工操作的項目,跑到會停下來等你:`
+    addLog(`${manual.length} manual item(s) selected — the run will pause for you:`
          + manual.map(s => s.title).join('、'), 'warn');
   }
   // 腳本測項不一定會開視窗(實測 switch devices 就不會),所以不擋,只提醒。
   // 真的跳出來的話,視窗監看器會端到網頁上讓你回答。
   if (script.length) {
-    addLog(`這批有 ${script.length} 個腳本測項,可能會開視窗 —— `
-         + `跳出來時會在這裡請你回答`, 'warn');
+    addLog(`${script.length} script item(s) in this batch — they may open a window; `
+         + `you will be asked here if they do`, 'warn');
   }
 
   openNameOv();               // 先問這一批叫什麼,再真的送出
@@ -1402,9 +1398,9 @@ function openNameOv() {
   const recent = rnRecent();
   $('#run-name').value = recent[0] || '';
   $('#rn-info').textContent =
-    `這一批 ${selected.size} 項 ・ ${S.open_project || ''} / ${S.measurement_object || ''}`;
+    `${selected.size} items · ${S.open_project || ''} / ${S.measurement_object || ''}`;
   $('#rn-recent').innerHTML = recent.length
-    ? '<span class="hint" style="align-self:center">最近用過:</span>'
+    ? '<span class="hint" style="align-self:center">Recent:</span>'
       + recent.map(x => `<button data-rn="${esc(x)}" title="${esc(x)}">${esc(x)}</button>`).join('')
     : '';
   $('#nameov').classList.add('on');
@@ -1427,8 +1423,8 @@ $('#run-name').addEventListener('keydown', (e) => {
 async function startRun(comment) {
   $('#nameov').classList.remove('on');
   rnRemember(comment);
-  showRunPending('正在送出…',
-    `已選 ${selected.size} 項 ・ ${comment || '(未命名)'}`);
+  showRunPending('Submitting…',
+    `${selected.size} items · ${comment || '(unnamed)'}`);
 
   // 帶上「我是在哪個上下文挑的」—— 後端會比對,不一致就拒絕。
   // 光靠 row_id 擋不住:不同資料庫的同一個 id 都存在,指的卻是不同測項。
@@ -1436,14 +1432,14 @@ async function startRun(comment) {
                        {row_ids: [...selected], ctx: S.ctx, comment},
                        {quiet: true, timeout: 30});
   if (!j.ok) {
-    showRunFail(j.error || '送出失敗');
-    NOTIFY.attention('送出失敗', j.error || '');
+    showRunFail(j.error || 'Submit failed');
+    NOTIFY.attention('Submit failed', j.error || '');
     return;
   }
 
-  $('#r-title').textContent = 'ACQUA 準備中…';
-  $('#r-meta').textContent  = `已送出 ${j.queued} 項`;
-  addLog(`已送出 ${j.queued} 項 ・ 這批的名稱:${comment || '(未命名)'}`, 'info');
+  $('#r-title').textContent = 'ACQUA is preparing…';
+  $('#r-meta').textContent  = `${j.queued} items submitted`;
+  addLog(`Submitted ${j.queued} items · name "${comment || '(unnamed)'}"`, 'info');
 }
 
 // ── ② 執行紀錄:PASS / FAIL 兩大類,各自按狀態碼分組 ────
@@ -1474,7 +1470,7 @@ function rcGroups(results) {
     .map(([code, items]) => {
       const info = codeInfo[code] || {};
       return {code, items, ours: !!info.ours, unknown: !!info.unknown,
-              name: info.name || (code === 'x' ? '沒有狀態碼' : 'Unknown(' + code + ')')};
+              name: info.name || (code === 'x' ? 'No status code' : 'Unknown(' + code + ')')};
     });
 }
 
@@ -1486,19 +1482,19 @@ function renderRecords() {
   $('#rc-t').textContent = res.length;
   $('#rc-head').textContent = res.length
     ? `${S.open_project || ''} / ${S.measurement_object || ''}`
-    : '這一輪還沒有任何結果';
+    : 'No results yet';
 
   const block = (label, list, cls) => {
     if (!list.length) return '';
-    return `<div class="rc-grp"><h4>${label}(${list.length} 項)</h4>`
+    return `<div class="rc-grp"><h4>${label} (${list.length})</h4>`
       + rcGroups(list).map(g => {
           const key = cls + ':' + g.code;
           const open = rcOpen.has(key);
           return `<div class="rc-row" data-k="${esc(key)}">
               <span class="code">${g.code === 'x' ? '—' : g.code}</span>
               <span class="nm">${esc(g.name)}</span>
-              ${g.unknown ? '<span class="ours">沒有回報,不是判定失敗</span>'
-                 : (g.ours ? '<span class="ours">我們標的</span>' : '')}
+              ${g.unknown ? '<span class="ours">not reported — not a verdict</span>'
+                 : (g.ours ? '<span class="ours">ours</span>' : '')}
               <span class="n">${g.items.length}</span>
               <span class="hint">${open ? '▲' : '▼'}</span>
             </div>`
@@ -1513,7 +1509,7 @@ function renderRecords() {
   };
 
   const html = block('PASS', pass, 'p') + block('FAIL', fail, 'f');
-  $('#rc-body').innerHTML = html || '<div class="empty">還沒有結果 —— 跑一批看看</div>';
+  $('#rc-body').innerHTML = html || '<div class="empty">No results yet</div>';
 }
 
 $('#rc-body').onclick = (e) => {
@@ -1537,19 +1533,7 @@ $('#btn-rec-csv').onclick   = () => { location.href = '/acqua/api/results.csv'; 
 // ── ③ 清除殘留 ─────────────────────────────────
 // 同一台機器可能有好幾個 port 各跑過一輪,或上一輪跑到一半就掛了 ——
 // running 卡在 True,新的一批就送不出去。這顆把我們這邊歸零。
-$('#btn-clear-run').onclick = async () => {
-  if (!confirm('清掉這個服務殘留的執行紀錄與狀態?(不會動 ACQUA 資料庫裡的結果)')) return;
-  let r = await post('/acqua/api/clear-run', {}, {quiet: true});
-  if (!r.ok && r.running) {
-    if (!confirm(r.error + ' —— 仍要強制清除嗎?')) return;
-    r = await post('/acqua/api/clear-run', {force: true}, {quiet: true});
-  }
-  if (!r.ok) { addLog('清除失敗:' + (r.error || ''), 'error'); return; }
-  resultMap = {};
-  rcOpen.clear();
-  addLog('已清除殘留的執行紀錄'
-       + (r.was_stale ? '(原本卡在執行中,但工作執行緒是閒的)' : ''), 'warn');
-};
+// 「清除殘留」搬到側邊欄的 drawer 裡(見 _nav.html)。
 
 let paused = false;
 let _wasRunning = false;
@@ -1566,17 +1550,17 @@ window.addEventListener('beforeunload', (e) => {
   if (leavingInternally) return;            // 站內換頁,進度跟著走
   if (S && S.running) {
     e.preventDefault();
-    e.returnValue = '測試會繼續在背景執行。但關掉頁面後,遇到需要回答的視窗就沒人處理了。';
+    e.returnValue = 'Tests keep running in the background, but nobody will answer ACQUA dialogs once this page is closed.';
     return e.returnValue;
   }
 });
 $('#btn-pause').onclick = async () => {
   await fetch(paused ? '/acqua/api/resume' : '/acqua/api/pause', {method:'POST'});
-  addLog(paused ? '已繼續' : '已暫停', paused ? 'info' : 'warn');
+  addLog(paused ? 'Resumed' : 'Paused', paused ? 'info' : 'warn');
 };
 $('#btn-cancel').onclick = async () => {
   const r = await (await fetch('/acqua/api/cancel', {method:'POST'})).json();
-  addLog('■ 中止:' + (r.note || ''), 'warn');
+  addLog('Stop: ' + (r.note || ''), 'warn');
 };
 
 // ── 通知:讓人不用一直盯著螢幕 ────────────────
@@ -1640,7 +1624,7 @@ const NOTIFY = {
   /** 需要人來處理 —— 三種一起上 */
   attention(title, body) {
     this.beep(3);
-    this.flash('⚠️ 需要你 — ' + this._baseTitle);
+    this.flash('Needs you — ' + this._baseTitle);
     this.desktop(title, body);
   },
   /** 好消息,叫一聲就好 */
@@ -1673,8 +1657,8 @@ function renderBlocking(b) {
   // 只在「新的」視窗出現時叫一次,不要每次輪詢都嗶
   if (b.hwnd !== _lastBlockHwnd) {
     _lastBlockHwnd = b.hwnd;
-    NOTIFY.attention('ACQUA 在等你操作',
-                     `${b.title}\n${(b.buttons || []).join(' / ') || '需要處理這個視窗'}`);
+    NOTIFY.attention('ACQUA needs input',
+                     `${b.title}\n${(b.buttons || []).join(' / ') || 'This window needs an answer'}`);
   }
   box.style.display = '';
   $('#rb-title').textContent = `[${b.cls}] ${b.title}`;
@@ -1692,7 +1676,7 @@ function renderBlocking(b) {
     btns.appendChild(el);
   }
   const close = document.createElement('button');
-  close.textContent = '直接關閉視窗';
+  close.textContent = 'Close the window';
   close.onclick = async () => {
     await post('/acqua/api/blocking', {hwnd: b.hwnd, action: 'close'});
     renderBlocking(null);
@@ -1703,7 +1687,7 @@ function renderBlocking(b) {
 // ── 把目前勾選的存成計畫 ──────────────────────
 // 計畫清單與接續執行在 /acqua/plans 那一頁,這裡只負責「存」。
 $('#btn-plan-save').onclick = async () => {
-  if (!selected.size) { addLog('沒有勾選任何測項,無法存成計畫', 'warn'); return; }
+  if (!selected.size) { addLog('Nothing selected — cannot save a plan', 'warn'); return; }
   // 存「路徑 + 名稱」而不只是 row_id —— 計畫可能之後在別的資料庫執行,
   // 而 row_id 跨庫必然重疊且指到別的測項(見 acqua/context.py)。
   const byId = new Map((S.smds || []).map(s => [s.row_id, s]));
@@ -1728,7 +1712,7 @@ $('#btn-plan-save').onclick = async () => {
     + (x.path ? `<br><small>${esc(x.path)}</small>` : '') + '</div>').join('');
   $('#pv-msg').textContent = '';
   $('#btn-pv-save').disabled = false;
-  $('#btn-pv-save').textContent = '確認儲存';
+  $('#btn-pv-save').textContent = 'Save';
   $('#planov').classList.add('on');
   $('#pv-title').focus();
   $('#pv-title').select();
@@ -1755,14 +1739,14 @@ $('#btn-pv-save').onclick = async () => {
     variables: collectVars(),
   }, {quiet: true});
   if (!r.ok) {
-    $('#pv-msg').innerHTML = `<b style="color:var(--fail)">${esc(r.error || '儲存失敗')}</b>`;
+    $('#pv-msg').innerHTML = `<b style="color:var(--fail)">${esc(r.error || 'Save failed')}</b>`;
     $('#btn-pv-save').disabled = false;
-    addLog('儲存失敗:' + (r.error || ''), 'error');
+    addLog('Save failed: ' + (r.error || ''), 'error');
     return;
   }
 
-  addLog(`已存成計畫「${r.plan.title}」(${r.plan.count} 項)——`
-       + ` 可以到「測試計畫」頁叫出來跑`);
+  addLog(`Saved plan "${r.plan.title}" (${r.plan.count} items) —`
+       + ` run it from the Sequence page`);
 
   // 存好就把輸入框與勾選清掉 —— 不清的話很容易把同一批重複存好幾次
   $('#plan-title').value = '';
@@ -1771,12 +1755,12 @@ $('#btn-pv-save').onclick = async () => {
   renderSmds();
   updCount();
 
-  $('#btn-pv-cancel').textContent = '關閉';
+  $('#btn-pv-cancel').textContent = 'Close';
   let left = 3;
   const tick = () => {
     $('#pv-msg').innerHTML =
-      `<span class="pv-ok">✓ 已存成計畫「${esc(r.plan.title)}」(${r.plan.count} 項)</span>`
-      + `<br><small>勾選與輸入框已清空 ・ ${left} 秒後自動關閉</small>`;
+      `<span class="pv-ok">Saved "${esc(r.plan.title)}" (${r.plan.count} items)</span>`
+      + `<br><small>Selection cleared · closing in ${left}s</small>`;
     if (left-- <= 0) closePlanOv();
   };
   clearInterval(pvTimer);
@@ -1791,8 +1775,8 @@ $('#btn-report').onclick = async () => {
   const r = await post('/acqua/api/report', {});
   if (!r.ok) return;
   repSrc = r.result || '';
-  $('#rep-src').textContent = `暫存:${repSrc}`
-      + (r.size ? `(${(r.size / 1024).toFixed(0)} KB)` : '');
+  $('#rep-src').textContent = `Staged at ${repSrc}`
+      + (r.size ? ` (${(r.size / 1024).toFixed(0)} KB)` : '');
   $('#rep-name').value = r.suggest_name || '';
   $('#rep-dir').value  = r.suggest_dir || '';
   $('#rep-msg').textContent = '';
@@ -1812,17 +1796,17 @@ async function saveReport(overwrite) {
     $('#btn-rep-save').disabled = true;
     $('#btn-rep-open').style.display = '';
     $('#btn-rep-open').dataset.path = r.path;
-    addLog('報告已存到 ' + r.path);
-    NOTIFY.desktop('報告已存檔', r.path);
+    addLog('Report saved to ' + r.path);
+    NOTIFY.desktop('Report saved', r.path);
     repSrc = '';                       // 已經搬走了,別再說「留在暫存」
 
     // 事情做完了就該收起來。留三秒讓人看清楚存到哪,
     // 但只要動到這個視窗(想按開啟資料夾)就取消自動關閉。
-    $('#btn-rep-later').textContent = '關閉視窗';
+    $('#btn-rep-later').textContent = 'Close';
     let left = 3;
     const tick = () => {
-      $('#rep-msg').innerHTML = `已存到 <b>${esc(r.path)}</b>`
-        + `<br><small>${left} 秒後自動關閉</small>`;
+      $('#rep-msg').innerHTML = `Saved to <b>${esc(r.path)}</b>`
+        + `<br><small>Closing in ${left}s</small>`;
       if (left-- <= 0) { clearInterval(repTimer); repTimer = null; closeRepOv(); }
     };
     clearInterval(repTimer);
@@ -1836,7 +1820,7 @@ async function saveReport(overwrite) {
 ${r.path}`)) return saveReport(true);
     return;
   }
-  $('#rep-msg').innerHTML = `<b style="color:var(--fail)">${esc(r.error || '存檔失敗')}</b>`;
+  $('#rep-msg').innerHTML = `<b style="color:var(--fail)">${esc(r.error || 'Save failed')}</b>`;
 }
 
 let repTimer = null;
@@ -1845,7 +1829,7 @@ function closeRepOv() {
   clearInterval(repTimer);
   repTimer = null;
   $('#repov').classList.remove('on');
-  if (repSrc) addLog('報告留在暫存資料夾:' + repSrc, 'warn');
+  if (repSrc) addLog('Report left in the staging folder: ' + repSrc, 'warn');
 }
 
 // 使用者一動這個視窗就別自動關 —— 他可能正要按「開啟所在資料夾」
@@ -1854,7 +1838,7 @@ $('#repov').addEventListener('mousemove', () => {
   clearInterval(repTimer);
   repTimer = null;
   const m = $('#rep-msg').querySelector('small');
-  if (m) m.textContent = '（已取消自動關閉）';
+  if (m) m.textContent = '(auto-close cancelled)';
 }, {passive: true});
 
 $('#btn-rep-save').onclick  = () => saveReport(false);
@@ -1884,7 +1868,7 @@ function showRunPending(title, sub) {
   runWatch = setTimeout(() => {
     if (runPending) {
       $('#r-meta').textContent =
-        '已等 45 秒還沒開始 —— ACQUA 可能跳了對話框,或量測引擎忙碌中。請切到 ACQUA 視窗看看。';
+        '45s without starting — ACQUA may be showing a dialog, or the engine is busy. Check the ACQUA window.';
     }
   }, 45000);
 }
@@ -1894,9 +1878,9 @@ function showRunFail(msg) {
   clearTimeout(runWatch);
   const ov = $('#runov');
   ov.className = 'ov on failed';
-  $('#r-title').textContent = '無法開始';
+  $('#r-title').textContent = 'Could not start';
   $('#r-meta').textContent = '';
-  $('#r-fail-msg').textContent = msg || '未知原因';
+  $('#r-fail-msg').textContent = msg || 'Unknown reason';
 }
 
 function hideRunOverlay() {
@@ -1908,7 +1892,7 @@ function hideRunOverlay() {
 function fmtDur(s) {
   if (!isFinite(s) || s < 0) return '—';
   const m = Math.floor(s / 60), ss = Math.round(s % 60);
-  return m ? `${m} 分 ${ss} 秒` : `${ss} 秒`;
+  return m ? `${m}m ${ss}s` : `${ss}s`;
 }
 
 function renderRunOverlay(s) {
@@ -1943,9 +1927,9 @@ function renderRunOverlay(s) {
   let eta = '';
   if (done >= 2 && total > done) {
     const per = el / done;
-    eta = ` ・ 平均每項 ${fmtDur(per)} ・ 預估還要 ${fmtDur(per * (total - done))}`;
+    eta = ` · ${fmtDur(per)} per item · ~${fmtDur(per * (total - done))} left`;
   } else if (done > 0 && total > done) {
-    eta = ' ・ 預估時間計算中(至少要完成 2 項)';
+    eta = ' · estimating…';
   }
   syncMini(s, done, total, eta);
 
@@ -1957,19 +1941,19 @@ function renderRunOverlay(s) {
   $('#r-total').textContent = total;
   $('#r-bar').style.width = total ? `${Math.round(done / total * 100)}%` : '0%';
 
-  $('#r-title').textContent = s.cancel_requested ? '停止中(等當前這筆結束)' : '測試進行中';
+  $('#r-title').textContent = s.cancel_requested ? 'Stopping…' : 'Running';
   $('#r-meta').textContent =
     `${s.database || ''} · ${s.open_project || ''} · ${s.measurement_object || ''}`;
 
   // 當前測項 + 它的階層
   const smd = (s.smds || []).find(x => x.title === cur.title);
   $('#r-path').textContent = smd?.path || '';
-  $('#r-name').textContent = cur.title || '準備中…';
+  $('#r-name').textContent = cur.title || 'Preparing…';
 
   $('#r-pass').textContent = s.summary.passed;
   $('#r-fail').textContent = s.summary.failed;
   $('#r-left').textContent = Math.max(0, total - done);
-  $('#r-eta').textContent = `已跑 ${fmtDur(el)}${eta}`;
+  $('#r-eta').textContent = `${fmtDur(el)} elapsed${eta}`;
 
   $('#r-log').textContent =
     [...$('#log').childNodes].slice(-4).map(n => n.textContent).join('\\n');
@@ -1983,15 +1967,15 @@ function syncMini(s, done, total, eta) {
   m.classList.toggle('stopping', !!s.cancel_requested);
   if (!runHidden || !(s.running || runPending)) return;
   if (runPending && !s.running) {
-    $('#m-title').textContent = 'ACQUA 準備中…';
+    $('#m-title').textContent = 'ACQUA is preparing…';
     $('#m-idx').textContent = '—';
     $('#m-total').textContent = total || '?';
     $('#m-bar').style.width = '34%';
-    $('#m-name').textContent = '等 ACQUA 開始這一批';
+    $('#m-name').textContent = 'Waiting for ACQUA to start';
     return;
   }
   const cur = s.current || {};
-  $('#m-title').textContent = s.cancel_requested ? '停止中…' : '測試進行中';
+  $('#m-title').textContent = s.cancel_requested ? 'Stopping…' : 'Running';
   $('#m-idx').textContent = cur.index || 0;
   $('#m-total').textContent = total;
   $('#m-bar').style.width = total ? `${Math.round(done / total * 100)}%` : '0%';
@@ -2002,9 +1986,9 @@ function syncMini(s, done, total, eta) {
 }
 
 $('#r-stop').onclick = async () => {
-  $('#r-title').textContent = '停止中(等當前這筆結束)';
+  $('#r-title').textContent = 'Stopping (after the current item)';
   $('#runov').classList.add('stopping');
-  addLog('已要求停止 —— ACQUA 會在當前這筆測項結束後中止', 'warn');
+  addLog('Stop requested — ACQUA stops after the current item', 'warn');
   await fetch('/acqua/api/cancel', {method: 'POST'});
 };
 $('#r-hide').onclick = () => {
@@ -2050,10 +2034,10 @@ async function checkLastRun() {
   $('#rs-fail').textContent = d.failed_count;
   $('#rs-left').textContent = d.remaining_count;
   $('#rs-detail').textContent =
-    (d.state === 'running' ? '狀態:上次執行沒有正常結束(伺服器被關掉或當機)\\n'
-                           : '狀態:上次被使用者中止\\n')
-    + '接下來要跑:' + d.remaining.slice(0, 3).map(x => x.title).join('、')
-    + (d.remaining_count > 3 ? ` …等 ${d.remaining_count} 項` : '');
+    (d.state === 'running' ? 'The last run did not finish cleanly' + String.fromCharCode(10)
+     : 'The last run was stopped by the user' + String.fromCharCode(10))
+    + 'Next: ' + d.remaining.slice(0, 3).map(x => x.title).join(', ')
+    + (d.remaining_count > 3 ? ` … ${d.remaining_count} total` : '');
   $('#resumeov').classList.add('on');
 }
 
@@ -2063,12 +2047,12 @@ $('#rs-go').onclick = async () => {
   $('#resumeov').classList.remove('on');
   let d;
   try { d = await (await fetch('/acqua/api/last-run')).json(); }
-  catch (e) { addLog('讀取上次紀錄失敗', 'error'); return; }
+  catch (e) { addLog('Could not read the last run record', 'error'); return; }
   const rest = (d && d.remaining) || [];
-  if (!rest.length) { addLog('沒有剩下的項目', 'warn'); return; }
+  if (!rest.length) { addLog('Nothing left to run', 'warn'); return; }
 
   if (!(S.smds || []).length) {
-    addLog('請先按「載入測項」,才能把上次沒跑完的勾起來', 'warn');
+    addLog('Load the items first so the unfinished ones can be ticked', 'warn');
     return;
   }
   selected.clear();
@@ -2078,14 +2062,14 @@ $('#rs-go').onclick = async () => {
   const keep = new Set([...selected]);
   dimmed = new Set((S.smds || []).map(s => s.row_id).filter(id => !keep.has(id)));
   renderSmds();
-  addLog(`已把上次沒跑完的 ${selected.size} 項勾起來`
-       + (missed ? `(有 ${missed} 項不在目前清單裡)` : '')
-       + ' —— 確認後按「開始執行」', missed ? 'warn' : 'info');
+  addLog(`Ticked the ${selected.size} unfinished item(s)`
+       + (missed ? ` (${missed} not in the current list)` : '')
+       + ' — check them, then press Run', missed ? 'warn' : 'info');
 };
 $('#rs-drop').onclick = async () => {
   $('#resumeov').classList.remove('on');
   await fetch('/acqua/api/last-run/dismiss', {method: 'POST'});
-  addLog('已清除上次的執行紀錄');
+  addLog('Previous run record cleared');
 };
 
 // ── SSE:即時日誌與狀態 ────────────────────────
@@ -2101,9 +2085,9 @@ let liveMode = 'poll';       // sse | poll | dead
 let sse = null, sseRetry = 0, sseTimer = null;
 
 function setLive(mode, text) {
+  // 連線指示改在側邊欄那顆點(見 _nav.html)—— 這裡只留模式,
+  // 供 SSE/輪詢的切換邏輯判斷用。
   liveMode = mode;
-  $('#live-dot').className = 'dot ' + ({sse: 'ok', poll: 'poll', dead: 'dead'}[mode] || '');
-  $('#live-txt').textContent = text;
 }
 
 // 把新事件補進日誌(輪詢與 SSE 共用,靠 seq 去重)
@@ -2133,10 +2117,10 @@ async function poll() {
     ]);
     applyEvents(ev.events);
     render(st);
-    if (liveMode === 'dead') setLive('poll', '輪詢中(SSE 斷線)');
+    if (liveMode === 'dead') setLive('poll', 'polling');
     return st;
   } catch (e) {
-    setLive('dead', '連不上伺服器');
+    setLive('dead', 'offline');
     return null;
   }
 }
@@ -2154,7 +2138,7 @@ function connectSSE() {
   try { if (sse) sse.close(); } catch {}
   sse = new EventSource('/acqua/api/stream?since=' + lastSeq);
 
-  sse.onopen = () => { sseRetry = 0; setLive('sse', '即時連線'); };
+  sse.onopen = () => { sseRetry = 0; setLive('sse', 'live'); };
 
   sse.onmessage = ev => {
     let d;
@@ -2165,7 +2149,7 @@ function connectSSE() {
 
   sse.onerror = () => {
     try { sse.close(); } catch {}
-    setLive('poll', '輪詢中(SSE 斷線)');
+    setLive('poll', 'polling');
     // 指數退避重連,最多 30 秒一次
     sseRetry = Math.min(sseRetry + 1, 6);
     clearTimeout(sseTimer);
@@ -2179,7 +2163,7 @@ document.addEventListener('visibilitychange', () => {
 });
 
 (async () => {
-  setLive('poll', '連線中…');
+  setLive('poll', 'connecting');
   await poll();
   schedulePoll();
   connectSSE();

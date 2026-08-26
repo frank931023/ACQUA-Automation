@@ -33,14 +33,14 @@
               white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 </style>
 
-<div id="rmini" title="點一下回到測試頁">
-  <div class="h"><i class="d"></i><span id="rm-title">測試進行中</span></div>
+<div id="rmini" title="Click to expand">
+  <div class="h"><i class="d"></i><span id="rm-title">Running</span></div>
   <div class="b">
     <div class="n"><span id="rm-i">0</span><small> / <span id="rm-n">0</span></small></div>
     <div class="bar"><i id="rm-bar" style="width:0%"></i></div>
     <div class="s">
-      <span class="p">PASS <b id="rm-p">0</b></span>
-      <span class="f">FAIL <b id="rm-f">0</b></span>
+      <span class="p">Pass <b id="rm-p">0</b></span>
+      <span class="f">Fail <b id="rm-f">0</b></span>
       <span id="rm-eta"></span>
     </div>
     <div class="t" id="rm-name"></div>
@@ -67,7 +67,7 @@
     }
     location.href = '/acqua/';
   };
-  box.title = '點一下展開';
+  box.title = 'Click to expand';
 
   let t0 = null, seen = 0;
 
@@ -92,7 +92,7 @@
 
     // 宿主說了算的階段(沒有伺服器端進度可用)
     if (host && host.active && !s.running) {
-      el('rm-title').textContent = host.title || '進行中';
+      el('rm-title').textContent = host.title || 'Running';
       el('rm-i').textContent = host.index || 0;
       el('rm-n').textContent = host.total || 0;
       el('rm-bar').style.width = (host.percent || 0) + '%';
@@ -109,8 +109,8 @@
     const done = s.summary ? s.summary.total : 0;
     if (t0 === null) { t0 = Date.now(); seen = done; }
 
-    el('rm-title').textContent = s.cancel_requested ? '停止中…'
-      : ((host && host.title) || '測試進行中');
+    el('rm-title').textContent = s.cancel_requested ? 'Stopping…'
+      : ((host && host.title) || 'Running');
     el('rm-i').textContent = cur.index || done;
     el('rm-n').textContent = total || '?';
     el('rm-bar').style.width = total ? Math.round(done / total * 100) + '%' : '0%';
@@ -125,8 +125,8 @@
       const per = (Date.now() - t0) / dn / 1000;
       const left = Math.round(per * (total - done));
       el('rm-eta').textContent = left > 60
-        ? '約剩 ' + Math.floor(left / 60) + ' 分 ' + (left % 60) + ' 秒'
-        : '約剩 ' + left + ' 秒';
+        ? '~' + Math.floor(left / 60) + 'm ' + (left % 60) + 's left'
+        : '~' + left + 's left';
     }
   }
 

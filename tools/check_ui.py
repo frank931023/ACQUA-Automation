@@ -53,7 +53,8 @@ def scripts_of(html):
 
 
 PAGES = ["templates/index.html", "templates/plans.html",
-         "templates/home.html", "templates/_runmini.html"]
+         "templates/home.html", "templates/soundproofroom.html",
+         "templates/_runmini.html"]
 
 # 共用 partial 的元素給宿主頁面用,所以要合在一起看
 SHARED = read("templates/_runmini.html")
@@ -196,7 +197,7 @@ for fn, needs in NEED.items():
     check("backend.%s 有前置檢查" % fn, ok or not needs)
 
 check("/api/run 送出前先擋前置條件",
-      'error="還沒開啟專案' in app and 'error="還沒選定量測物件' in app)
+      'error="No project open"' in app and 'error="No measurement object selected"' in app)
 check("/api/run 同步驗證測項歸屬", '"check_rows"' in app)
 
 
@@ -220,7 +221,7 @@ pl_html = read("templates/plans.html")
 check("存成計畫先跳確認視窗", 'id="planov"' in idx_html and "btn-pv-save" in idx_html)
 check("確認視窗列出勾選的項目", 'id="pv-items"' in idx_html)
 check("存好後顯示成功並倒數關閉",
-      "已存成計畫" in idx_html and "秒後自動關閉" in idx_html)
+      "Saved plan" in idx_html and "Closing in" in idx_html)
 check("存好後清空輸入框與勾選",
       "$('#plan-title').value = '';" in idx_html and "selected.clear();" in idx_html)
 
@@ -229,7 +230,7 @@ check("刪除要先跳視窗", 'id="delov"' in pl_html)
 check("刪除要把名稱完整打一次",
       "$('#dl-input').value.trim() === p.title" in pl_html)
 check("名稱沒對上時刪除鈕是停用的", "$('#dl-go').disabled = !same" in pl_html)
-check("刪除後顯示成功字樣", "已刪除" in pl_html)
+check("刪除後顯示成功字樣", "Deleted \"" in pl_html)
 
 check("計畫庫有關鍵字搜尋", 'id="q"' in pl_html and "function matches(p)" in pl_html)
 check("搜尋涵蓋名稱/說明/來源/setup",
@@ -264,7 +265,7 @@ check("縮小視窗涵蓋整個序列(含移動階段)",
       and "window.__miniInfo === 'function'" in read("templates/_runmini.html"))
 check("跑完列出產生的 Word", "madeDocs.push" in pl_html and "dn-files" in pl_html)
 check("完成視窗五秒後自動關閉", "秒後自動關閉" in pl_html and "closeRunOv" in pl_html)
-check("滑鼠一動就取消自動關閉", "已取消自動關閉" in pl_html)
+check("滑鼠一動就取消自動關閉", "auto-close cancelled" in pl_html)
 check("舊的手動 setup 對話框已移除",
       "btwov" not in pl_html and "waitSetup" not in pl_html)
 
@@ -298,7 +299,7 @@ check("存計畫時帶序號", "occ: s.occ" in idx_html)
 check("測項分類看型別也看標題",
       "def _classifier" in com and "script_smd_types" in com)
 check("mock 後端有同樣的分類", "def _classifier" in read("acqua/backend_mock.py"))
-check("腳本測項會事先提醒", "個腳本測項" in idx_html)
+check("腳本測項會事先提醒", "script item(s) in this batch" in idx_html)
 
 # 精靈變數:看它怎麼被使用,不看名字前綴
 check("精靈變數靠關係運算子篩選",
@@ -340,6 +341,12 @@ check("有開機自動啟動的安裝腳本",
 check("序列可以拖曳排序", "dragstart" in pl_html and "data-grip" in pl_html)
 check("縮小後點一下回到原本的視窗", "__miniRestore" in pl_html
       and "__miniRestore" in read("templates/_runmini.html"))
+# 側邊欄三頁 + 3D 頁都要有,而且 logo 要能回首頁
+_nav = read("templates/_nav.html")
+for _p in ("index", "plans", "soundproofroom"):
+    check("%s 掛了側邊欄" % _p, "_nav.html" in read("templates/%s.html" % _p))
+check("logo 連到首頁", 'class="logo" href="/"' in _nav)
+check("同一張卡的段落之間有間距", ".panel > h2 ~ h2" in read("templates/_ui.html"))
 check("有涵蓋率盤點工具",
       os.path.exists(os.path.join(ROOT, "tools", "survey.py")))
 
@@ -351,7 +358,7 @@ check("時間與名稱都可正反排",
                                  "title_asc", "title_desc")))
 check("一頁十筆", "const PAGE = 10" in pl_html)
 check("有上一頁 / 下一頁", 'id="pg-prev"' in pl_html and 'id="pg-next"' in pl_html)
-check("顯示目前第幾頁", "第 ${page} / ${pages} 頁" in pl_html)
+check("顯示目前第幾頁", "Page ${page} of ${pages}" in pl_html)
 check("換搜尋或排序會回第一頁", pl_html.count("page = 1;") >= 3)
 check("過濾後頁數縮水會自動修正", "if (page > pages) page = pages;" in pl_html)
 

@@ -118,9 +118,9 @@ def _cmd(_cmd_name, timeout=600, **kwargs):
     (例如切換硬體設定),同名會撞成 TypeError。
     """
     if worker is None or not worker.ready.is_set():
-        return jsonify(ok=False, error="工作執行緒尚未就緒"), 503
+        return jsonify(ok=False, error="Worker thread is not ready"), 503
     if worker.init_error:
-        return jsonify(ok=False, error=f"後端初始化失敗:{worker.init_error}"), 500
+        return jsonify(ok=False, error=f"Backend initialisation failed: {worker.init_error}"), 500
     try:
         result = worker.submit(_cmd_name, **kwargs).wait(timeout=timeout)
         return jsonify(ok=True, result=result, state=state.snapshot())
@@ -276,7 +276,7 @@ def api_restore():
 
     if not want.get("project"):
         return jsonify(ok=True, restored=False,
-                       note="這個資料庫還沒有用過,請自己選一次 —— 之後就會記住",
+                       note="This database has not been used yet — pick a project once and it will be remembered",
                        steps=r.steps, state=state.snapshot())
 
     # 專案還在不在?不在就不要嘗試,直接說清楚
@@ -286,7 +286,7 @@ def api_restore():
         hit = next((g for g, ps in groups.items() if proj in ps), None)
         if hit is None:
             return jsonify(ok=True, restored=False,
-                           note=f"上次用的專案「{proj}」不在這個資料庫裡了",
+                           note=f"The last project \"{proj}\" is no longer in this database",
                            steps=r.steps, state=state.snapshot())
         grp = hit                                # 群組換了名字,專案還在
 
@@ -327,7 +327,7 @@ def api_select_mo():
     target = config.get("target", {})
     title = body.get("title") or target.get("measurement_object", "")
     if not title:
-        return jsonify(ok=False, error="請先選一個量測物件"), 400
+        return jsonify(ok=False, error="Select a measurement object first"), 400
     # 前端給的名稱一律來自下拉選單(既有的),所以不嘗試建立 ——
     # ACQUA 的 AddMeasurementObject 實測回 -1 不動作,詳見 backend_com。
     resp = _cmd("select_mo", timeout=120, title=title, create_if_missing=False)
@@ -418,11 +418,11 @@ def api_run():
     body = request.get_json(silent=True) or {}
 
     if state.running:
-        return jsonify(ok=False, error="已經有一批測試在執行中"), 409
+        return jsonify(ok=False, error="A run is already in progress"), 409
 
     row_ids = [int(r) for r in (body.get("row_ids") or [])]
     if not row_ids:
-        return jsonify(ok=False, error="沒有勾選任何測項"), 400
+        return jsonify(ok=False, error="Nothing selected"), 400
 
     # ⭐ 呼叫端要聲明「我是在哪個上下文挑的」,不一致就拒絕。
     #
@@ -445,10 +445,10 @@ def api_run():
     #    「ACQUA 準備中…」,錯誤只進 log 沒人看到。
     s = state.snapshot()
     if not s.get("open_project"):
-        return jsonify(ok=False, error="還沒開啟專案 —— 請先完成上面的「開啟專案」"), 400
+        return jsonify(ok=False, error="No project open"), 400
     if not s.get("measurement_object"):
         return jsonify(ok=False,
-                       error="還沒選定量測物件 —— 請先按「選定 / 建立」"), 400
+                       error="No measurement object selected"), 400
 
     # ⭐ 歸屬驗證要同步做完再送 —— 這批 row_id 真的屬於目前這個專案嗎?
     #    跨資料庫的 idTreeItem 必然重疊,送錯不會報錯,只會安靜地跑到
@@ -509,7 +509,7 @@ def api_clear_run():
     busy = bool(worker is not None and worker.busy())
     if state.running and busy and not body.get("force"):
         return jsonify(ok=False, running=True,
-                       error="真的有一批測試正在執行 —— 請先按中止"), 409
+                       error="A run really is in progress — stop it first"), 409
 
     stale = state.running and not busy
     state.clear_results()
@@ -544,7 +544,7 @@ def api_cancel():
 def api_pause():
     """[*] 暫停(可恢復)。逐項模式停在兩筆之間;整批模式停止關對話框。"""
     if worker is None:
-        return jsonify(ok=False, error="工作執行緒尚未就緒"), 503
+        return jsonify(ok=False, error="Worker thread is not ready"), 503
     worker.request_pause()
     return jsonify(ok=True)
 
@@ -557,7 +557,7 @@ def api_resume():
     繼續 = 監看器開回來,那些對話框又會被處理,量測自然往下走。
     """
     if worker is None:
-        return jsonify(ok=False, error="工作執行緒尚未就緒"), 503
+        return jsonify(ok=False, error="Worker thread is not ready"), 503
     worker.request_resume()
     return jsonify(ok=True)
 
@@ -580,7 +580,7 @@ def api_blocking():
     #    排進去的命令要等整批跑完才會被處理。而阻塞視窗只在量測進行中
     #    才出現,排隊等於永遠不會被回答。
     if worker is None:
-        return jsonify(ok=False, error="工作執行緒尚未就緒"), 503
+        return jsonify(ok=False, error="Worker thread is not ready"), 503
     try:
         ok = worker.answer_blocking(hwnd, action)
     except Exception as exc:                                # noqa: BLE001
@@ -611,7 +611,7 @@ def api_plans():
     body = request.get_json(silent=True) or {}
     items = body.get("items") or []
     if not items:
-        return jsonify(ok=False, error="沒有任何測項,不能存成計畫"), 400
+        return jsonify(ok=False, error="No items — cannot save a plan"), 400
     s = state.snapshot()
     # source = 「這批測項是在哪裡挑的」。跨庫執行時要靠它知道切去哪,
     # 也要靠 ctx 判斷能不能直接用 row_id(見 acqua/context.py)。
@@ -638,7 +638,7 @@ def api_plan_one(plan_id):
 
     d = plans.load(plan_id)
     if d is None:
-        return jsonify(ok=False, error="找不到這個計畫"), 404
+        return jsonify(ok=False, error="Plan not found"), 404
 
     if request.method == "POST":
         # 只改「描述性」欄位 —— 測項與 source 不在這裡動,
@@ -668,18 +668,18 @@ def api_mos():
     """
     s = state.snapshot()
     if not (s.get("server") and s.get("database")):
-        return jsonify(ok=True, mos=[], note="尚未連線")
+        return jsonify(ok=True, mos=[], note="Not connected")
 
     # ctx = server|database|idProject
     parts = str(s.get("ctx") or "").split("|")
     pid = int(parts[2]) if len(parts) == 3 and parts[2].isdigit() else None
     if pid is None and not s.get("open_project"):
-        return jsonify(ok=True, mos=[], note="尚未開啟專案")
+        return jsonify(ok=True, mos=[], note="No project open")
 
     from acqua.sqlcat import SqlCatalog
     cat = SqlCatalog(state)
     if not cat.connect(s["server"], s["database"]):
-        return jsonify(ok=False, error="SQL 連線失敗"), 400
+        return jsonify(ok=False, error="SQL connection failed"), 400
     try:
         mos = cat.list_mobjects(project_id=pid,
                                 project_title=s.get("open_project"))
@@ -701,7 +701,7 @@ def api_plan_mos(plan_id):
     """
     plan = plans.load(plan_id)
     if plan is None:
-        return jsonify(ok=False, error="找不到這個計畫"), 404
+        return jsonify(ok=False, error="Plan not found"), 404
     src = plan.get("source") or {}
     # 舊計畫沒記 server(那時候只存了 database)—— 退回目前連的那台。
     # 實務上只有一台 SQL Server,真正決定內容的是 database。
@@ -709,7 +709,7 @@ def api_plan_mos(plan_id):
               or config.get("database", {}).get("server", ""))
     database = src.get("database")
     if not (server and database):
-        return jsonify(ok=True, mos=[], note="這個計畫沒有記來源資料庫(舊格式)")
+        return jsonify(ok=True, mos=[], note="This plan has no source database (legacy format)")
 
     # ctx = server|database|idProject
     pid = None
@@ -720,7 +720,7 @@ def api_plan_mos(plan_id):
     from acqua.sqlcat import SqlCatalog
     cat = SqlCatalog(state)
     if not cat.connect(server, database):
-        return jsonify(ok=False, error=f"連不上 {server} / {database}"), 400
+        return jsonify(ok=False, error=f"Cannot reach {server} / {database}"), 400
     try:
         mos = cat.list_mobjects(project_id=pid, project_title=src.get("project"))
     except Exception as exc:                                # noqa: BLE001
@@ -747,9 +747,9 @@ def api_plan_prepare(plan_id):
     """
     plan = plans.load(plan_id)
     if plan is None:
-        return jsonify(ok=False, error="找不到這個計畫"), 404
+        return jsonify(ok=False, error="Plan not found"), 404
     if state.running:
-        return jsonify(ok=False, error="已經有一批測試在執行中"), 409
+        return jsonify(ok=False, error="A run is already in progress"), 409
 
     src = plan.get("source") or {}
     r = StepRunner(worker)
@@ -832,7 +832,7 @@ def api_hardware():
     body = request.get_json(silent=True) or {}
     name = body.get("name")
     if not name:
-        return jsonify(ok=False, error="需要 name"), 400
+        return jsonify(ok=False, error="name is required"), 400
     return _cmd("set_hardware", timeout=60, name=name)
 
 
@@ -896,27 +896,27 @@ def api_report_save():
     src = os.path.abspath(body.get("src") or "")
     stage = _report_stage_dir()
     if not (src.startswith(stage + os.sep) and os.path.isfile(src)):
-        return jsonify(ok=False, error="找不到剛產生的報告檔,請重新產生一次"), 400
+        return jsonify(ok=False, error="Cannot find the generated report — generate it again"), 400
 
     directory = (body.get("directory") or "").strip()
     filename = (body.get("filename") or "").strip()
     if not directory or not filename:
-        return jsonify(ok=False, error="請填寫檔名與存放資料夾"), 400
+        return jsonify(ok=False, error="File name and folder are required"), 400
     if os.path.basename(filename) != filename:
-        return jsonify(ok=False, error="檔名不能包含路徑分隔符號"), 400
+        return jsonify(ok=False, error="The file name cannot contain a path separator"), 400
     if not os.path.splitext(filename)[1]:
         filename += os.path.splitext(src)[1] or ".doc"
 
     dst = os.path.join(os.path.abspath(directory), filename)
     if os.path.exists(dst) and not body.get("overwrite"):
         return jsonify(ok=False, exists=True, path=dst,
-                       error=f"「{filename}」已經存在,要覆蓋嗎?"), 409
+                       error=f"\"{filename}\" already exists — overwrite?"), 409
     try:
         os.makedirs(os.path.dirname(dst), exist_ok=True)
         shutil.copy2(src, dst)      # 先複製再刪 —— 中途失敗暫存檔還在
         os.unlink(src)
     except Exception as exc:                                # noqa: BLE001
-        return jsonify(ok=False, error=f"存檔失敗:{exc}"), 400
+        return jsonify(ok=False, error=f"Save failed: {exc}"), 400
 
     prefs.set_report_dir(os.path.dirname(dst))
     state.log(f"報告已存到 {dst}")
@@ -928,7 +928,7 @@ def api_report_reveal():
     """在檔案總管裡選取這個檔案。伺服器就跑在使用者自己的機器上。"""
     path = os.path.abspath((request.get_json(silent=True) or {}).get("path") or "")
     if not os.path.exists(path):
-        return jsonify(ok=False, error="檔案不存在"), 400
+        return jsonify(ok=False, error="File does not exist"), 400
     try:
         subprocess.Popen(["explorer", "/select,", path])
     except Exception as exc:                                # noqa: BLE001

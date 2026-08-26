@@ -171,7 +171,9 @@ check("紀錄可按狀態碼展開看是哪些 SMD", "rcGroups(" in idx and "rc-
 check("清除殘留路由存在", '"/api/clear-run"' in ap)
 check("能分辨真忙與殘留旗標", "def busy(self)" in read("acqua/worker.py"))
 check("清除不動 ACQUA 資料庫", "不會動 ACQUA 資料庫" in ap)
-check("前端有清除按鈕", 'id="btn-clear-run"' in idx)
+check("清除殘留放在側邊欄的 drawer",
+      'id="drw-clear"' in read("templates/_nav.html")
+      and "/acqua/api/clear-run" in read("templates/_nav.html"))
 
 # 三個點只該出現在需人工的測項 —— 其他測項沒有精靈可設定
 check("三個點只給需人工的測項",
@@ -191,10 +193,10 @@ check("prepare 會切庫 / 開專案 / 選 MO / 載入 / 對應",
       all(k in ap for k in ('切換到 {where}', '開啟專案 {proj}',
                             '選定量測物件 {mo}', '"載入測項"', '"resolve_items"')))
 check("序列頁有 setup 編輯", 'id="setupov"' in pl2 and "su-save" in pl2)
-check("序列頁會標出要切換資料庫", "切換到 ${esc(s.database)}" in pl2)
+check("序列頁會標出要切換資料庫", "switch to ${esc(s.database)}" in pl2)
 check("步驟之間會處理 setup", "movingToSetup(" in pl2)
 check("序列存在瀏覽器,重整不會不見", "acqua.sequence" in pl2)
-check("對應不到會問過使用者才繼續", "對應不到,只會跑" in pl2)
+check("對應不到會問過使用者才繼續", "item(s) unmatched" in pl2)
 
 
 print("\n" + ("結論:全部通過" if not fails

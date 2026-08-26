@@ -3,8 +3,24 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>聲學測試室 3D</title>
+<title>Test room 3D — ACQUA Automation</title>
 <link rel="stylesheet" href="/soundproofroom/src/style.css">
+<style>
+  /* 側欄需要的 token。這一頁是深色的,所以 panel/line/fg 都跟另外兩頁不同 ——
+     只補這幾個,不套整套 _ui.html,免得蓋掉 3D 頁自己的深色配色。 */
+  :root {
+    --brand:#009B85; --brand-soft:#009B8522;
+    --panel:#161b22; --line:#262d36; --sunk:#1c2129;
+    --fg:#e6e9ef; --muted:#8b93a1; --faint:#6d7683;
+    --fail:#f85149; --r-sm:7px; --nav:56px;
+  }
+  html, body { height:100%; margin:0; overflow:hidden; }
+  .shell { display:grid; grid-template-columns:var(--nav) 1fr;
+           height:100vh; overflow:hidden; }
+  .shell #app { height:100vh; min-width:0; }
+  .hint { font-size:11px; color:var(--muted); margin:0; }
+  button { font:inherit; }
+</style>
 
 <!--
   免 build 模式:用瀏覽器原生 importmap 把裸模組名 `three` 對應到 CDN,
@@ -20,16 +36,20 @@
 </script>
 </head>
 <body>
+<script>window.__navPage = 'room';</script>
+<div class="shell">
+{% include '_nav.html' %}
 <div id="app">
   <div id="viewport">
     <div id="hint">
-      <b>左鍵拖曳物件</b>:喇叭陣列・大螢幕・HATS・兩張桌台・兩組麥克風吊架<br>
-      <b>左鍵拖曳空白處</b>:旋轉視角 ・ <b>滾輪</b>:縮放 ・ <b>右鍵</b>:平移
+      <b>Drag an object</b>: speaker array · display · HATS · tables · mic booms<br>
+      <b>Drag empty space</b>: orbit · <b>Wheel</b>: zoom · <b>Right-drag</b>: pan
     </div>
   </div>
 
   <aside id="panel"></aside>
 </div>
+</div><!-- /shell -->
 
 <div id="err" style="display:none;position:fixed;inset:0;background:#0d1116;color:#f85149;
      padding:40px;font:14px/1.8 Consolas,monospace;white-space:pre-wrap;z-index:999"></div>

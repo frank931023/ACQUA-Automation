@@ -1,0 +1,59 @@
+{
+  "id": "20260826-155733-4b15",
+  "created": "2026-08-26T15:57:33",
+  "title": "0826-test1",
+  "description": "",
+  "updated": "2026-08-26T15:57:33",
+  "items": [
+    {
+      "row_id": 6857,
+      "title": "7.1.1 Send path - delay",
+      "path": "ZoomRooms_v2020Oct_v1 / COS_auto_Tiny / Basic Test_using Mouth only",
+      "occ": 0,
+      "sig": "b5af1f61",
+      "smd_type": 12
+    },
+    {
+      "row_id": 6858,
+      "title": "7.1.5 Send path - frequency response_Conf",
+      "path": "ZoomRooms_v2020Oct_v1 / COS_auto_Tiny / Basic Test_using Mouth only",
+      "occ": 0,
+      "sig": "d8525582",
+      "smd_type": 1
+    },
+    {
+      "row_id": 6859,
+      "title": "7.2.1 Receive path - delay",
+      "path": "ZoomRooms_v2020Oct_v1 / COS_auto_Tiny / Basic Test_using Mouth only",
+      "occ": 0,
+      "sig": "27dc69b9",
+      "smd_type": 12
+    },
+    {
+      "row_id": 6860,
+      "title": "7.2.3 Receive path - frequency response_Conf",
+      "path": "ZoomRooms_v2020Oct_v1 / COS_auto_Tiny / Basic Test_using Mouth only",
+      "occ": 0,
+      "sig": "9dce6c2d",
+      "smd_type": 1
+    }
+  ],
+  "count": 4,
+  "variables": {},
+  "source": {
+    "server": "AUTOMATION_ACQU\\ACQUADBSERVER",
+    "database": "ACQUA_auto_v2026Aug",
+    "group": "(Unsorted Projects)",
+    "project": "ZoomRooms_v2020Oct_v1",
+    "measurement_object": "Front_of_Room",
+    "ctx": "AUTOMATION_ACQU\\ACQUADBSERVER|ACQUA_auto_v2026Aug|1",
+    "tree_fingerprint": "7e10c14f931b52fa:1477"
+  },
+  "manual_excluded": [],
+  "setup": {
+    "name": "",
+    "note": "",
+    "params": {},
+    "_note": "尚未自動化:目前只會在序列中間停下來提示人工調整"
+  }
+}

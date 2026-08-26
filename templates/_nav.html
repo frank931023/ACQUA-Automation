@@ -1,0 +1,156 @@
+{# 側邊欄 + overlay drawer。三頁共用。
+
+   為什麼是 drawer 而不是頁首那一排:
+   頁首那排會隨著專案名稱長短而換行,版面高度就跟著跳 ——
+   跟「寬高任何時候都不改變」直接衝突。側邊欄寬度固定,
+   內容再長也只在 drawer 裡面捲。
+
+   宿主頁面要提供:
+     window.__navPage   目前頁面的代號('run' / 'plans' / 'room')
+   會用到的共用 API(有才用,沒有就跳過):
+     /acqua/api/status      顯示連線狀態
+     /acqua/api/clear-run   清除殘留
+#}
+<style>
+  .nav { background:var(--brand); display:flex; flex-direction:column;
+         align-items:center; padding:10px 0; gap:4px; }
+  .nav .logo { width:30px; height:30px; border-radius:8px; background:#ffffff26;
+               color:#fff; display:flex; align-items:center; justify-content:center;
+               font-size:13px; font-weight:700; margin-bottom:8px; flex:none;
+               text-decoration:none; transition:background .12s; }
+  .nav .logo:hover { background:#ffffff45; color:#fff; }
+  .nav a, .nav button.navb {
+        width:38px; height:38px; border-radius:9px; border:none;
+        background:transparent; color:#ffffffb0; cursor:pointer;
+        display:flex; align-items:center; justify-content:center;
+        font-size:16px; text-decoration:none; transition:background .12s, color .12s; }
+  .nav a:hover, .nav button.navb:hover { background:#ffffff24; color:#fff; }
+  .nav a.on { background:#fff; color:var(--brand); }
+  .nav .sp { flex:1; }
+  .nav .st { width:8px; height:8px; border-radius:50%; background:#ffffff70;
+             margin:6px 0; flex:none; }
+  .nav .st.ok { background:#fff; }
+  .nav .st.dead { background:#ffd0cb; }
+
+  /* drawer */
+  .drw { position:fixed; inset:0; z-index:300; display:none; }
+  .drw.on { display:block; }
+  .drw .scrim { position:absolute; inset:0; background:#0a201d55;
+                backdrop-filter:blur(2px); }
+  .drw .pane { position:absolute; left:0; top:0; bottom:0; width:min(330px,86vw);
+               background:var(--panel); border-right:1px solid var(--line);
+               display:flex; flex-direction:column;
+               box-shadow:6px 0 30px #00302a1f;
+               animation:drwin .16s ease-out; }
+  @keyframes drwin { from { transform:translateX(-14px); opacity:.4 } }
+  .drw h4 { margin:0; padding:16px 18px 10px; font-size:13px; font-weight:700; }
+  .drw .sec { padding:10px 18px; border-top:1px solid var(--line); }
+  .drw .sec > div:first-child { font-size:10px; color:var(--faint);
+        text-transform:uppercase; letter-spacing:.08em; margin-bottom:7px; }
+  .drw .kv { font-size:12px; color:var(--muted); word-break:break-all;
+             padding:2px 0; }
+  .drw .kv b { color:var(--fg); font-weight:600; }
+  .drw .links { padding:6px 10px; flex:1; overflow-y:auto; }
+  .drw .links a { display:flex; align-items:center; gap:10px;
+                  padding:9px 10px; border-radius:var(--r-sm);
+                  color:var(--fg); text-decoration:none; font-size:13px; }
+  .drw .links a:hover { background:var(--brand-soft); color:var(--brand); }
+  .drw .links a.on { background:var(--brand); color:#fff; }
+  .drw .links a i { font-style:normal; width:18px; text-align:center; }
+  .drw .foot { padding:12px 18px; border-top:1px solid var(--line); }
+  .drw .foot button { width:100%; }
+</style>
+
+<nav class="nav">
+  <a class="logo" href="/" title="Home">A</a>
+  <button class="navb" id="nav-menu" title="Menu">☰</button>
+  <a href="/acqua/" id="nav-run" title="Test run">▶</a>
+  <a href="/acqua/plans" id="nav-plans" title="Sequence">⧉</a>
+  <a href="/soundproofroom" id="nav-room" title="Room">◍</a>
+  <div class="sp"></div>
+  <div class="st" id="nav-dot" title="Connection"></div>
+</nav>
+
+<div class="drw" id="drawer">
+  <div class="scrim" id="drw-scrim"></div>
+  <div class="pane">
+    <h4>ACQUA Automation</h4>
+    <div class="links">
+      <a href="/acqua/" data-p="run"><i>▶</i>Test run</a>
+      <a href="/acqua/plans" data-p="plans"><i>⧉</i>Sequence</a>
+      <a href="/soundproofroom" data-p="room"><i>◍</i>Room</a>
+    </div>
+    <div class="sec">
+      <div>Connection</div>
+      <div class="kv" id="drw-backend">—</div>
+      <div class="kv" id="drw-db">—</div>
+      <div class="kv" id="drw-proj">—</div>
+    </div>
+    <div class="foot">
+      <button class="danger" id="drw-clear">Clear stale run state</button>
+      <div class="hint" style="margin-top:7px">
+        Resets this service's run records and flags. Does not touch the ACQUA database.
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  const q = (s) => document.querySelector(s);
+  const drw = q('#drawer');
+  const open = () => drw.classList.add('on');
+  const close = () => drw.classList.remove('on');
+
+  q('#nav-menu').onclick = open;
+  q('#drw-scrim').onclick = close;
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') close();
+  });
+
+  // 標出目前這一頁
+  const page = window.__navPage || '';
+  const cur = q('#nav-' + page);
+  if (cur) cur.classList.add('on');
+  const link = q('.drw .links a[data-p="' + page + '"]');
+  if (link) link.classList.add('on');
+
+  // ── 連線狀態 ──
+  // 側邊欄那顆點是唯一常駐的狀態指示;細節在 drawer 裡,不佔版面。
+  async function poll() {
+    let s;
+    try { s = await (await fetch('/acqua/api/status')).json(); }
+    catch (e) { q('#nav-dot').className = 'st dead'; return; }
+    q('#nav-dot').className = 'st ' + (s.connected ? 'ok' : 'dead');
+    q('#drw-backend').innerHTML = s.backend === 'com'
+      ? 'Backend <b>COM</b> (live ACQUA)' : 'Backend <b>mock</b>';
+    q('#drw-db').innerHTML = s.connected
+      ? `<b>${s.database || ''}</b><br>${s.server || ''}` : 'Not connected';
+    q('#drw-proj').innerHTML = s.open_project
+      ? `<b>${s.open_project}</b>` + (s.measurement_object
+          ? `<br>DUT ${s.measurement_object}` : '')
+      : 'No project open';
+  }
+  poll();
+  setInterval(poll, 4000);
+
+  // ── 清除殘留 ──
+  // 同一台機器可能有好幾個 port 各跑過一輪,或上一輪跑到一半就掛了 ——
+  // running 卡在 True,新的一批就送不出去。
+  q('#drw-clear').onclick = async () => {
+    if (!confirm('Clear this service\'s run records and flags?\n\n'
+               + 'The ACQUA database is not touched.')) return;
+    const send = (body) => fetch('/acqua/api/clear-run', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(body || {}),
+    }).then(r => r.json());
+    let r = await send();
+    if (!r.ok && r.running) {
+      if (!confirm(r.error + '\n\nForce clear anyway?')) return;
+      r = await send({force: true});
+    }
+    alert(r.ok ? 'Cleared.' : ('Failed: ' + (r.error || '')));
+    if (r.ok) location.reload();
+  };
+})();
+</script>

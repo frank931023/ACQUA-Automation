@@ -3,13 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>執行序列 — ACQUA 自動化</title>
+<title>Sequence — ACQUA Automation</title>
 {% include '_ui.html' %}
 <style>
   /* ── 這一頁特有 ── */
-  main { max-width:1200px; margin:22px auto; padding:0 22px;
-         display:grid; grid-template-columns:1fr 1.2fr; gap:18px; align-items:start; }
-  @media (max-width:1000px) { main { grid-template-columns:1fr; } }
+  .work { grid-template-columns:minmax(280px,1fr) 1.35fr; }
+  @media (max-width:1000px) { .work { grid-template-columns:1fr; } }
 
   /* ── 計畫庫 ── */
   .pl { display:flex; align-items:center; gap:12px; padding:10px 12px;
@@ -98,6 +97,18 @@
   .done { margin-top:12px; padding:12px 14px; border-radius:9px;
           border:1px solid var(--ok); background:#1a7f370d; }
   .done .h { font-size:13px; font-weight:600; color:var(--ok); margin-bottom:6px; }
+  /* 每個計畫一列:序號 ・ 名稱+DUT ・ pass/fail */
+  .done .pr { display:flex; align-items:center; gap:9px; padding:5px 0;
+              border-top:1px solid var(--line); font-size:12px; }
+  .done .pr .n { flex:none; width:18px; height:18px; border-radius:50%;
+                 background:var(--sunk); color:var(--muted); font-size:10px;
+                 display:flex; align-items:center; justify-content:center; }
+  .done .pr .t { flex:1; min-width:0; }
+  .done .pr .t b { display:block; font-weight:600; }
+  .done .pr .t small { color:var(--faint); font-size:10px; }
+  .done .pr .s { flex:none; font-variant-numeric:tabular-nums; }
+  .done .pr .s .p { color:var(--ok); } .done .pr .s .f { color:var(--fail); }
+
   .done .f { font-size:11px; padding:4px 0; border-top:1px dashed var(--line); }
   .done .f b { display:block; }
   .done .f small { color:var(--muted); word-break:break-all; }
@@ -121,37 +132,31 @@
 </head>
 <body>
 
-<header>
-  <h1>執行序列</h1>
-  <span class="badge" id="b-backend">—</span>
-  <span class="badge" id="b-proj">未開啟專案</span>
-  <span style="flex:1"></span>
-  <a href="/acqua">← 回測項選擇</a>
-  <a href="/">首頁</a>
-</header>
-
-<main>
+<script>window.__navPage = 'plans';</script>
+<div class="shell">
+{% include '_nav.html' %}
+<main class="work">
   <!-- ── 左:計畫庫 ────────────────────────────── -->
   <section class="panel">
-    <h2>計畫庫</h2>
+    <h2>Plan library</h2>
     <div class="row" style="margin-bottom:8px">
-      <input type="text" id="q" placeholder="搜尋計畫…" style="flex:1">
-      <button class="ghost" id="btn-qclear">清除</button>
+      <input type="text" id="q" placeholder="Search plans…" style="flex:1">
+      <button class="ghost" id="btn-qclear">Clear</button>
     </div>
     <div class="row" style="margin-bottom:10px">
       <select id="sort" style="width:auto">
-        <option value="created_desc">建立時間:新 → 舊</option>
-        <option value="created_asc">建立時間:舊 → 新</option>
-        <option value="title_asc">名稱:A → Z</option>
-        <option value="title_desc">名稱:Z → A</option>
-        <option value="count_desc">項目數:多 → 少</option>
+        <option value="created_desc">Newest first</option>
+        <option value="created_asc">Oldest first</option>
+        <option value="title_asc">Name A–Z</option>
+        <option value="title_desc">Name Z–A</option>
+        <option value="count_desc">Most items</option>
       </select>
-      <button class="ghost" id="btn-reload">重讀</button>
-      <button class="ghost" id="btn-addall">整頁加入</button>
+      <button class="ghost" id="btn-reload">Reload</button>
+      <button class="ghost" id="btn-addall">Add page</button>
       <span style="flex:1"></span>
       <span class="hint" id="q-n"></span>
     </div>
-    <div id="list"><div class="empty">載入中…</div></div>
+    <div id="list" class="grow"><div class="empty">Loading…</div></div>
     <div class="row" id="pager" style="margin-top:12px">
       <button class="ghost" id="pg-prev">←</button>
       <span class="hint" id="pg-n" style="flex:1;text-align:center"></span>
@@ -161,29 +166,30 @@
 
   <!-- ── 右:執行序列 ──────────────────────────── -->
   <section class="panel">
-    <h2>執行序列</h2>
+    <h2>Sequence</h2>
     <div class="row" style="margin-bottom:10px">
-      <input type="text" id="seq-name" placeholder="這一輪的名稱(選填)" style="flex:1">
-      <button class="primary" id="btn-run" disabled>▶ 執行</button>
+      <input type="text" id="seq-name" placeholder="Run name (optional)" style="flex:1">
+      <button class="primary" id="btn-run" disabled>▶ Run</button>
       <button id="btn-pause" disabled>⏸</button>
       <button class="danger" id="btn-stop" disabled>■</button>
-      <button class="ghost" id="btn-clear">清空</button>
+      <button class="ghost" id="btn-clear">Clear</button>
     </div>
 
-    <div id="seq"><div class="empty">序列是空的 —— 從左邊把計畫加進來</div></div>
+    <div id="seq" class="grow"><div class="empty">Empty — add plans from the left</div></div>
   </section>
 </main>
+</div>
 
 <!-- setup 位置設定 -->
 <div class="ov" id="setupov">
   <div class="bx">
-    <h3>setup 位置</h3>
+    <h3>Setup position</h3>
     <div class="hint" id="su-plan"></div>
-    <label>位置名稱<input type="text" id="su-name" placeholder="例如 0°／1m／桌面中央"></label>
-    <label>備註<input type="text" id="su-note" placeholder="選填"></label>
+    <label>Name<input type="text" id="su-name" placeholder="e.g. 0° / 1m / table centre"></label>
+    <label>Note<input type="text" id="su-note" placeholder="Optional"></label>
     <div class="acts">
-      <button class="primary" id="su-save">儲存</button>
-      <button id="su-cancel">取消</button>
+      <button class="primary" id="su-save">Save</button>
+      <button id="su-cancel">Cancel</button>
     </div>
   </div>
 </div>
@@ -191,15 +197,15 @@
 <!-- 計畫細節:這個計畫會跑哪些測項 -->
 <div class="ov" id="detov">
   <div class="bx" style="width:min(680px,94vw)">
-    <h3 id="dt-title">計畫細節</h3>
+    <h3 id="dt-title">Plan details</h3>
     <div class="hint" id="dt-meta" style="margin:0"></div>
     <div class="hint" id="dt-desc" style="margin:6px 0 0"></div>
     <div class="hint" id="dt-setup" style="margin:6px 0 0"></div>
     <div class="hint" id="dt-when" style="margin:6px 0 0"></div>
     <div class="det" id="dt-items"></div>
     <div class="acts">
-      <button class="primary" id="dt-close">關閉</button>
-      <button id="dt-add">加入序列</button>
+      <button class="primary" id="dt-close">Close</button>
+      <button id="dt-add">Add to sequence</button>
     </div>
   </div>
 </div>
@@ -207,21 +213,21 @@
 <!-- 刪除計畫:要打名稱才算數 -->
 <div class="ov" id="delov">
   <div class="bx">
-    <h3>刪除計畫</h3>
+    <h3>Delete plan</h3>
     <div class="cur2">
-      <div class="p">要刪除的計畫</div>
+      <div class="p">Plan to delete</div>
       <div class="n2" id="dl-title">—</div>
     </div>
     <div class="hint" id="dl-meta" style="margin:8px 0 0"></div>
-    <p class="hint" style="margin:14px 0 0">刪掉不能復原 —— 請完整輸入計畫名稱。</p>
+    <p class="hint" style="margin:14px 0 0">This cannot be undone. Type the plan name to confirm.</p>
     <label style="display:block;margin-top:10px">
-      <input type="text" id="dl-input" placeholder="在這裡輸入計畫名稱"
+      <input type="text" id="dl-input" placeholder="Plan name"
              style="width:100%" spellcheck="false">
     </label>
     <div class="hint" id="dl-msg" style="margin:8px 0 0"></div>
     <div class="acts">
-      <button class="danger" id="dl-go" disabled>刪除</button>
-      <button id="dl-cancel">取消</button>
+      <button class="danger" id="dl-go" disabled>Delete</button>
+      <button id="dl-cancel">Cancel</button>
     </div>
   </div>
 </div>
@@ -229,41 +235,42 @@
 <!-- 執行中 -->
 <div class="ov" id="runov">
   <div class="bx">
-    <h3 id="r-title">執行中</h3>
+    <h3 id="r-title">Running</h3>
     <div class="hint" id="r-meta" style="margin:0"></div>
-    <div class="big"><span id="r-idx">0</span><small> / <span id="r-total">0</span> 項</small></div>
+    <div class="big"><span id="r-idx">0</span><small> / <span id="r-total">0</span></small></div>
     <div class="pbar"><i id="r-bar" style="width:0%"></i></div>
-    <div class="cur2"><div class="p" id="r-plan">—</div><div class="n2" id="r-name">準備中…</div></div>
+    <div class="cur2"><div class="p" id="r-plan">—</div><div class="n2" id="r-name">Preparing…</div></div>
     <div class="cnt">
       <div class="p"><b id="r-pass">0</b>PASS</div>
       <div class="f"><b id="r-fail">0</b>FAIL</div>
-      <div><b id="r-left">0</b>剩餘</div>
+      <div><b id="r-left">0</b>Left</div>
     </div>
     <div class="setupph" id="r-setup" style="display:none">
-      <div class="h">🔧 Moving to new setup</div>
+      <div class="h">Moving to new setup</div>
       <div id="sp-name">—</div>
       <div class="pbar" style="margin:8px 0 4px"><i id="sp-bar" style="width:0%"></i></div>
       <div id="sp-left" style="font-size:11px;color:var(--faint)"></div>
     </div>
     <div class="done" id="r-done" style="display:none">
-      <div class="h" id="dn-h">✓ 全部完成</div>
+      <div class="h" id="dn-h">Sequence complete</div>
       <div id="dn-sum"></div>
+      <div id="dn-steps"></div>
       <div id="dn-files"></div>
       <div id="dn-left" style="font-size:11px;color:var(--muted);margin-top:8px"></div>
     </div>
     <div class="blk" id="r-blk" style="display:none">
-      <div class="h">⏸ ACQUA 開了視窗在等你</div>
+      <div class="h">ACQUA is waiting for you</div>
       <div id="blk-t"></div>
       <div class="bs" id="blk-b"></div>
     </div>
     <div class="log" id="r-log"></div>
     <div class="acts" id="r-acts">
-      <button id="r-pause">⏸ 暫停</button>
-      <button class="danger" id="r-stop">■ 中止</button>
-      <button id="r-hide">縮小</button>
+      <button id="r-pause">Pause</button>
+      <button class="danger" id="r-stop">Stop</button>
+      <button id="r-hide">Minimise</button>
     </div>
     <div class="acts" id="r-acts-done" style="display:none">
-      <button class="primary" id="r-close">關閉視窗</button>
+      <button class="primary" id="r-close">Close</button>
     </div>
   </div>
 </div>
@@ -319,7 +326,7 @@ async function loadPlans() {
 function srcLine(p) {
   const s = p.source || {};
   const bits = [s.database, s.project, s.measurement_object].filter(Boolean);
-  return bits.length ? bits.map(esc).join(' <i>/</i> ') : '(來源不明 —— 舊格式的計畫)';
+  return bits.length ? bits.map(esc).join(' <i>/</i> ') : '(source unknown — legacy plan)';
 }
 
 /** 關鍵字比對:名稱、說明、來源、setup 都算 —— 使用者記得哪個就用哪個找 */
@@ -356,10 +363,10 @@ function render() {
   const shown = hits.slice((page - 1) * PAGE, page * PAGE);
 
   $('#q-n').textContent = query
-    ? `符合 ${hits.length} / ${plans.length} 個`
-    : `共 ${plans.length} 個`;
+    ? `${hits.length} of ${plans.length}`
+    : `${plans.length} plans`;
   $('#pg-n').textContent = hits.length
-    ? `第 ${page} / ${pages} 頁 ・ 這頁 ${shown.length} 個`
+    ? `Page ${page} of ${pages}`
     : '';
   $('#pg-prev').disabled = page <= 1;
   $('#pg-next').disabled = page >= pages;
@@ -369,25 +376,25 @@ function render() {
     <div class="pl">
       <div class="t">
         <b>${esc(p.title)}</b>
-        <small>${p.count} 項${
+        <small>${p.count} items${
           (p.setup && p.setup.name) ? ' ・ ' + esc(p.setup.name) : ''}</small>
       </div>
       <div class="btns">
-        <button data-add="${esc(p.id)}">加入序列</button>
-        <button data-detail="${esc(p.id)}">計畫細節</button>
-        <button data-setup="${esc(p.id)}">setup…</button>
-        <button data-del="${esc(p.id)}">刪除</button>
+        <button data-add="${esc(p.id)}">Add</button>
+        <button data-detail="${esc(p.id)}">Details</button>
+        <button data-setup="${esc(p.id)}">Setup…</button>
+        <button data-del="${esc(p.id)}">Delete</button>
       </div>
     </div>`).join('')
     : (plans.length
-        ? `<div class="empty">沒有符合「${esc(query)}」的計畫</div>`
-        : '<div class="empty">還沒有任何計畫 —— 到<a href="/acqua">測項選擇</a>頁勾好測項後「存成計畫」</div>');
+        ? `<div class="empty">No plans match "${esc(query)}"</div>`
+        : '<div class="empty">No plans yet — pick items on the Test run page and save them</div>');
 
   // ── 執行序列 ──
   const sb = $('#seq');
   if (typing) { paintSeqButtons(); return; }
   if (!seq.length) {
-    sb.innerHTML = '<div class="empty">序列是空的 —— 從左邊把計畫加進來</div>';
+    sb.innerHTML = '<div class="empty">Empty — add plans from the left</div>';
   } else {
     let prevDb = S.database || null;
     sb.innerHTML = seq.map((st, i) => {
@@ -398,10 +405,10 @@ function render() {
       // 兩步之間會發生什麼,先講出來:調整 setup、必要時換資料庫
       const bits = [];
       if (i > 0) {
-        bits.push(su.name ? `setup:${esc(su.name)}` : 'setup(未設定)');
+        bits.push(su.name ? `setup:${esc(su.name)}` : 'setup (not set)');
       }
       if (s.database && s.database !== prevDb) {
-        bits.push(`<span class="sw">切換到 ${esc(s.database)}</span>`);
+        bits.push(`<span class="sw">switch to ${esc(s.database)}</span>`);
       }
       prevDb = s.database || prevDb;
       const head = bits.length ? `<div class="between">↓ ${bits.join(' ・ ')}</div>` : '';
@@ -413,11 +420,11 @@ function render() {
         <div class="stepwrap${cls}">
           <div class="step">
             <span class="grip" draggable="true" data-grip="${i}"
-                  title="拖曳調整順序">⠿</span>
+                  title="Drag to reorder">⠿</span>
             <div class="no">${i + 1}</div>
             <div class="t">
-              <b>${esc(p.title || '(已刪除)')}</b>
-              <div class="src">${srcLine(p)} ・ ${p.count || 0} 項</div>
+              <b>${esc(p.title || '(deleted)')}</b>
+              <div class="src">${srcLine(p)} · ${p.count || 0} items</div>
             </div>
             <div class="btns">
               <button class="ghost" data-up="${i}" ${i === 0 ? 'disabled' : ''}>↑</button>
@@ -427,20 +434,20 @@ function render() {
             </div>
           </div>
           <div class="stcfg">
-            <label class="wide"><span>run 名稱</span>
+            <label class="wide"><span>Run name</span>
               <input type="text" data-f="run_name" data-i="${i}"
                      value="${esc(st.run_name)}"
-                     placeholder="留空 = 這一輪的名稱 · ${esc(p.title || '')}"></label>
+                     placeholder="blank = run name · ${esc(p.title || '')}"></label>
             <label class="wide"><span>DUT</span>
               <select data-f="mo" data-i="${i}" data-plan="${esc(st.id)}">
-                <option value="">${esc(s.measurement_object || '(依計畫)')}</option>
+                <option value="">${esc(s.measurement_object || '(from plan)')}</option>
               </select></label>
-            <label><span>Word 檔名</span>
+            <label><span>Word file name</span>
               <input type="text" data-f="doc_name" data-i="${i}"
-                     value="${esc(st.doc_name)}" placeholder="留空 = 不出報告"></label>
-            <label><span>Word 位置</span>
+                     value="${esc(st.doc_name)}" placeholder="blank = no report"></label>
+            <label><span>Word folder</span>
               <input type="text" data-f="doc_dir" data-i="${i}"
-                     value="${esc(st.doc_dir)}" placeholder="D:/報告/2026"></label>
+                     value="${esc(st.doc_dir)}" placeholder="D:/reports/2026"></label>
           </div>
         </div>`;
     }).join('');
@@ -454,7 +461,7 @@ function paintSeqButtons() {
   $('#btn-run').disabled   = !seq.length || running;
   $('#btn-stop').disabled  = !running;
   $('#btn-pause').disabled = !running;
-  const label = S.paused ? '▶ 繼續' : '⏸ 暫停';
+  const label = S.paused ? 'Resume' : 'Pause';
   $('#btn-pause').textContent = label;
   $('#r-pause').textContent = label;
 }
@@ -476,6 +483,7 @@ $('#seq').addEventListener('change', onFieldChange);   // <select> 只發 change
 // 一個計畫抓一次就夠,同一份清單在序列裡可能被用到很多次。
 const moCache = new Map();
 let madeDocs = [];        // 這一輪產生的 Word:[{name, path, plan}]
+let stepResults = [];     // 每一個計畫各自的成績
 
 async function mosOf(planId) {
   if (moCache.has(planId)) return moCache.get(planId);
@@ -508,7 +516,7 @@ async function fillMoSelects() {
     // 存過的選擇如果已經不在清單裡(DUT 被刪掉),就退回預設並講一聲
     if (st.mo && !list.includes(st.mo)) {
       const o = document.createElement('option');
-      o.value = st.mo; o.textContent = st.mo + '(已不存在)';
+      o.value = st.mo; o.textContent = st.mo + ' (missing)';
       el.appendChild(o);
     }
     el.value = st.mo || '';
@@ -539,24 +547,24 @@ async function openDetail(id) {
     [s.database, s.project, s.measurement_object].filter(Boolean).join(' / ');
   $('#dt-desc').textContent = p.description || '';
   $('#dt-setup').textContent = su.name
-    ? `setup:${su.name}${su.note ? ' —— ' + su.note : ''}`
-    : 'setup:未設定';
+    ? `Setup: ${su.name}${su.note ? ' — ' + su.note : ''}`
+    : 'Setup: not set';
   $('#dt-when').textContent =
-    `建立於 ${(p.created || '').replace('T', ' ')}`
+    `Created ${(p.created || '').replace('T', ' ')}`
     + (p.updated && p.updated !== p.created
-       ? ` ・ 最後更新 ${p.updated.replace('T', ' ')}` : '');
-  $('#dt-items').innerHTML = '<div>讀取中…</div>';
+       ? ` · updated ${p.updated.replace('T', ' ')}` : '');
+  $('#dt-items').innerHTML = '<div>Loading…</div>';
   $('#detov').classList.add('on');
 
   // 清單頁只回摘要,完整的 items 要另外拿
   const r = await (await fetch('/acqua/api/plans/' + encodeURIComponent(id))).json();
-  if (!r.ok) { $('#dt-items').innerHTML = '<div>讀取失敗</div>'; return; }
+  if (!r.ok) { $('#dt-items').innerHTML = '<div>Load failed</div>'; return; }
   const items = r.plan.items || [];
   $('#dt-items').innerHTML = items.length
     ? items.map((x, i) => `<div>${i + 1}. #${x.row_id} ${esc(x.title)}`
         + (x.path ? `<br><small>　　${esc(x.path)}</small>` : '') + '</div>').join('')
-    : '<div>這個計畫沒有任何測項</div>';
-  $('#dt-title').textContent = `${p.title}(${items.length} 項)`;
+    : '<div>This plan has no items</div>';
+  $('#dt-title').textContent = `${p.title} (${items.length} items)`;
 }
 $('#dt-close').onclick = () => $('#detov').classList.remove('on');
 $('#dt-add').onclick = () => {
@@ -573,12 +581,12 @@ function openDelete(id) {
   const s = p.source || {};
   $('#dl-title').textContent = p.title;
   $('#dl-meta').textContent =
-    [s.database, s.project, `${p.count} 項`].filter(Boolean).join(' / ');
+    [s.database, s.project, `${p.count} items`].filter(Boolean).join(' / ');
   $('#dl-input').value = '';
   $('#dl-msg').textContent = '';
   $('#dl-go').disabled = true;
-  $('#dl-go').textContent = '刪除';
-  $('#dl-cancel').textContent = '取消';
+  $('#dl-go').textContent = 'Delete';
+  $('#dl-cancel').textContent = 'Cancel';
   $('#delov').classList.add('on');
   $('#dl-input').focus();
 }
@@ -593,7 +601,7 @@ $('#dl-input').addEventListener('input', () => {
   const p = byId(delId);
   const same = p && $('#dl-input').value.trim() === p.title;
   $('#dl-go').disabled = !same;
-  $('#dl-msg').textContent = same ? '' : (p ? '名稱還沒對上' : '');
+  $('#dl-msg').textContent = same ? '' : (p ? 'Name does not match yet' : '');
 });
 $('#dl-input').addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !$('#dl-go').disabled) $('#dl-go').click();
@@ -605,19 +613,19 @@ $('#dl-go').onclick = async () => {
   const r = await (await fetch('/acqua/api/plans/' + encodeURIComponent(delId),
                                {method: 'DELETE'})).json();
   if (!r.ok) {
-    $('#dl-msg').innerHTML = '<b style="color:var(--fail)">刪除失敗</b>';
+    $('#dl-msg').innerHTML = '<b style="color:var(--fail)">Delete failed</b>';
     return;
   }
   seq = seq.filter(x => x.id !== delId); saveSeq();
   moCache.delete(delId);
   await loadPlans();
 
-  $('#dl-cancel').textContent = '關閉';
+  $('#dl-cancel').textContent = 'Close';
   let left = 3;
   const tick = () => {
     $('#dl-msg').innerHTML =
-      `<span class="ok-msg">✓ 已刪除「${esc(p ? p.title : '')}」</span>`
-      + `<br><small>${left} 秒後自動關閉</small>`;
+      `<span class="ok-msg">Deleted "${esc(p ? p.title : '')}"</span>`
+      + `<br><small>Closing in ${left}s</small>`;
     if (left-- <= 0) closeDelete();
   };
   clearInterval(delTimer);
@@ -737,9 +745,7 @@ $('#su-save').onclick = async () => {
 async function poll() {
   try {
     S = await (await fetch('/acqua/api/status')).json();
-    $('#b-backend').textContent = S.backend === 'com' ? 'COM(真實 ACQUA)' : '模擬模式';
-    $('#b-proj').textContent =
-      [S.database, S.open_project].filter(Boolean).join(' / ') || '未開啟專案';
+    // 連線與專案狀態由側邊欄顯示(見 _nav.html)
     paintRun();
     if (!running) render();
   } catch (e) { /* 伺服器還沒起來 */ }
@@ -778,7 +784,7 @@ function paintBlocking(b) {
     bs.appendChild(el);
   }
   const c = document.createElement('button');
-  c.textContent = '直接關閉視窗';
+  c.textContent = 'Close the window';
   c.onclick = () => answerBlk(b.hwnd, 'close');
   bs.appendChild(c);
 }
@@ -806,7 +812,7 @@ $('#btn-run').onclick = runSeq;
 $('#btn-stop').onclick = $('#r-stop').onclick = async () => {
   abort = true;
   await fetch('/acqua/api/cancel', {method: 'POST'});
-  log('已要求中止');
+  log('Stop requested');
 };
 $('#r-hide').onclick = () => {
   // 「縮小」只是把大框收起來,序列照跑 —— 右下角那個小視窗接手。
@@ -820,7 +826,7 @@ window.__miniRestore = () => $('#runov').classList.add('on');
 $('#btn-pause').onclick = $('#r-pause').onclick = async () => {
   const to = S.paused ? 'resume' : 'pause';
   await fetch('/acqua/api/' + to, {method: 'POST'});
-  log(to === 'pause' ? '已暫停 —— 目前這筆跑完就停住' : '已繼續');
+  log(to === 'pause' ? 'Paused — stops after the current item' : 'Resumed');
 };
 
 const post = async (url, body) => (await fetch(url, {
@@ -837,6 +843,7 @@ async function runSeq() {
   if (running || !seq.length) return;
   running = true; abort = false; curStep = -1;
   madeDocs = [];
+  stepResults = [];
   $('#r-done').style.display = 'none';
   $('#r-setup').style.display = 'none';
   $('#r-log').innerHTML = '';
@@ -848,12 +855,12 @@ async function runSeq() {
 
   try {
     for (let i = 0; i < seq.length; i++) {
-      if (abort) { log('序列已中止'); break; }
+      if (abort) { log('Sequence stopped'); break; }
       curStep = i; render();
 
       const st = seq[i];
       const p = byId(st.id);
-      if (!p) { log(`第 ${i + 1} 步的計畫已被刪除,跳過`); continue; }
+      if (!p) { log(`Step ${i + 1}: plan was deleted, skipping`); continue; }
 
       // 第二步開始:先跑一段「移動治具」。
       // ⚠️ 目前是 mock —— 固定五秒,不會真的動任何東西。
@@ -861,7 +868,7 @@ async function runSeq() {
       //    介面不變(一樣是 await 一個會結束的動作)。
       if (i > 0) {
         if (!(await movingToSetup(p, i + 1, seq.length))) {
-          log('序列已中止'); break;
+          log('Sequence stopped'); break;
         }
       }
 
@@ -869,54 +876,54 @@ async function runSeq() {
                    index: i + 1, total: seq.length,
                    percent: Math.round(i / seq.length * 100),
                    detail: p.title};
-      $('#r-title').textContent = `執行中 — ${p.title}`;
-      $('#r-meta').textContent = `序列 ${i + 1} / ${seq.length}`;
+      $('#r-title').textContent = `Running — ${p.title}`;
+      $('#r-meta').textContent = `Step ${i + 1} of ${seq.length}`;
       $('#r-plan').textContent = p.title;
-      $('#r-name').textContent = '準備中 —— 切換到這個計畫的位置';
+      $('#r-name').textContent = 'Preparing — switching to this plan';
 
       // ① 把 ACQUA 帶到這個計畫需要的地方,並把測項對應回來。
       //    跨資料庫時 row_id 不能沿用,由後端用「路徑 + 名稱」重對。
-      log(`[${i + 1}/${seq.length}] 準備「${p.title}」`);
+      log(`[${i + 1}/${seq.length}] Preparing "${p.title}"`);
       const prep = await post(
         '/acqua/api/plans/' + encodeURIComponent(st.id) + '/prepare',
         {measurement_object: st.mo.trim()});
       (prep.steps || []).forEach(s =>
         log('   ' + (s.ok ? '✓ ' : '✗ ') + s.name + (s.detail ? ' — ' + s.detail : '')));
-      if (!prep.ok) { log('準備失敗,序列中止'); break; }
+      if (!prep.ok) { log('Prepare failed — sequence stopped'); break; }
 
       const res = prep.resolution || {};
       (res.missing || []).forEach(m =>
-        log('   ⚠ 找不到測項:' + (m.path ? m.path + ' / ' : '') + m.title));
+        log('   ! Item not found: ' + (m.path ? m.path + ' / ' : '') + m.title));
       (res.ambiguous || []).forEach(m =>
-        log(`   ⚠ 同名 ${m.count} 筆無法分辨,已跳過:${m.title}(${m.why || ''})`));
+        log(`   ! Ambiguous (${m.count} matches), skipped: ${m.title} — ${m.why || ''}`));
       (res.conflicts || []).forEach(m =>
-        log(`   ✗ 證據互相矛盾,已跳過:${m.title} —— ${m.why || ''}`));
+        log(`   x Conflicting evidence, skipped: ${m.title} — ${m.why || ''}`));
 
       const row_ids = prep.row_ids || [];
-      if (!row_ids.length) { log('   沒有可執行的測項,跳過這一步'); continue; }
+      if (!row_ids.length) { log('   Nothing to run, skipping this step'); continue; }
 
       // ⚠️ 專案樹被改過的話,測項序號會整組位移 —— 而位移之後身分鍵仍然
       //    「對得上」,只是對到別的測項。這種靜默錯誤一定要問過人。
       if (res.tree_changed) {
-        log('   ⚠ 專案樹跟這個計畫存檔時不一樣了');
-        if (!confirm(`「${p.title}」的專案樹在存檔之後被改過。\n\n`
-                   + `測項是靠「路徑 + 名稱 + 序號」對回去的,\n`
-                   + `樹一改序號就會位移,對到的可能不是原本那一項。\n\n`
-                   + `仍要用這 ${row_ids.length} 項執行嗎?`)) {
-          log('使用者取消 —— 建議重新挑一次測項存成新計畫'); break;
+        log('   ! Project tree changed since this plan was saved');
+        if (!confirm(`The project tree for "${p.title}" changed after this plan was saved.\n\n`
+                   + `Items are matched by path + name + index. When the tree changes\n`
+                   + `the index can shift, so a match may not be the original item.\n\n`
+                   + `Run these ${row_ids.length} items anyway?`)) {
+          log('Cancelled — consider re-picking the items into a new plan'); break;
         }
       } else if (res.needs_review) {
-        if (!confirm(`「${p.title}」有 ${res.needs_review} 項的對應沒有十足把握\n`
-                   + `(計畫沒有存結構指紋,或是靠名稱勉強對上的)。\n\n`
-                   + `仍要執行嗎?`)) { log('使用者取消'); break; }
+        if (!confirm(`"${p.title}": ${res.needs_review} item(s) matched with low confidence\n`
+                   + `(no structure fingerprint stored, or matched by name only).\n\n`
+                   + `Run anyway?`)) { log('Cancelled'); break; }
       }
 
       const bad = (res.missing || []).length + (res.ambiguous || []).length
                 + (res.conflicts || []).length;
       if (bad) {
-        if (!confirm(`「${p.title}」有 ${bad} 項對應不到,只會跑 ${row_ids.length} 項。\n`
-                   + '要繼續嗎?(詳情看執行視窗的日誌)')) {
-          log('使用者取消'); break;
+        if (!confirm(`"${p.title}": ${bad} item(s) unmatched, ${row_ids.length} will run.\n`
+                   + 'Continue? (see the log for details)')) {
+          log('Cancelled'); break;
         }
       }
 
@@ -926,13 +933,21 @@ async function runSeq() {
         || [seqName, p.title].filter(Boolean).join(' · ');
       const j = await post('/acqua/api/run',
                            {row_ids, ctx: prep.ctx, comment});
-      if (!j.ok) { log('送出失敗:' + (j.error || '')); break; }
-      log(`   已送出 ${row_ids.length} 項 ・ 名稱「${comment || '(未命名)'}」`);
+      if (!j.ok) { log('Submit failed: ' + (j.error || '')); break; }
+      log(`   Submitted ${row_ids.length} items · name "${comment || '(unnamed)'}"`);
 
       await waitDone();
       const sm = S.summary || {};
-      log(`[${i + 1}/${seq.length}]「${p.title}」結束 — `
-        + `${sm.passed || 0} PASS / ${sm.failed || 0} FAIL`);
+      // 每一步的成績要當下記下來 —— summary 是「當前這一批」的,
+      // 下一步一開始就被覆蓋掉了。
+      stepResults.push({
+        title: p.title, mo: (prep.state && prep.state.measurement_object) || '',
+        planned: row_ids.length,
+        pass: sm.passed || 0, fail: sm.failed || 0, total: sm.total || 0,
+        comment,
+      });
+      log(`[${i + 1}/${seq.length}] "${p.title}" done — `
+        + `${sm.passed || 0} pass / ${sm.failed || 0} fail`);
 
       // ③ 這一步有指定 Word 輸出就順手產一份
       if (st.doc_name.trim() || st.doc_dir.trim()) await makeReport(st, p);
@@ -942,7 +957,7 @@ async function runSeq() {
     miniPhase = null;
     $('#r-setup').style.display = 'none';
     render();
-    $('#r-title').textContent = abort ? '序列已中止' : '序列完成';
+    $('#r-title').textContent = abort ? 'Sequence stopped' : 'Sequence complete';
     $('#r-name').textContent = '';
     beep();
     showDone(Math.round((Date.now() - t0) / 1000));
@@ -956,15 +971,15 @@ async function runSeq() {
 function movingToSetup(plan, idx, total) {
   const su = plan.setup || {};
   const label = su.name
-    ? `${su.name}${su.note ? ' —— ' + su.note : ''}`
-    : `${plan.title}(這個計畫還沒設定位置)`;
+    ? `${su.name}${su.note ? ' — ' + su.note : ''}`
+    : `${plan.title} (no position set)`;
   const SEC = 5;
 
   $('#r-title').textContent = 'Moving to new setup';
   $('#r-meta').textContent = `序列 ${idx} / ${total}`;
   $('#r-setup').style.display = '';
   $('#sp-name').textContent = label;
-  log(`Moving to new setup —— ${label}`);
+  log(`Moving to new setup — ${label}`);
 
   return new Promise(res => {
     const start = Date.now();
@@ -972,8 +987,8 @@ function movingToSetup(plan, idx, total) {
       const el = (Date.now() - start) / 1000;
       const pct = Math.min(100, Math.round(el / SEC * 100));
       $('#sp-bar').style.width = pct + '%';
-      $('#sp-left').textContent = `還要 ${Math.max(0, (SEC - el)).toFixed(1)} 秒`
-        + '(目前是模擬,之後由 Raspberry Pi 回報就位)';
+      $('#sp-left').textContent = `${Math.max(0, (SEC - el)).toFixed(1)}s left`
+        + ' (simulated — a Raspberry Pi will report readiness later)';
       miniPhase = {active: true, title: 'Moving to new setup',
                    index: idx, total, percent: pct, detail: label};
       if (abort) { clearInterval(timer); finish(false); return; }
@@ -990,25 +1005,42 @@ function movingToSetup(plan, idx, total) {
 /** 跑完的摘要:總結 + 產生了哪些 Word。五秒後自動關閉。 */
 let doneTimer = null;
 function showDone(secs) {
-  const sm = S.summary || {};
-  $('#dn-h').textContent = abort ? '■ 序列已中止' : '✓ 全部完成';
+  const tot = stepResults.reduce((a, r) => ({
+    pass: a.pass + r.pass, fail: a.fail + r.fail, total: a.total + r.total,
+  }), {pass: 0, fail: 0, total: 0});
+
+  $('#dn-h').textContent = abort ? 'Sequence stopped' : 'Sequence complete';
   $('#dn-sum').innerHTML =
-    `${seq.length} 個計畫 ・ 花了 ${Math.floor(secs / 60)} 分 ${secs % 60} 秒`
-    + `<br>最後一批:${sm.passed || 0} PASS / ${sm.failed || 0} FAIL`;
+    `${stepResults.length} / ${seq.length} plans · `
+    + `${Math.floor(secs / 60)}m ${secs % 60}s · `
+    + `<b style="color:var(--ok)">${tot.pass} pass</b> / `
+    + `<b style="color:var(--fail)">${tot.fail} fail</b>`;
+
+  // 每一個計畫各自的成績 —— 序列的重點就是「這幾批分別如何」
+  $('#dn-steps').innerHTML = stepResults.length
+    ? stepResults.map((r, i) => `
+        <div class="pr">
+          <span class="n">${i + 1}</span>
+          <span class="t"><b>${esc(r.title)}</b>
+            <small>${esc(r.mo || '')}${r.planned !== r.total
+              ? ` · ${r.total}/${r.planned} reported` : ''}</small></span>
+          <span class="s"><b class="p">${r.pass}</b> / <b class="f">${r.fail}</b></span>
+        </div>`).join('')
+    : '<div class="hint">No plan finished.</div>';
   $('#dn-files').innerHTML = madeDocs.length
     ? '<div style="margin-top:8px;font-size:11px;color:var(--muted)">'
-      + `產生了 ${madeDocs.length} 份 Word:</div>`
+      + `${madeDocs.length} Word file(s):</div>`
       + madeDocs.map(d => `<div class="f"><b>${esc(d.name)}</b>`
           + `<small>${esc(d.path)}</small></div>`).join('')
     : '<div style="margin-top:8px;font-size:11px;color:var(--muted)">'
-      + '沒有產生 Word(序列裡沒有步驟填了輸出檔名)</div>';
+      + 'No Word files (no step had an output name)</div>';
   $('#r-done').style.display = '';
   $('#r-acts').style.display = 'none';        // 跑完了,暫停/中止沒有意義
   $('#r-acts-done').style.display = '';
 
   let left = 5;
   const tick = () => {
-    $('#dn-left').textContent = `${left} 秒後自動關閉 —— 移動滑鼠可取消`;
+    $('#dn-left').textContent = `Closing in ${left}s — move the mouse to cancel`;
     if (left-- <= 0) { clearInterval(doneTimer); doneTimer = null; closeRunOv(); }
   };
   clearInterval(doneTimer);
@@ -1029,7 +1061,7 @@ $('#r-close').onclick = closeRunOv;
 $('#runov').addEventListener('mousemove', () => {
   if (!doneTimer) return;
   clearInterval(doneTimer); doneTimer = null;
-  $('#dn-left').textContent = '(已取消自動關閉)';
+  $('#dn-left').textContent = '(auto-close cancelled)';
 }, {passive: true});
 
 /** 產生 Word 報告並存到這一步指定的位置。
@@ -1037,9 +1069,9 @@ $('#runov').addEventListener('mousemove', () => {
     同名不覆蓋 —— 序列常常是同一批重跑,直接蓋掉等於把上一輪的結果弄丟。
     改成自動加編號,並在日誌講清楚最後存成什麼名字。 */
 async function makeReport(st, plan) {
-  log('   產生 Word 報告…');
+  log('   Generating Word report…');
   const rep = await post('/acqua/api/report', {});
-  if (!rep.ok) { log('   ✗ 報告產生失敗:' + (rep.error || '')); return; }
+  if (!rep.ok) { log('   x Report generation failed: ' + (rep.error || '')); return; }
 
   const dir = st.doc_dir.trim() || rep.suggest_dir;
   let name = st.doc_name.trim() || rep.suggest_name;
@@ -1052,13 +1084,13 @@ async function makeReport(st, plan) {
     const sv = await post('/acqua/api/report/save',
                           {src: rep.result, filename: fn, directory: dir});
     if (sv.ok) {
-      log('   ✓ 報告已存到 ' + sv.path);
+      log('   Report saved to ' + sv.path);
       madeDocs.push({name: fn, path: sv.path, plan: plan.title});
       return;
     }
-    if (!sv.exists) { log('   ✗ 報告存檔失敗:' + (sv.error || '')); return; }
+    if (!sv.exists) { log('   x Saving the report failed: ' + (sv.error || '')); return; }
   }
-  log('   ✗ 同名檔案太多,報告留在暫存資料夾:' + rep.result);
+  log('   x Too many name clashes — report left in the staging folder: ' + rep.result);
 }
 
 function waitDone() {
@@ -1082,7 +1114,7 @@ window.addEventListener('beforeunload', e => {
   if (leavingInternally) return;            // 站內換頁,進度跟著走
   if (running || S.running) {
     e.preventDefault();
-    e.returnValue = '測試會繼續在背景執行。但關掉頁面後,遇到需要回答的視窗就沒人處理了。';
+    e.returnValue = 'Tests keep running in the background, but nobody will answer ACQUA dialogs once this page is closed.';
     return e.returnValue;
   }
 });

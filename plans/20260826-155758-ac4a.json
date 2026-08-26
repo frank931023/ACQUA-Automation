@@ -1,0 +1,67 @@
+{
+  "id": "20260826-155758-ac4a",
+  "created": "2026-08-26T15:57:58",
+  "title": "0826-test33333",
+  "description": "",
+  "updated": "2026-08-26T15:57:58",
+  "items": [
+    {
+      "row_id": 5331,
+      "title": "I. Analy. 3QUEST TS103 - VoiceDistr",
+      "path": "ZoomRooms_v2020Oct_v1 / COS_auto_Tiny / BGN test / Meeting Device / 4.4.1 send quality with ambient noise -  22Oct / Analyze",
+      "occ": 0,
+      "sig": "9e2ab218",
+      "smd_type": 44
+    },
+    {
+      "row_id": 5313,
+      "title": "7.4.1 3QUEST result - S-MOS(Speech MOS) for NoBGN",
+      "path": "ZoomRooms_v2020Oct_v1 / COS_auto_Tiny / BGN test / Meeting Device / 4.4.1 send quality with ambient noise -  22Oct",
+      "occ": 0,
+      "sig": "1c5a8d2f",
+      "smd_type": 41
+    },
+    {
+      "row_id": 5330,
+      "title": "H. Analy. 3QUEST TS103 - CallCenter",
+      "path": "ZoomRooms_v2020Oct_v1 / COS_auto_Tiny / BGN test / Meeting Device / 4.4.1 send quality with ambient noise -  22Oct / Analyze",
+      "occ": 0,
+      "sig": "d01841d2",
+      "smd_type": 44
+    },
+    {
+      "row_id": 5329,
+      "title": "G. Analy. 3QUEST TS103 - Mensa",
+      "path": "ZoomRooms_v2020Oct_v1 / COS_auto_Tiny / BGN test / Meeting Device / 4.4.1 send quality with ambient noise -  22Oct / Analyze",
+      "occ": 0,
+      "sig": "43db6f54",
+      "smd_type": 44
+    },
+    {
+      "row_id": 5328,
+      "title": "O. Analy. 3QUEST TS103 - noBGN",
+      "path": "ZoomRooms_v2020Oct_v1 / COS_auto_Tiny / BGN test / Meeting Device / 4.4.1 send quality with ambient noise -  22Oct / Analyze",
+      "occ": 0,
+      "sig": "58f5fb23",
+      "smd_type": 44
+    }
+  ],
+  "count": 5,
+  "variables": {},
+  "source": {
+    "server": "AUTOMATION_ACQU\\ACQUADBSERVER",
+    "database": "ACQUA_auto_v2026Aug",
+    "group": "(Unsorted Projects)",
+    "project": "ZoomRooms_v2020Oct_v1",
+    "measurement_object": "Front_of_Room",
+    "ctx": "AUTOMATION_ACQU\\ACQUADBSERVER|ACQUA_auto_v2026Aug|1",
+    "tree_fingerprint": "7e10c14f931b52fa:1477"
+  },
+  "manual_excluded": [],
+  "setup": {
+    "name": "",
+    "note": "",
+    "params": {},
+    "_note": "尚未自動化:目前只會在序列中間停下來提示人工調整"
+  }
+}

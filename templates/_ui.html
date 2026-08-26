@@ -1,114 +1,128 @@
-{# 共用的設計系統。
+{# Shared design system.
 
-   為什麼要抽出來:兩頁原本各寫一份 CSS,而且一頁深色一頁淺色 ——
-   同一個系統看起來像兩個產品。這裡是唯一的來源,兩頁都 include 它,
-   各自只留自己特有的規則。
-
-   風格取向:少框線、多留白、字級克制。狀態用顏色講,不用文字重複講。 #}
+   兩個硬規則:
+   ① 主色 #009B85 + 白。其他顏色只在「狀態」上出現(通過/失敗/警告)。
+   ② 嚴格一頁式:body 永遠不捲動,版面用 100vh 的格線切成固定區塊,
+      需要捲的東西只在自己的區塊裡捲。寬高在任何狀態下都不變動 ——
+      清單長短、有沒有結果、視窗開不開,都不該讓版面跳動。
+#}
 <style>
   :root {
-    --bg:#f7f8fa;  --panel:#fff;    --sunk:#f2f3f6;
-    --line:#e6e8ec; --line-2:#d4d8de;
-    --fg:#16181d;  --muted:#6a7181; --faint:#9aa1b0;
-    --accent:#3b6ef0; --accent-soft:#3b6ef014;
-    --ok:#1a7f45; --fail:#d1293d; --warn:#b45309;
+    --brand:#009B85;
+    --brand-dark:#00806E;
+    --brand-soft:#009B850f;
+    --brand-line:#009B8533;
+
+    --bg:#f4f6f6;   --panel:#fff;     --sunk:#f0f3f3;
+    --line:#e2e8e7; --line-2:#cfd8d7;
+    --fg:#18201f;   --muted:#5f6b6a;  --faint:#93a09e;
+
+    --ok:#009B85;   --fail:#d1493f;   --warn:#b7791f;
     --r:10px; --r-sm:7px;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg:#0e1014; --panel:#161920; --sunk:#1c2029;
-      --line:#252932; --line-2:#333846;
-      --fg:#e7e9ee; --muted:#8d95a6; --faint:#666d7d;
-      --accent:#5b8cff; --accent-soft:#5b8cff1f;
-      --ok:#3fb96b; --fail:#f2565f; --warn:#d99a2b;
-    }
+    --nav:56px;                 /* 側邊欄寬度 */
   }
 
   * { box-sizing:border-box; }
+
+  /* ── 嚴格一頁式 ──
+     html/body 鎖死在視窗大小,永遠不出現捲軸。所有捲動都發生在
+     內部區塊裡,所以外框(側欄、頁首、按鈕列)的位置永遠固定。 */
+  html, body { height:100%; overflow:hidden; }
   body { margin:0; background:var(--bg); color:var(--fg);
-         font:14px/1.55 "Segoe UI","Microsoft JhengHei",system-ui,sans-serif;
+         font:14px/1.5 "Segoe UI",system-ui,-apple-system,sans-serif;
          -webkit-font-smoothing:antialiased; }
 
-  /* ── 頁首 ── */
-  header { display:flex; align-items:center; gap:14px; flex-wrap:wrap;
-           padding:12px 22px; background:var(--panel);
-           border-bottom:1px solid var(--line); }
-  header h1 { font-size:15px; margin:0; font-weight:600; letter-spacing:-.01em; }
-  header a { font-size:12px; color:var(--muted); text-decoration:none; }
-  header a:hover { color:var(--accent); }
-  .badge { font-size:11px; color:var(--muted); padding:3px 9px;
-           border-radius:20px; border:1px solid var(--line); white-space:nowrap; }
-  .badge.com  { color:var(--ok);   border-color:#1a7f4544; }
-  .badge.mock { color:var(--warn); border-color:#b4530944; }
-  .badge.live { display:inline-flex; align-items:center; gap:6px; }
-  .dot { width:6px; height:6px; border-radius:50%; background:var(--faint); flex:none; }
-  .dot.ok { background:var(--ok); } .dot.poll { background:var(--warn); }
-  .dot.dead { background:var(--fail); }
+  .shell { display:grid; grid-template-columns:var(--nav) 1fr;
+           height:100vh; overflow:hidden; }
+  .work  { display:grid; height:100vh; overflow:hidden; padding:14px;
+           gap:14px; }
 
-  /* ── 版面 ── */
+  /* 面板:自己是格線的一格,內容超出就在自己裡面捲 */
   .panel { background:var(--panel); border:1px solid var(--line);
-           border-radius:var(--r); padding:16px 18px; }
-  .panel h2 { font-size:11px; margin:0 0 12px; color:var(--faint);
-              font-weight:600; text-transform:uppercase; letter-spacing:.07em; }
-  .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-  .hint { font-size:12px; color:var(--muted); margin:0; }
-  .empty { padding:26px 18px; text-align:center; color:var(--faint); font-size:13px; }
+           border-radius:var(--r); padding:14px 16px;
+           display:flex; flex-direction:column; min-height:0; overflow:hidden; }
+  .panel > h2 { font-size:10px; margin:0 0 10px; color:var(--faint);
+                font-weight:700; text-transform:uppercase; letter-spacing:.09em;
+                flex:none; }
+  /* 一張卡裡有好幾段時,後面的段落要跟上一段的按鈕拉開距離,
+     並用一條細線分開 —— 不然標題會貼在按鈕下緣,看起來像同一組。 */
+  .panel > h2 ~ h2 { margin-top:20px; padding-top:16px;
+                     border-top:1px solid var(--line); }
+  .grow { flex:1; min-height:0; overflow-y:auto; }
+
+  .row { display:flex; gap:7px; align-items:center; flex:none; }
+  .row + .row { margin-top:7px; }
+  .hint { font-size:11px; color:var(--muted); margin:0; }
+  .empty { padding:22px 14px; text-align:center; color:var(--faint); font-size:12px; }
 
   /* ── 表單 ── */
-  label { display:block; font-size:11px; color:var(--muted); margin:10px 0 4px; }
+  label { display:block; font-size:10px; color:var(--muted);
+          margin:8px 0 3px; text-transform:uppercase; letter-spacing:.05em; }
   input, select, button, textarea { font:inherit; }
   input[type=text], input[type=password], select, textarea {
-    width:100%; padding:7px 10px; border-radius:var(--r-sm);
+    width:100%; padding:6px 9px; border-radius:var(--r-sm);
     border:1px solid var(--line); background:var(--panel); color:var(--fg);
     transition:border-color .12s; }
   input[type=text]:focus, select:focus {
-    outline:none; border-color:var(--accent); }
+    outline:none; border-color:var(--brand); }
   input::placeholder { color:var(--faint); }
   select { cursor:pointer; }
 
-  button { padding:7px 13px; border-radius:var(--r-sm);
+  button { padding:6px 12px; border-radius:var(--r-sm);
            border:1px solid var(--line); background:var(--panel);
-           color:var(--fg); cursor:pointer; transition:border-color .12s, background .12s; }
+           color:var(--fg); cursor:pointer;
+           transition:border-color .12s, background .12s; white-space:nowrap; }
   button:hover:not(:disabled) { border-color:var(--line-2); background:var(--sunk); }
   button:disabled { opacity:.4; cursor:default; }
-  button.primary { background:var(--accent); border-color:var(--accent);
-                   color:#fff; font-weight:600; }
-  button.primary:hover:not(:disabled) { filter:brightness(1.08);
-                                        background:var(--accent); }
-  button.danger { background:transparent; border-color:#d1293d55; color:var(--fail); }
-  button.danger:hover:not(:disabled) { background:#d1293d12; border-color:var(--fail); }
-  button.ghost { border-color:transparent; color:var(--muted); }
-  button.ghost:hover:not(:disabled) { color:var(--fg); }
+  button.primary { background:var(--brand); border-color:var(--brand); color:#fff; }
+  button.primary:hover:not(:disabled) { background:var(--brand-dark);
+                                        border-color:var(--brand-dark); }
+  button.danger { background:transparent; border-color:#d1493f55; color:var(--fail); }
+  button.danger:hover:not(:disabled) { background:#d1493f10; border-color:var(--fail); }
+  button.ghost { border-color:transparent; color:var(--muted); background:transparent; }
+  button.ghost:hover:not(:disabled) { color:var(--brand); background:var(--brand-soft); }
 
   /* ── 進度條 ── */
-  .pbar { height:5px; border-radius:3px; background:var(--line);
-          overflow:hidden; margin:10px 0; }
-  .pbar i { display:block; height:100%; background:var(--accent);
+  .pbar { height:4px; border-radius:2px; background:var(--line);
+          overflow:hidden; margin:8px 0; flex:none; }
+  .pbar i { display:block; height:100%; background:var(--brand);
             transition:width .3s ease; }
 
-  /* ── 對話框 ── */
-  .ov { position:fixed; inset:0; z-index:100; display:none;
+  /* ── 對話框:自己也不讓外層捲動 ── */
+  .ov { position:fixed; inset:0; z-index:200; display:none;
         align-items:center; justify-content:center;
-        background:#0b0d1180; backdrop-filter:blur(3px); }
+        background:#0a201d66; backdrop-filter:blur(3px); padding:20px; }
   .ov.on { display:flex; }
   .bx, .rbx { background:var(--panel); border:1px solid var(--line);
-              border-radius:14px; padding:22px 24px; width:min(560px,94vw);
-              box-shadow:0 18px 56px #00000038; }
-  .bx h3, .rbx h3 { margin:0 0 6px; font-size:15px; font-weight:600; }
-  .acts, .acts2 { display:flex; gap:8px; align-items:center; margin-top:18px; }
+              border-radius:14px; padding:20px 22px; width:min(560px,94vw);
+              max-height:92vh; display:flex; flex-direction:column;
+              box-shadow:0 18px 56px #00302a2e; }
+  .bx h3, .rbx h3 { margin:0 0 5px; font-size:15px; font-weight:600; flex:none; }
+  .acts, .acts2 { display:flex; gap:7px; align-items:center;
+                  margin-top:14px; flex:none; }
   .acts button { flex:1; }
 
   /* ── 數字磚 ── */
-  .cnt { display:flex; gap:8px; margin-top:12px; }
-  .cnt div { flex:1; text-align:center; padding:9px 6px; border-radius:var(--r-sm);
-             border:1px solid var(--line); font-size:11px; color:var(--muted); }
-  .cnt b { display:block; font-size:18px; color:var(--fg);
-           font-variant-numeric:tabular-nums; }
+  .cnt { display:flex; gap:7px; margin-top:10px; flex:none; }
+  .cnt div { flex:1; text-align:center; padding:8px 5px; border-radius:var(--r-sm);
+             border:1px solid var(--line); font-size:10px; color:var(--muted);
+             text-transform:uppercase; letter-spacing:.05em; }
+  .cnt b { display:block; font-size:17px; color:var(--fg);
+           font-variant-numeric:tabular-nums; letter-spacing:0; }
   .cnt .p b { color:var(--ok); }
   .cnt .f b { color:var(--fail); }
 
-  /* ── 捲軸:別喧賓奪主 ── */
-  ::-webkit-scrollbar { width:9px; height:9px; }
-  ::-webkit-scrollbar-thumb { background:var(--line-2); border-radius:5px; }
+  .badge { font-size:10px; color:var(--muted); padding:2px 8px;
+           border-radius:20px; border:1px solid var(--line); white-space:nowrap; }
+  .badge.com  { color:var(--brand); border-color:var(--brand-line);
+                background:var(--brand-soft); }
+  .badge.mock { color:var(--warn); border-color:#b7791f33; }
+  .dot { width:6px; height:6px; border-radius:50%; background:var(--faint); flex:none; }
+  .dot.ok { background:var(--brand); } .dot.poll { background:var(--warn); }
+  .dot.dead { background:var(--fail); }
+
+  ::-webkit-scrollbar { width:8px; height:8px; }
+  ::-webkit-scrollbar-thumb { background:var(--line-2); border-radius:4px; }
+  ::-webkit-scrollbar-thumb:hover { background:var(--faint); }
   ::-webkit-scrollbar-track { background:transparent; }
 </style>

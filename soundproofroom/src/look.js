@@ -62,7 +62,7 @@ export const LOOK = {
 
 
   /** 滑鼠移過去時的高亮色 */
-  highlight: 0x4f8ef7,
+  highlight: 0x009b85,
 
   /** 場景背景 */
   background: 0x11151a,

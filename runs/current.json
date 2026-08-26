@@ -1,13 +1,13 @@
 {
-  "state": "finished",
+  "state": "canceled",
   "mode": "selected",
-  "comment": "0826test · 0824-finaltest-2",
+  "comment": "0824-finaltest-2",
   "database": "51_MS_Teams_Rev05_SP2",
   "project_group": "MS Teams v5 Rev05 SP2 - Speakerphone",
   "project": "MS Teams v5 Rev05 SP2 - Speakerphone",
   "measurement_object": "New Measurement Object",
-  "started_at": 1787724077.815115,
-  "updated_at": 1787724101.9957402,
+  "started_at": 1787728427.3116696,
+  "updated_at": 1787730641.2089567,
   "planned": [
     {
       "row_id": 3584,
@@ -39,7 +39,7 @@
       "path": "MS Teams v5 Rev05 SP2 - Speakerphone / V5_Personal Space and Shared Space Devices - Desk Phone, Speakerphone / Information and preparation",
       "passed": true,
       "retries": 0,
-      "ts": 1787724081.3295908
+      "ts": 1787728430.7892747
     },
     {
       "row_id": 3585,
@@ -49,7 +49,7 @@
       "path": "MS Teams v5 Rev05 SP2 - Speakerphone / V5_Personal Space and Shared Space Devices - Desk Phone, Speakerphone / Information and preparation",
       "passed": true,
       "retries": 0,
-      "ts": 1787724086.2188551
+      "ts": 1787728435.5803154
     },
     {
       "row_id": 3586,
@@ -59,7 +59,7 @@
       "path": "MS Teams v5 Rev05 SP2 - Speakerphone / V5_Personal Space and Shared Space Devices - Desk Phone, Speakerphone / Information and preparation",
       "passed": true,
       "retries": 0,
-      "ts": 1787724091.092689
+      "ts": 1787728440.1721284
     },
     {
       "row_id": 3587,
@@ -69,7 +69,7 @@
       "path": "MS Teams v5 Rev05 SP2 - Speakerphone / V5_Personal Space and Shared Space Devices - Desk Phone, Speakerphone / Information and preparation",
       "passed": true,
       "retries": 0,
-      "ts": 1787724096.0306742
+      "ts": 1787728445.081822
     },
     {
       "row_id": 3588,
@@ -79,7 +79,7 @@
       "path": "MS Teams v5 Rev05 SP2 - Speakerphone / V5_Personal Space and Shared Space Devices - Desk Phone, Speakerphone / Information and preparation",
       "passed": true,
       "retries": 0,
-      "ts": 1787724100.5785735
+      "ts": 1787728449.8369734
     }
   ]
 }
