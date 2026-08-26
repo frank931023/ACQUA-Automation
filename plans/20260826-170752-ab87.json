@@ -1,0 +1,35 @@
+{
+  "id": "20260826-170752-ab87",
+  "created": "2026-08-26T17:07:52",
+  "title": "crossdataset-test-autov2026aug",
+  "description": "",
+  "updated": "2026-08-26T17:07:52",
+  "items": [
+    {
+      "row_id": 5920,
+      "title": "switch devices",
+      "path": "ZoomRooms_v2020Oct_v1",
+      "occ": 0,
+      "sig": "a8676ac8",
+      "smd_type": 43
+    }
+  ],
+  "count": 1,
+  "variables": {},
+  "source": {
+    "server": "AUTOMATION_ACQU\\ACQUADBSERVER",
+    "database": "ACQUA_auto_v2026Aug",
+    "group": "(Unsorted Projects)",
+    "project": "ZoomRooms_v2020Oct_v1",
+    "measurement_object": null,
+    "ctx": "AUTOMATION_ACQU\\ACQUADBSERVER|ACQUA_auto_v2026Aug|1",
+    "tree_fingerprint": "7e10c14f931b52fa:1477"
+  },
+  "manual_excluded": [],
+  "setup": {
+    "name": "",
+    "note": "",
+    "params": {},
+    "_note": "尚未自動化:目前只會在序列中間停下來提示人工調整"
+  }
+}

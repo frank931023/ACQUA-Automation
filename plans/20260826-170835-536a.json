@@ -1,0 +1,107 @@
+{
+  "id": "20260826-170835-536a",
+  "created": "2026-08-26T17:08:35",
+  "title": "crossdataset-test-teamssp2",
+  "description": "",
+  "updated": "2026-08-26T17:08:35",
+  "items": [
+    {
+      "row_id": 3579,
+      "title": "Info: MS Teams Information",
+      "path": "MS Teams v5 Rev05 SP2 - Speakerphone / V5_Personal Space and Shared Space Devices - Desk Phone, Speakerphone / Information and preparation",
+      "occ": 0,
+      "sig": "c41d05c3",
+      "smd_type": 34
+    },
+    {
+      "row_id": 3580,
+      "title": "Info: Setting up the RME soundcard for MS Teams testing",
+      "path": "MS Teams v5 Rev05 SP2 - Speakerphone / V5_Personal Space and Shared Space Devices - Desk Phone, Speakerphone / Information and preparation",
+      "occ": 0,
+      "sig": "b8516da5",
+      "smd_type": 34
+    },
+    {
+      "row_id": 3581,
+      "title": "Info: Setting up the Reference (REF) PC - MS Teams",
+      "path": "MS Teams v5 Rev05 SP2 - Speakerphone / V5_Personal Space and Shared Space Devices - Desk Phone, Speakerphone / Information and preparation",
+      "occ": 0,
+      "sig": "8863a62f",
+      "smd_type": 34
+    },
+    {
+      "row_id": 3582,
+      "title": "Info: Setting up the Device Under Test (DUT) PC - MS Teams",
+      "path": "MS Teams v5 Rev05 SP2 - Speakerphone / V5_Personal Space and Shared Space Devices - Desk Phone, Speakerphone / Information and preparation",
+      "occ": 0,
+      "sig": "e79c68fc",
+      "smd_type": 34
+    },
+    {
+      "row_id": 3583,
+      "title": "Info: Measurement settings",
+      "path": "MS Teams v5 Rev05 SP2 - Speakerphone / V5_Personal Space and Shared Space Devices - Desk Phone, Speakerphone / Information and preparation",
+      "occ": 0,
+      "sig": "f4a3aaab",
+      "smd_type": 34
+    },
+    {
+      "row_id": 3584,
+      "title": "Info: labCORE settings",
+      "path": "MS Teams v5 Rev05 SP2 - Speakerphone / V5_Personal Space and Shared Space Devices - Desk Phone, Speakerphone / Information and preparation",
+      "occ": 0,
+      "sig": "44112b47",
+      "smd_type": 34
+    },
+    {
+      "row_id": 3585,
+      "title": "Info: Workplace settings",
+      "path": "MS Teams v5 Rev05 SP2 - Speakerphone / V5_Personal Space and Shared Space Devices - Desk Phone, Speakerphone / Information and preparation",
+      "occ": 0,
+      "sig": "a9686c10",
+      "smd_type": 34
+    },
+    {
+      "row_id": 3586,
+      "title": "Info: Input calibration",
+      "path": "MS Teams v5 Rev05 SP2 - Speakerphone / V5_Personal Space and Shared Space Devices - Desk Phone, Speakerphone / Information and preparation",
+      "occ": 0,
+      "sig": "9b7f6b4d",
+      "smd_type": 34
+    },
+    {
+      "row_id": 3587,
+      "title": "Info: Mouth equalization",
+      "path": "MS Teams v5 Rev05 SP2 - Speakerphone / V5_Personal Space and Shared Space Devices - Desk Phone, Speakerphone / Information and preparation",
+      "occ": 0,
+      "sig": "3f1edef1",
+      "smd_type": 34
+    },
+    {
+      "row_id": 3588,
+      "title": "Info: SMD Collections",
+      "path": "MS Teams v5 Rev05 SP2 - Speakerphone / V5_Personal Space and Shared Space Devices - Desk Phone, Speakerphone / Information and preparation",
+      "occ": 0,
+      "sig": "9daa99ee",
+      "smd_type": 34
+    }
+  ],
+  "count": 10,
+  "variables": {},
+  "source": {
+    "server": "AUTOMATION_ACQU\\ACQUADBSERVER",
+    "database": "51_MS_Teams_Rev05_SP2",
+    "group": "MS Teams v5 Rev05 SP2 - Speakerphone",
+    "project": "MS Teams v5 Rev05 SP2 - Speakerphone",
+    "measurement_object": "New Measurement Object",
+    "ctx": "AUTOMATION_ACQU\\ACQUADBSERVER|51_MS_Teams_Rev05_SP2|6",
+    "tree_fingerprint": "c081e41e7a9575c8:1151"
+  },
+  "manual_excluded": [],
+  "setup": {
+    "name": "",
+    "note": "",
+    "params": {},
+    "_note": "尚未自動化:目前只會在序列中間停下來提示人工調整"
+  }
+}

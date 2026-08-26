@@ -1,85 +1,29 @@
 {
-  "state": "canceled",
+  "state": "finished",
   "mode": "selected",
-  "comment": "0824-finaltest-2",
-  "database": "51_MS_Teams_Rev05_SP2",
-  "project_group": "MS Teams v5 Rev05 SP2 - Speakerphone",
-  "project": "MS Teams v5 Rev05 SP2 - Speakerphone",
-  "measurement_object": "New Measurement Object",
-  "started_at": 1787728427.3116696,
-  "updated_at": 1787730641.2089567,
+  "comment": "crossdataset-test-autov2026aug",
+  "database": "ACQUA_auto_v2026Aug",
+  "project_group": "(Unsorted Projects)",
+  "project": "ZoomRooms_v2020Oct_v1",
+  "measurement_object": "Front_of_Room",
+  "started_at": 1787735577.265595,
+  "updated_at": 1787735647.3760746,
   "planned": [
     {
-      "row_id": 3584,
-      "title": "Info: labCORE settings"
-    },
-    {
-      "row_id": 3585,
-      "title": "Info: Workplace settings"
-    },
-    {
-      "row_id": 3586,
-      "title": "Info: Input calibration"
-    },
-    {
-      "row_id": 3587,
-      "title": "Info: Mouth equalization"
-    },
-    {
-      "row_id": 3588,
-      "title": "Info: SMD Collections"
+      "row_id": 5920,
+      "title": "switch devices"
     }
   ],
   "done": [
     {
-      "row_id": 3584,
-      "title": "Info: labCORE settings",
+      "row_id": 5920,
+      "title": "switch devices",
       "status": "Done",
       "code": 1,
-      "path": "MS Teams v5 Rev05 SP2 - Speakerphone / V5_Personal Space and Shared Space Devices - Desk Phone, Speakerphone / Information and preparation",
+      "path": "ZoomRooms_v2020Oct_v1",
       "passed": true,
       "retries": 0,
-      "ts": 1787728430.7892747
-    },
-    {
-      "row_id": 3585,
-      "title": "Info: Workplace settings",
-      "status": "Done",
-      "code": 1,
-      "path": "MS Teams v5 Rev05 SP2 - Speakerphone / V5_Personal Space and Shared Space Devices - Desk Phone, Speakerphone / Information and preparation",
-      "passed": true,
-      "retries": 0,
-      "ts": 1787728435.5803154
-    },
-    {
-      "row_id": 3586,
-      "title": "Info: Input calibration",
-      "status": "Done",
-      "code": 1,
-      "path": "MS Teams v5 Rev05 SP2 - Speakerphone / V5_Personal Space and Shared Space Devices - Desk Phone, Speakerphone / Information and preparation",
-      "passed": true,
-      "retries": 0,
-      "ts": 1787728440.1721284
-    },
-    {
-      "row_id": 3587,
-      "title": "Info: Mouth equalization",
-      "status": "Done",
-      "code": 1,
-      "path": "MS Teams v5 Rev05 SP2 - Speakerphone / V5_Personal Space and Shared Space Devices - Desk Phone, Speakerphone / Information and preparation",
-      "passed": true,
-      "retries": 0,
-      "ts": 1787728445.081822
-    },
-    {
-      "row_id": 3588,
-      "title": "Info: SMD Collections",
-      "status": "Done",
-      "code": 1,
-      "path": "MS Teams v5 Rev05 SP2 - Speakerphone / V5_Personal Space and Shared Space Devices - Desk Phone, Speakerphone / Information and preparation",
-      "passed": true,
-      "retries": 0,
-      "ts": 1787728449.8369734
+      "ts": 1787735646.0245337
     }
   ]
 }
