@@ -27,6 +27,7 @@
 """
 import queue
 import threading
+import time
 import traceback
 
 from .state import SharedState
@@ -64,6 +65,11 @@ class AcquaWorker(threading.Thread):
         #: 正在執行的命令名稱(閒置時為 None)。
         #: 用來分辨「state.running 是真的在跑」還是「上一輪死掉留下的旗標」。
         self._running_cmd = None
+        #: COM 心跳。閒置迴圈每次打訊息幫浦都會更新 ——
+        #: 幫浦丟例外就代表 COM 那端斷了。/api/health 只讀這個,
+        #: 不主動去碰 COM(量測跑起來時佇列是塞住的)。
+        self.last_pump_ok = 0.0
+        self.last_pump_error = None
 
     # ── 給 Flask 執行緒呼叫 ──────────────────────────
     def submit(self, _name: str, **kwargs) -> Command:
@@ -146,10 +152,14 @@ class AcquaWorker(threading.Thread):
             try:
                 cmd = self._q.get(timeout=0.05)
             except queue.Empty:
-                # 沒事做的時候打訊息幫浦 —— COM 事件靠這個進來
+                # 沒事做的時候打訊息幫浦 —— COM 事件靠這個進來。
+                # 順便當心跳:打得動就代表 COM 那端還活著。
                 try:
                     self.backend.pump()
+                    self.last_pump_ok = time.monotonic()
+                    self.last_pump_error = None
                 except Exception as exc:               # noqa: BLE001
+                    self.last_pump_error = str(exc)[:200]
                     self.state.log(f"訊息幫浦錯誤:{exc}", "error")
                 continue
 

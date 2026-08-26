@@ -476,6 +476,74 @@ def api_run():
     return jsonify(ok=True, queued=len(row_ids))
 
 
+@acqua_bp.route("/api/health")
+def api_health():
+    """開頁前的就緒檢查。**不排進工作佇列。**
+
+    量測跑起來時佇列是塞住的,而那正是最需要知道「服務還活著嗎」的時候。
+    所以只讀已經記錄下來的狀態,不主動去碰 COM。
+
+    三個層層遞進的訊號:
+        licence_service  Sentinel LDK 在不在(dongle 拔掉時它還是在,
+                         所以只是必要條件)
+        acqua_process    ACQUA 開著沒
+        com              **決定性的一項** —— 真的碰得到 ACQUA。
+                         授權或 dongle 有問題時 COM 一定失敗。
+
+    每一項都附「怎麼修」,因為看到這個畫面的人通常正卡住。
+    """
+    import subprocess
+    import time as _t
+
+    checks = []
+
+    def add(key, ok, detail, fix=""):
+        checks.append({"key": key, "ok": bool(ok), "detail": detail, "fix": fix})
+
+    ready = worker is not None and worker.ready.is_set()
+    init_err = str(worker.init_error)[:160] if (worker and worker.init_error) else ""
+    add("worker", ready and not init_err,
+        "ready" if ready else "not ready", init_err)
+
+    snap = state.snapshot()
+    if snap.get("backend") != "com":
+        add("acqua", True, "mock backend — ACQUA not needed")
+        return jsonify(ok=all(c["ok"] for c in checks), mock=True,
+                       checks=checks, state=snap)
+
+    def probe(cmd, needle, timeout=8):
+        try:
+            out = subprocess.run(cmd, capture_output=True, text=True,
+                                 timeout=timeout).stdout
+            return needle in out
+        except Exception:                                   # noqa: BLE001
+            return None                                     # 查不到,不當作失敗
+
+    svc = probe(["sc", "query", "hasplms"], "RUNNING", 6)
+    add("licence_service", svc is not False,
+        {True: "running", False: "not running"}.get(svc, "unknown"),
+        "Start the Sentinel LDK License Manager service (hasplms)."
+        if svc is False else "")
+
+    proc = probe(["tasklist", "/FI", "IMAGENAME eq Acqua6.exe"], "Acqua6.exe")
+    add("acqua_process", proc is not False,
+        {True: "running", False: "not running"}.get(proc, "unknown"),
+        "Start ACQUA first — this service attaches to it, it does not launch it."
+        if proc is False else "")
+
+    beat = worker.last_pump_ok if worker else 0.0
+    age = (_t.monotonic() - beat) if beat else None
+    err = (worker.last_pump_error if worker else "worker missing")
+    alive = bool(beat and age is not None and age < 30 and not err)
+    add("com", alive,
+        ("heartbeat %.1fs ago" % age) if age is not None else "no heartbeat",
+        (err or "Cannot reach ACQUA over COM. Check that ACQUA is open and the "
+                "ACOPT18 licence dongle is plugged in.") if not alive else "")
+
+    return jsonify(ok=all(c["ok"] for c in checks), mock=False,
+                   checks=checks, state=snap)
+
+
 @acqua_bp.route("/api/status-codes")
 def api_status_codes():
     """狀態碼字典 —— 讓前端不用自己抄一份 0-8 的對應表。

@@ -1,0 +1,93 @@
+{# 開頁前的就緒攔截。
+
+   為什麼要擋在前面:少了 dongle / ACQUA 沒開的時候,頁面本身照樣打得開,
+   每個按鈕也都按得下去 —— 但每一個都會失敗,而失敗訊息埋在日誌裡。
+   使用者要試好幾次才會意識到「不是我操作錯,是環境沒準備好」。
+
+   所以在確定就緒之前先蓋住畫面,把缺什麼、怎麼修直接寫出來。
+   模擬模式不需要 ACQUA,所以不擋。
+#}
+<style>
+  .gate { position:fixed; inset:0; z-index:400; display:none;
+          align-items:center; justify-content:center; padding:24px;
+          background:#0a201df2; backdrop-filter:blur(4px); }
+  .gate.on { display:flex; }
+  .gate .bxx { background:var(--panel); border-radius:14px; padding:24px 26px;
+               width:min(520px,94vw); box-shadow:0 20px 60px #00000040; }
+  .gate h3 { margin:0 0 4px; font-size:16px; font-weight:700; }
+  .gate .sub { font-size:12px; color:var(--muted); margin-bottom:16px; }
+  .gate .ck { display:flex; gap:11px; align-items:flex-start;
+              padding:10px 0; border-top:1px solid var(--line); }
+  .gate .ck .m { flex:none; width:18px; height:18px; border-radius:50%;
+                 display:flex; align-items:center; justify-content:center;
+                 font-size:11px; color:#fff; margin-top:1px; }
+  .gate .ck.ok  .m { background:var(--brand); }
+  .gate .ck.bad .m { background:var(--fail); }
+  .gate .ck .t { flex:1; min-width:0; }
+  .gate .ck .t b { display:block; font-size:13px; font-weight:600; }
+  .gate .ck .t small { color:var(--muted); font-size:11px; }
+  .gate .ck .t .fix { display:block; margin-top:4px; font-size:11px;
+                      color:var(--fail); }
+  .gate .acts3 { display:flex; gap:8px; margin-top:18px; }
+  .gate .acts3 button { flex:1; }
+</style>
+
+<div class="gate" id="gate">
+  <div class="bxx">
+    <h3>Not ready</h3>
+    <div class="sub" id="gate-sub">Checking…</div>
+    <div id="gate-list"></div>
+    <div class="acts3">
+      <button class="primary" id="gate-retry">Retry</button>
+      <button id="gate-skip">Continue anyway</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  const el = (id) => document.getElementById(id);
+  const gate = el('gate');
+  let skipped = false;
+
+  const LABEL = {
+    worker:          'Worker thread',
+    licence_service: 'Sentinel licence manager',
+    acqua_process:   'ACQUA running',
+    com:             'ACQUA reachable (COM + dongle)',
+    acqua:           'Backend',
+  };
+
+  async function check(showWhenOk) {
+    let r;
+    try {
+      r = await (await fetch('/acqua/api/health')).json();
+    } catch (e) {
+      // 伺服器連不上就不是這個視窗能解決的問題,交給頁面本身的錯誤處理
+      return;
+    }
+    if (r.ok || skipped) { gate.classList.remove('on'); return; }
+
+    el('gate-sub').textContent =
+      'The page works, but every action will fail until these are fixed.';
+    el('gate-list').innerHTML = (r.checks || []).map(c => `
+      <div class="ck ${c.ok ? 'ok' : 'bad'}">
+        <div class="m">${c.ok ? '✓' : '!'}</div>
+        <div class="t">
+          <b>${LABEL[c.key] || c.key}</b>
+          <small>${c.detail || ''}</small>
+          ${c.ok || !c.fix ? '' : `<span class="fix">${c.fix}</span>`}
+        </div>
+      </div>`).join('');
+    gate.classList.add('on');
+  }
+
+  el('gate-retry').onclick = () => check(true);
+  // 「先繼續」是刻意留的:有時候只是心跳還沒建立,或使用者只想看看畫面。
+  // 但這一次工作階段就不再擋 —— 不要變成每 10 秒彈一次的騷擾。
+  el('gate-skip').onclick = () => { skipped = true; gate.classList.remove('on'); };
+
+  check();
+  setInterval(() => { if (!skipped) check(); }, 10000);
+})();
+</script>
