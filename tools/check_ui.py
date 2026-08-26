@@ -376,6 +376,25 @@ check("換搜尋或排序會回第一頁", pl_html.count("page = 1;") >= 3)
 check("過濾後頁數縮水會自動修正", "if (page > pages) page = pages;" in pl_html)
 
 
+print("\n=== J. 服務活性與收工 ===")
+_gate = read("templates/_gate.html")
+_wk = read("acqua/worker.py")
+app_py = read("app.py")
+# 忙碌 != 死掉。少了這一條,任何超過 30 秒的命令都會被判成 COM 不通,
+# 使用者會被要求去檢查一個根本沒問題的 dongle。
+check("忙碌時不判成 COM 死掉", "alive = bool(busy_cmd)" in app_py)
+check("活性看執行緒不看啟動閂鎖", "worker.is_alive()" in app_py)
+check("命令跑完也更新心跳",
+      _wk.count("self.last_pump_ok = time.monotonic()") >= 2)
+check("健康檢查會說出正在跑什麼", "running_command()" in app_py)
+check("就緒視窗有停止服務", 'id="gate-stop"' in _gate)
+check("停止是兩段式確認", "'Confirm'" in _gate)
+check("停止有對應路由",
+      "/api/shutdown" in app_py and "/api/shutdown" in _gate)
+check("測試進行中不准關", "A test is running" in app_py)
+check("關掉會真的釋放 port", "os._exit(0)" in app_py)
+
+
 print("\n" + ("結論:全部通過" if not fails
               else "結論:%d 項未通過 —— %s" % (len(fails), "、".join(fails))))
 sys.exit(1 if fails else 0)

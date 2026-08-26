@@ -30,6 +30,13 @@
                       color:var(--fail); }
   .gate .acts3 { display:flex; gap:8px; margin-top:18px; }
   .gate .acts3 button { flex:1; }
+  .gate .acts3 button.danger { flex:0 0 auto; padding-left:14px;
+                               padding-right:14px; color:var(--fail);
+                               border-color:var(--fail); }
+  .gate .acts3 button.danger.arm { background:var(--fail); color:#fff; }
+  .gate .bye { text-align:center; padding:8px 0 2px; }
+  .gate .bye b { display:block; font-size:14px; margin-bottom:6px; }
+  .gate .bye small { color:var(--muted); font-size:12px; }
 </style>
 
 <div class="gate" id="gate">
@@ -40,6 +47,8 @@
     <div class="acts3">
       <button class="primary" id="gate-retry">Retry</button>
       <button id="gate-skip">Continue anyway</button>
+      <button class="danger" id="gate-stop"
+              title="Shut the service down and free the port">Stop</button>
     </div>
   </div>
 </div>
@@ -83,6 +92,47 @@
   }
 
   el('gate-retry').onclick = () => check(true);
+
+  // 兩段式:第一下只是舉起來,第二下才真的關。5 秒沒有第二下就放下。
+  // 它緊鄰 Retry,誤觸等於整個服務沒了。
+  let armed = 0;
+  const stopBtn = el('gate-stop');
+  stopBtn.onclick = async () => {
+    if (!armed) {
+      armed = 1;
+      stopBtn.classList.add('arm');
+      stopBtn.textContent = 'Confirm';
+      setTimeout(() => {
+        if (!armed) return;
+        armed = 0;
+        stopBtn.classList.remove('arm');
+        stopBtn.textContent = 'Stop';
+      }, 5000);
+      return;
+    }
+    armed = 0;
+    stopBtn.disabled = true;
+    stopBtn.textContent = 'Stopping…';
+    let r = {};
+    try {
+      r = await (await fetch('/acqua/api/shutdown', { method: 'POST' })).json();
+    } catch (e) {
+      // 連線斷掉就是關成功了 —— 行程沒了,回應當然收不到
+      r = { ok: true };
+    }
+    if (r.ok === false) {
+      // 唯一會被拒絕的情況:有測試在跑
+      stopBtn.disabled = false;
+      stopBtn.classList.remove('arm');
+      stopBtn.textContent = 'Stop';
+      el('gate-sub').textContent = r.error || 'Could not stop';
+      return;
+    }
+    skipped = true;              // 別讓輪詢再把畫面蓋回來
+    gate.querySelector('.bxx').innerHTML =
+      '<div class="bye"><b>Service stopped</b>' +
+      '<small>Port released. Run <code>run</code> again when you need it.</small></div>';
+  };
   // 「先繼續」是刻意留的:有時候只是心跳還沒建立,或使用者只想看看畫面。
   // 但這一次工作階段就不再擋 —— 不要變成每 10 秒彈一次的騷擾。
   el('gate-skip').onclick = () => { skipped = true; gate.classList.remove('on'); };

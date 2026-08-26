@@ -168,6 +168,9 @@ class AcquaWorker(threading.Thread):
                 self._dispatch(cmd)
             finally:
                 self._running_cmd = None
+                # 命令跑完也算心跳 —— 剛剛才碰過 COM,顯然是活的。
+                # 只靠閒置迴圈更新的話,長命令期間會被誤判成死掉。
+                self.last_pump_ok = time.monotonic()
 
         # 收工時如果還在跑,講清楚 —— 事件接收端一死,ACQUA 會卡在
         # IsMeasuring=True 回不來(2026-08-17 實測過)。

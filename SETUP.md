@@ -243,4 +243,6 @@ notepad config.json
 | 換庫後測項還是舊的 | 這是已修掉的 bug。若又出現,跑 `tools/check_context.py` |
 | 執行卡在「準備中」不動 | 看 ACQUA 視窗有沒有對話框在等人。網頁上的「擋路視窗」面板也會顯示 |
 | `running` 一直是 True 送不出新的一批 | 上一輪可能沒收乾淨。按標頭的「清除殘留」 |
+| 「Not ready」視窗說 COM 不通,但 dongle 明明插著 | 幾乎都是它正忙。視窗上會直接寫 `busy: open_project` 之類的,等它跑完就好。真的死掉會寫 `thread not alive` |
+| 想收工不想留一個行程佔著 port | 「Not ready」視窗上的 **Stop**(按兩下確認),或 `run stop` |
 | 報告產生很久 | 結果多的時候本來就慢(1400+ 筆要好幾分鐘)。ACQUA 是在背景寫檔,不是卡住 |

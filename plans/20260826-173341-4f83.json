@@ -1,0 +1,67 @@
+{
+  "id": "20260826-173341-4f83",
+  "created": "2026-08-26T17:33:41",
+  "title": "crossdataset-test-3",
+  "description": "",
+  "updated": "2026-08-26T17:33:41",
+  "items": [
+    {
+      "row_id": 3579,
+      "title": "Info: MS Teams Information",
+      "path": "MS Teams v5 Rev05 SP3 - Speakerphone / V5_Personal Space and Shared Space Devices - Desk Phone, Speakerphone / Information and preparation",
+      "occ": 0,
+      "sig": "f0d863d5",
+      "smd_type": 34
+    },
+    {
+      "row_id": 3580,
+      "title": "Info: Setting up the RME soundcard for MS Teams testing",
+      "path": "MS Teams v5 Rev05 SP3 - Speakerphone / V5_Personal Space and Shared Space Devices - Desk Phone, Speakerphone / Information and preparation",
+      "occ": 0,
+      "sig": "908856fb",
+      "smd_type": 34
+    },
+    {
+      "row_id": 3581,
+      "title": "Info: Setting up the Reference (REF) PC - MS Teams",
+      "path": "MS Teams v5 Rev05 SP3 - Speakerphone / V5_Personal Space and Shared Space Devices - Desk Phone, Speakerphone / Information and preparation",
+      "occ": 0,
+      "sig": "3821dd83",
+      "smd_type": 34
+    },
+    {
+      "row_id": 3582,
+      "title": "Info: Setting up the Device Under Test (DUT) PC - MS Teams",
+      "path": "MS Teams v5 Rev05 SP3 - Speakerphone / V5_Personal Space and Shared Space Devices - Desk Phone, Speakerphone / Information and preparation",
+      "occ": 0,
+      "sig": "f9d5a63d",
+      "smd_type": 34
+    },
+    {
+      "row_id": 3583,
+      "title": "Info: Measurement settings",
+      "path": "MS Teams v5 Rev05 SP3 - Speakerphone / V5_Personal Space and Shared Space Devices - Desk Phone, Speakerphone / Information and preparation",
+      "occ": 0,
+      "sig": "15f9aa3e",
+      "smd_type": 34
+    }
+  ],
+  "count": 5,
+  "variables": {},
+  "source": {
+    "server": "AUTOMATION_ACQU\\ACQUADBSERVER",
+    "database": "51_MS_Teams_Rev05_SP3",
+    "group": "MS Teams v5 Rev05 SP3 - Speakerphone",
+    "project": "MS Teams v5 Rev05 SP3 - Speakerphone",
+    "measurement_object": null,
+    "ctx": "AUTOMATION_ACQU\\ACQUADBSERVER|51_MS_Teams_Rev05_SP3|6",
+    "tree_fingerprint": "5b7a98da4e16c842:1151"
+  },
+  "manual_excluded": [],
+  "setup": {
+    "name": "",
+    "note": "",
+    "params": {},
+    "_note": "尚未自動化:目前只會在序列中間停下來提示人工調整"
+  }
+}

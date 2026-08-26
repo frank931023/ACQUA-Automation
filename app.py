@@ -512,10 +512,17 @@ def api_health():
     def add(key, ok, detail, fix=""):
         checks.append({"key": key, "ok": bool(ok), "detail": detail, "fix": fix})
 
-    ready = worker is not None and worker.ready.is_set()
+    # ⚠️ `ready` 是啟動時設一次的閂鎖 —— 執行緒死了它照樣是 True。
+    #    活性要看 is_alive()。
+    alive_thread = bool(worker and worker.is_alive())
+    ready = bool(worker and worker.ready.is_set())
     init_err = str(worker.init_error)[:160] if (worker and worker.init_error) else ""
-    add("worker", ready and not init_err,
-        "ready" if ready else "not ready", init_err)
+    busy_cmd = worker.running_command() if worker else None
+    add("worker", alive_thread and ready and not init_err,
+        ("running: %s" % busy_cmd) if busy_cmd
+        else ("idle" if (alive_thread and ready) else "thread not alive"),
+        init_err or ("The worker thread died - restart the service."
+                     if not alive_thread else ""))
 
     snap = state.snapshot()
     if snap.get("backend") != "com":
@@ -546,14 +553,49 @@ def api_health():
     beat = worker.last_pump_ok if worker else 0.0
     age = (_t.monotonic() - beat) if beat else None
     err = (worker.last_pump_error if worker else "worker missing")
-    alive = bool(beat and age is not None and age < 30 and not err)
+    # 忙著執行命令時走不到閒置迴圈,心跳當然不會更新 —— 那不是死掉。
+    # 開專案可以跑 300 秒,一批量測好幾分鐘,用時間判斷一定誤報。
+    alive = bool(busy_cmd) or bool(
+        beat and age is not None and age < 30 and not err)
     add("com", alive,
-        ("heartbeat %.1fs ago" % age) if age is not None else "no heartbeat",
+        ("busy: %s" % busy_cmd) if busy_cmd
+        else (("heartbeat %.1fs ago" % age) if age is not None else "no heartbeat"),
         (err or "Cannot reach ACQUA over COM. Check that ACQUA is open and the "
                 "ACOPT18 licence dongle is plugged in.") if not alive else "")
 
     return jsonify(ok=all(c["ok"] for c in checks), mock=False,
                    checks=checks, state=snap)
+
+
+@acqua_bp.route("/api/shutdown", methods=["POST"])
+def api_shutdown():
+    """把服務關掉並釋放 port。
+
+    環境有問題時(ACQUA 沒開、dongle 沒插)最自然的動作就是收工去修,
+    而不是留一個半死不活的行程佔著 port。
+
+    有測試在跑就拒絕 —— 那是唯一不該被隨手關掉的情況。
+    """
+    body = request.get_json(silent=True) or {}
+    if (state.running or (worker and worker.busy())) and not body.get("force"):
+        return jsonify(ok=False, running=True,
+                       error="A test is running - stop it first"), 409
+
+    state.log("Shutdown requested from the web UI", "warn")
+
+    def bye():
+        import time as _tt
+        _tt.sleep(0.4)          # 讓這個回應先送出去
+        try:
+            if worker:
+                worker.stop()
+                worker.join(timeout=8)
+        except Exception:                                   # noqa: BLE001
+            pass
+        os._exit(0)
+
+    threading.Thread(target=bye, daemon=True).start()
+    return jsonify(ok=True)
 
 
 @acqua_bp.route("/api/status-codes")

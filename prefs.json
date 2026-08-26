@@ -11,6 +11,16 @@
       "project": "MS Teams v5 Rev05 SP2 - Speakerphone",
       "used": "2026-08-26T17:08:07",
       "mo": "New Measurement Object"
+    },
+    "|": {
+      "group": "(Unsorted Projects)",
+      "project": "ZoomRooms_v2020Oct_v1",
+      "used": "2026-08-26T17:26:02"
+    },
+    "AUTOMATION_ACQU\\ACQUADBSERVER|51_MS_Teams_Rev05_SP3": {
+      "group": "MS Teams v5 Rev05 SP3 - Speakerphone",
+      "project": "MS Teams v5 Rev05 SP3 - Speakerphone",
+      "used": "2026-08-26T17:32:50"
     }
   },
   "report_dir": "C:\\Users\\autom\\OneDrive\\Desktop"
