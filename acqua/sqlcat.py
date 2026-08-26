@@ -89,7 +89,7 @@ def _raw_query(server: str, database: str, sql: str) -> list:
         except Exception as exc:                            # noqa: BLE001
             last = exc
     if last is not None:
-        raise RuntimeError(f"所有 OLE DB provider 都連不上:{last}")
+        raise RuntimeError(f"No OLE DB provider could connect: {last}")
     try:
         rs = cn.Execute(sql)[0]
         names = [rs.Fields.Item(i).Name for i in range(rs.Fields.Count)]

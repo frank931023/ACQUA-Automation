@@ -15,6 +15,7 @@ import os
 import shutil
 import subprocess
 import sys
+import threading
 import time
 
 from flask import (Blueprint, Flask, Response, jsonify, render_template,
@@ -44,6 +45,17 @@ config = {}
 # 測試計畫存在本地 plans/ 資料夾,不寫回 ACQUA 資料庫
 plans = TestPlans(BASE_DIR)
 prefs = Prefs(BASE_DIR)
+
+#: 最後一次收到請求的時間。閒置退出用 —— 見 _idle_watchdog。
+_last_seen = [time.monotonic()]
+
+
+@app.before_request
+def _mark_seen():
+    # 靜態檔不算 —— 瀏覽器可能只是在背景抓 favicon
+    if not request.path.startswith("/soundproofroom/src/"):
+        _last_seen[0] = time.monotonic()
+
 
 # ACQUA 測試自動化整組掛在 /acqua 底下 —— 頁面與 API 都是。
 # 好處:網址一看就知道屬於哪個子系統,以後要再加別的模組也不會打架。
@@ -1031,6 +1043,61 @@ def api_results_csv():
 
 
 # ── 進入點 ──────────────────────────────────────────
+def _open_browser_when_ready(url, port, timeout=90):
+    """等到 port 真的在聽了才開瀏覽器。
+
+    直接開的話會撞上「還在初始化 COM」那幾秒 —— 使用者看到的是
+    連線被拒絕的錯誤頁,然後要自己重新整理。
+    """
+    def wait():
+        import socket
+        import webbrowser
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            s = socket.socket()
+            s.settimeout(0.5)
+            ok = s.connect_ex(("127.0.0.1", port)) == 0
+            s.close()
+            if ok:
+                webbrowser.open(url)
+                return
+            time.sleep(0.5)
+
+    threading.Thread(target=wait, name="open-browser", daemon=True).start()
+
+
+def _idle_watchdog(seconds, port):
+    """沒人用又沒在跑,就收工把 port 讓出來。
+
+    「沒在跑」有兩個條件都要看:
+        state.running    後端自己的旗標
+        worker.busy()    工作執行緒真的在執行命令嗎
+    只看旗標的話,上一輪沒收乾淨留下的 True 會讓它永遠不退出。
+    """
+    def loop():
+        while True:
+            time.sleep(5)
+            idle = time.monotonic() - _last_seen[0]
+            if idle < seconds:
+                continue
+            if state.running or (worker and worker.busy()):
+                continue        # 有測試在跑 —— 關頁不該讓它停
+            print(f"\nIdle for {int(idle)}s with nothing running - shutting down, "
+                  f"port {port} released.\nRun again when you need it.")
+            try:
+                if worker:
+                    worker.stop()
+                    worker.join(timeout=8)
+            except Exception:                                # noqa: BLE001
+                pass
+            # werkzeug 的開發伺服器沒有乾淨的關閉入口,而該收的
+            # (COM、SQL 連線)worker.stop() 已經處理過了。
+            os._exit(0)
+
+    th = threading.Thread(target=loop, name="idle-watchdog", daemon=True)
+    th.start()
+
+
 def main():
     global worker, config
 
@@ -1040,6 +1107,10 @@ def main():
     ap.add_argument("--config")
     ap.add_argument("--backend", choices=["mock", "com"])
     ap.add_argument("--port", type=int)
+    ap.add_argument("--idle-exit", type=int, default=None, metavar="SEC",
+                    help="沒人用且沒在跑超過這麼多秒就自動退出(0 = 不退出)")
+    ap.add_argument("--open", action="store_true",
+                    help="伺服器起來之後自動開瀏覽器")
     args = ap.parse_args()
 
     config = load_config(args.config)
@@ -1048,24 +1119,24 @@ def main():
     if args.backend:
         config["backend"] = args.backend
 
-    print(f"設定檔:{config.get('_loaded_from')}")
-    print(f"後端  :{config.get('backend')}")
+    print(f"config : {config.get('_loaded_from')}")
+    print(f"backend: {config.get('backend')}")
     if config.get("backend") == "mock":
-        print("       (模擬模式 —— 不會連接真實的 ACQUA)")
+        print("         (mock - does not talk to a real ACQUA)")
 
     state.runlog = RunLog(BASE_DIR)
     pending = state.runlog.unfinished()
     if pending:
-        print(f"[!] 偵測到上次有未完成的執行:"
-              f"{pending['done_count']}/{pending['total']} 已完成,"
-              f"剩 {pending['remaining_count']} 項")
+        print(f"[!] Unfinished run found: "
+              f"{pending['done_count']}/{pending['total']} done, "
+              f"{pending['remaining_count']} left")
 
     worker = make_worker(config, state)
     worker.start()
     if not worker.ready.wait(timeout=320):
-        print("[!] 工作執行緒初始化逾時,Web 介面仍會啟動以便查看日誌")
+        print("[!] Worker start-up timed out - the web UI still starts so you can read the log")
     elif worker.init_error:
-        print(f"[!] 後端初始化失敗:{worker.init_error}")
+        print(f"[!] Backend initialisation failed: {worker.init_error}")
 
     web = config.get("web", {})
     port = args.port or int(web.get("port", 5000))
@@ -1080,14 +1151,24 @@ def main():
     if busy:
         worker.stop()
         raise SystemExit(
-            f"\n[x] port {port} 已經有程式在用了。\n"
-            f"  多開一個會讓兩個行程搶同一個 ACQUA,狀態會亂掉。\n"
-            f"  請先關掉舊的,或用 --port 換一個埠號。\n"
-            f"  找出是誰:  Get-NetTCPConnection -LocalPort {port} -State Listen\n")
+            f"\n[x] Port {port} is already in use.\n"
+            f"  A second copy would fight the first one over the same ACQUA.\n"
+            f"  Stop the old one, or pass --port to use another port.\n"
+            f"  Find it with:  Get-NetTCPConnection -LocalPort {port} -State Listen\n")
 
-    print(f"\n開啟瀏覽器:http://{host}:{port}")
-    print(f"   ACQUA 測試自動化   http://{host}:{port}/acqua")
-    print(f"   聲學測試室 3D      http://{host}:{port}/soundproofroom\n")
+    print(f"\nOpen  http://{host}:{port}")
+    print(f"   Test run    http://{host}:{port}/acqua")
+    print(f"   Test room   http://{host}:{port}/soundproofroom\n")
+
+    if args.open:
+        _open_browser_when_ready(f"http://{host}:{port}/acqua/", port)
+
+    idle = args.idle_exit
+    if idle is None:
+        idle = int(os.environ.get("ACQUA_IDLE_EXIT", "0") or 0)
+    if idle > 0:
+        print(f"Quits by itself after {idle}s idle, unless a test is running.")
+        _idle_watchdog(idle, port)
 
     # use_reloader=False —— 重載器會 fork 出第二個行程,COM 執行緒會被開兩份
     app.run(host=host, port=port, threaded=True, use_reloader=False, debug=False)

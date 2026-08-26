@@ -55,61 +55,61 @@ def report(quiet=False):
             print("        → %s" % r["fix"])
     print()
     if bad:
-        print("結論:%d 項致命問題 —— 不要啟動,先修好" % len(bad))
+        print("%d fatal problem(s) - do not start until fixed" % len(bad))
         return 1
     if warn:
-        print("結論:可以啟動,但有 %d 項要注意" % len(warn))
+        print("Ready, with %d warning(s)" % len(warn))
         return 2
-    print("結論:全部就緒")
+    print("All checks passed")
     return 0
 
 
 # ── 1. Python 本身 ──────────────────────────────
 def check_python():
     bits = struct.calcsize("P") * 8
-    check("Python 位元數", OK if bits == 32 else FATAL, "%d 位元" % bits,
-          "ACQUA 的 TypeLib 只註冊 win32 分支,一定要 32-bit 的 Python。"
-          "用 HEAD 附的:C:/Program Files (x86)/Common Files/HEAD shared/Python39")
+    check("Python architecture", OK if bits == 32 else FATAL, "%d-bit" % bits,
+          "ACQUA registers its TypeLib under win32 only - 32-bit Python is required. "
+          "Use the one shipped with HEAD: C:/Program Files (x86)/Common Files/HEAD shared/Python39")
 
-    for mod, why in [("flask", "網頁服務"), ("win32com", "COM 介面"),
-                     ("pythoncom", "COM 執行緒")]:
+    for mod, why in [("flask", "web service"), ("win32com", "COM interface"),
+                     ("pythoncom", "COM threading")]:
         try:
             __import__(mod)
-            check("套件 %s" % mod, OK, why)
+            check("Package %s" % mod, OK, why)
         except ImportError:
-            check("套件 %s" % mod, FATAL, "找不到",
-                  "確認用的是 .venv 裡的 Python:.venv\\Scripts\\python.exe")
+            check("Package %s" % mod, FATAL, "not found",
+                  "Make sure you are using .venv\\Scripts\\python.exe")
 
 
 # ── 2. 設定 ─────────────────────────────────────
 def check_config():
     path = os.path.join(ROOT, "config.json")
     if not os.path.exists(path):
-        check("config.json", FATAL, "不存在",
-              "複製 config.example.json 成 config.json")
+        check("config.json", FATAL, "missing",
+              "Copy config.example.json to config.json")
         return None
     try:
         cfg = json.load(io.open(path, encoding="utf-8"))
     except Exception as exc:                                # noqa: BLE001
-        check("config.json", FATAL, "格式壞掉:%s" % str(exc)[:50],
-              "用 JSON 檢查器看一下,常見是多一個逗號")
+        check("config.json", FATAL, "invalid JSON: %s" % str(exc)[:50],
+              "Check the file - a trailing comma is the usual cause")
         return None
 
     from acqua import env as env_settings
     applied = env_settings.apply_to(cfg, os.path.join(ROOT, ".env"))
-    check("config.json", OK, "讀取成功")
+    check("config.json", OK, "loaded")
     if os.path.exists(os.path.join(ROOT, ".env")):
-        check(".env", OK, "覆寫 %d 項" % len(applied))
+        check(".env", OK, "%d override(s)" % len(applied))
     else:
-        check(".env", WARN, "不存在,完全照 config.json",
-              "移機時複製 .env.example 成 .env,機器專屬的東西放那裡")
+        check(".env", WARN, "not present - using config.json as-is",
+              "Copy .env.example to .env and put machine-specific values there")
 
     db = cfg.get("database", {})
     if not db.get("server"):
-        check("資料庫設定", FATAL, "沒有指定 server",
-              "在 .env 設 ACQUA_DB_SERVER=機器名\\ACQUADBSERVER")
+        check("Database config", FATAL, "no server set",
+              "Set ACQUA_DB_SERVER=MACHINE\\ACQUADBSERVER in .env")
     else:
-        check("資料庫設定", OK, "%s / %s" % (db.get("server"), db.get("name")))
+        check("Database config", OK, "%s / %s" % (db.get("server"), db.get("name")))
     return cfg
 
 
@@ -121,16 +121,27 @@ def check_sql(cfg):
     server, name = db.get("server"), db.get("name")
     if not server:
         return
-    try:
-        from acqua.sqlcat import raw_query
-        rows = raw_query(server, name or "master",
-                         "SELECT DB_NAME() AS db, SUSER_NAME() AS usr")
-        check("SQL Server", OK, "%s(使用者 %s)"
-              % (rows[0]["db"], rows[0]["usr"]))
-    except Exception as exc:                                # noqa: BLE001
-        check("SQL Server", FATAL, str(exc)[:60],
-              "確認 SQL Server 服務有在跑,而且資料庫名稱正確。"
-              "不確定機器名的話,啟動後按網頁上的「掃描」")
+    # ⚠️ 重試而不是一次定生死:實測看過剛把舊行程砍掉之後,
+    #    緊接著的第一次連線會失敗(連線池/SSPI 還沒回穩)。
+    #    因為一次抖動就擋住啟動,是最惱人的那種假警報。
+    from acqua.sqlcat import raw_query
+    last = None
+    for attempt in range(3):
+        try:
+            rows = raw_query(server, name or "master",
+                             "SELECT DB_NAME() AS db, SUSER_NAME() AS usr")
+            check("SQL Server", OK, "%s (user %s)%s"
+                  % (rows[0]["db"], rows[0]["usr"],
+                     "" if not attempt else " (after %d retries)" % attempt))
+            return
+        except Exception as exc:                            # noqa: BLE001
+            last = exc
+            if attempt < 2:
+                import time
+                time.sleep(1.5)
+    check("SQL Server", FATAL, str(last)[:60],
+          "Check that SQL Server is running and the database name is right. "
+          "If unsure of the machine name, use Scan in the web UI")
 
 
 def check_acqua():
@@ -140,12 +151,12 @@ def check_acqua():
         pythoncom.CoInitialize()
         app = w.Dispatch("Acqua3.AcquaApplication")
         _ = app.SelectedDatabaseName          # 碰一下確認真的活著
-        check("ACQUA", OK, "已連上")
+        check("ACQUA", OK, "reachable over COM")
     except Exception as exc:                                # noqa: BLE001
         msg = str(exc)
-        hint = "先把 ACQUA 開起來 —— 這個程式是附掛上去的,不會幫你啟動"
+        hint = "Start ACQUA first - this service attaches to it, it does not launch it"
         if "無效的類別字串" in msg or "Invalid class string" in msg:
-            hint += ";如果 ACQUA 開著仍然這樣,檢查 ACOPT18 授權與 dongle"
+            hint += "; if ACQUA is open and this still fails, check the ACOPT18 licence and dongle"
         check("ACQUA", FATAL, msg[:60], hint)
 
 
@@ -158,16 +169,16 @@ def check_port(cfg):
     try:
         s.connect((host if host != "0.0.0.0" else "127.0.0.1", port))
         s.close()
-        check("網頁 port %d" % port, WARN, "已經有東西在用",
-              "可能是上一份還開著。要嘛先關掉,要嘛在 .env 改 ACQUA_WEB_PORT")
+        check("Web port %d" % port, WARN, "already in use",
+              "Another copy may be running. Stop it, or change ACQUA_WEB_PORT in .env")
     except Exception:                                       # noqa: BLE001
-        check("網頁 port %d" % port, OK, "可用")
+        check("Web port %d" % port, OK, "free")
 
 
 # ── 4. 本地資料 ─────────────────────────────────
 def check_storage():
-    for sub, why in [("plans", "測試計畫"), ("reports", "報告暫存"),
-                     ("runs", "執行紀錄")]:
+    for sub, why in [("plans", "test plans"), ("reports", "report staging"),
+                     ("runs", "run records")]:
         p = os.path.join(ROOT, sub)
         try:
             os.makedirs(p, exist_ok=True)
@@ -176,18 +187,18 @@ def check_storage():
                 f.write("x")
             os.unlink(probe)
             n = len([x for x in os.listdir(p) if x.endswith(".json")])
-            check("資料夾 %s" % sub, OK, "可寫入(%s ・ %d 筆)" % (why, n))
+            check("Folder %s" % sub, OK, "writable (%s, %d file(s))" % (why, n))
         except Exception as exc:                            # noqa: BLE001
-            check("資料夾 %s" % sub, FATAL, str(exc)[:50],
-                  "檢查資料夾權限,或這個路徑是不是在唯讀的位置")
+            check("Folder %s" % sub, FATAL, str(exc)[:50],
+                  "Check folder permissions, or whether this path is read-only")
 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--quiet", action="store_true", help="只印有問題的")
+    ap.add_argument("--quiet", action="store_true", help="only print problems")
     args = ap.parse_args()
 
-    print("啟動前自檢 ・ %s\n" % ROOT)
+    print("Pre-flight  %s\n" % ROOT)
     check_python()
     cfg = check_config()
     check_storage()
