@@ -1,13 +1,13 @@
 {
-  "state": "canceled",
+  "state": "finished",
   "mode": "selected",
-  "comment": "0824test · 0824-finaltest-2",
+  "comment": "0826test · 0824-finaltest-2",
   "database": "51_MS_Teams_Rev05_SP2",
   "project_group": "MS Teams v5 Rev05 SP2 - Speakerphone",
   "project": "MS Teams v5 Rev05 SP2 - Speakerphone",
   "measurement_object": "New Measurement Object",
-  "started_at": 1787562910.3448026,
-  "updated_at": 1787563032.9372966,
+  "started_at": 1787724077.815115,
+  "updated_at": 1787724101.9957402,
   "planned": [
     {
       "row_id": 3584,
@@ -39,7 +39,7 @@
       "path": "MS Teams v5 Rev05 SP2 - Speakerphone / V5_Personal Space and Shared Space Devices - Desk Phone, Speakerphone / Information and preparation",
       "passed": true,
       "retries": 0,
-      "ts": 1787562914.6668441
+      "ts": 1787724081.3295908
     },
     {
       "row_id": 3585,
@@ -49,7 +49,7 @@
       "path": "MS Teams v5 Rev05 SP2 - Speakerphone / V5_Personal Space and Shared Space Devices - Desk Phone, Speakerphone / Information and preparation",
       "passed": true,
       "retries": 0,
-      "ts": 1787562920.0084522
+      "ts": 1787724086.2188551
     },
     {
       "row_id": 3586,
@@ -59,7 +59,7 @@
       "path": "MS Teams v5 Rev05 SP2 - Speakerphone / V5_Personal Space and Shared Space Devices - Desk Phone, Speakerphone / Information and preparation",
       "passed": true,
       "retries": 0,
-      "ts": 1787562925.3186219
+      "ts": 1787724091.092689
     },
     {
       "row_id": 3587,
@@ -69,7 +69,7 @@
       "path": "MS Teams v5 Rev05 SP2 - Speakerphone / V5_Personal Space and Shared Space Devices - Desk Phone, Speakerphone / Information and preparation",
       "passed": true,
       "retries": 0,
-      "ts": 1787562931.052039
+      "ts": 1787724096.0306742
     },
     {
       "row_id": 3588,
@@ -79,7 +79,7 @@
       "path": "MS Teams v5 Rev05 SP2 - Speakerphone / V5_Personal Space and Shared Space Devices - Desk Phone, Speakerphone / Information and preparation",
       "passed": true,
       "retries": 0,
-      "ts": 1787562936.2619233
+      "ts": 1787724100.5785735
     }
   ]
 }

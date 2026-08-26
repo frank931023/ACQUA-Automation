@@ -470,6 +470,18 @@ class ComBackend(AcquaBackend):
         self._update_context()
         self.state.log(f"已開啟專案:{group} / {self.project.Title}")
 
+        # 沒有量測物件的專案跑不了,而且**程式建不出來**
+        #(AddMeasurementObject 實測一律回 -1)。
+        # 與其等使用者按下開始才失敗,現在就講。
+        try:
+            mos = self._catalog().list_mobjects(project_id=self._project_id())
+            if not mos:
+                self.state.log(
+                    f"⚠️ 「{self.project.Title}」底下沒有任何量測物件 —— "
+                    "請先在 ACQUA 裡建一個,否則沒辦法執行", "error")
+        except Exception:                                   # noqa: BLE001
+            pass        # 只是提醒,查不到就算了
+
     def select_measurement_object(self, title, create_if_missing=True):
         if self.project is None:
             raise RuntimeError("尚未開啟專案")
@@ -543,23 +555,37 @@ class ComBackend(AcquaBackend):
         self.state.log(f"[精靈] 從條件式反推出 {len(items)} 個變數,分成 {len(groups)} 組")
         return groups
 
-    def _manual_matcher(self):
-        """回傳一個判斷式:這個標題是不是「需要人工操作」的測項。
+    def _classifier(self):
+        """回傳一個函式:這個測項屬於哪一類。
 
-        這類項目跑到就會開視窗等人(例如 DUT & Measurement Wizard),
-        自動勾選時要排除掉,否則整批就沒辦法無人值守。
+        兩層,因為「會不會開視窗」沒有單一欄位可以判斷:
+
+            "manual"  已確認會開視窗(標題在設定裡)。自動勾選一律排除,
+                      否則整批就沒辦法無人值守。
+            "script"  SMDType 是腳本型別但沒被確認。**照常可跑** ——
+                      實測 ZoomRooms 的 `switch devices`(同樣是腳本)
+                      跑得完且不開任何視窗。只在開跑前提醒。
+            ""        一般測項。
+
+        為什麼不能只靠標題:盤點發現三個已確認的互動項全是 SMDType 43,
+        但同樣是 43 的 `Select automatic/manual volume control` 卻不在
+        清單裡 —— 靠人維護標題清單一定會漏。
+        為什麼不能只靠型別:43 只代表「腳本」,不代表一定互動。
         """
         import fnmatch
         m = self.config.get("manual_items") or {}
         titles = {str(x).strip() for x in (m.get("titles") or [])}
         pats = [str(x) for x in (m.get("title_patterns") or [])]
+        script_types = {int(x) for x in (m.get("script_smd_types") or [])}
 
-        def is_manual(title):
-            t = (title or "").strip()
-            if t in titles:
-                return True
-            return any(fnmatch.fnmatch(t, p) for p in pats)
-        return is_manual
+        def classify(smd):
+            t = (smd.get("title") or "").strip()
+            if t in titles or any(fnmatch.fnmatch(t, p) for p in pats):
+                return "manual"
+            if int(smd.get("smd_type", -1)) in script_types:
+                return "script"
+            return ""
+        return classify
 
     def _project_id(self):
         """目前作用中專案的 idProject。
@@ -600,55 +626,199 @@ class ComBackend(AcquaBackend):
         self.state.set(ctx=key)
         return key
 
-    def resolve_items(self, items):
+    def resolve_items(self, items, expect_fingerprint=None, same_ctx=False):
         """把計畫裡存的測項對應到「目前這個專案」的 row_id。
 
-        計畫可能是在別的資料庫建立的。row_id 跨庫必然重疊、而且指到完全
-        不同的測項(見 acqua/context.py),所以絕不能直接拿來用 ——
-        這裡改用「路徑 + 標題」重新對應。
+        三種證據互相佐證,任何一項對不上都會浮出來:
 
-        對不上的明白列出來,不猜、不自動略過:少跑一項比跑錯一項難發現。
+          ① **row_id** —— 只有在同一個專案內才有意義(same_ctx)。
+             跨庫的 idTreeItem 必然重疊且指向別的東西(見 acqua/context.py)。
+             同專案時它是權威,但仍要反過來驗標題與路徑。
+
+          ② **結構指紋** —— 存檔當時整棵樹的 (路徑+名稱) 雜湊。
+             相同 = 樹沒動過 = 序號可信;不同 = 樹被改過,序號可能整組位移。
+
+          ③ **(路徑, 名稱, 序號)** —— 跨庫時唯一能用的身分鍵。
+
+        指紋對不上時**不假裝有把握**:照樣對應,但標成「要人確認」,
+        由呼叫端在執行前問過使用者。少跑一項比跑錯一項難發現 ——
+        但跑錯一項比少跑一項更危險,所以寧可多問一次。
         """
+        from .sqlcat import fingerprint_of
+
         smds = self.state.smds or []
         if not smds:
             raise RuntimeError("目前沒有載入任何測項,無法對應計畫內容")
 
-        by_key, by_title = {}, {}
+        now_fp = fingerprint_of(smds)
+        # ⚠️ 指紋只在「同一個專案」才有意義 —— 跨專案本來就是另一棵樹,
+        #    拿來比一定不同,每次都警告就等於狼來了。
+        if not same_ctx:
+            tree_changed = None          # 不適用
+        elif expect_fingerprint:
+            tree_changed = (expect_fingerprint != now_fp)
+        else:
+            tree_changed = None          # 舊計畫沒存指紋,不知道
+
+        by_rowid = {int(s["row_id"]): s for s in smds}
+        by_exact, by_key, by_title = {}, {}, {}
         for s in smds:
             title = str(s.get("title") or "").strip()
             path = str(s.get("path") or "").strip()
-            by_key.setdefault((path, title), s)
+            by_exact[(path, title, int(s.get("occ") or 0))] = s
+            by_key.setdefault((path, title), []).append(s)
             by_title.setdefault(title, []).append(s)
 
-        resolved, missing, ambiguous = [], [], []
+        resolved, missing, ambiguous, conflicts = [], [], [], []
+        corrected = []          # 序號位移但靠鄰居校正回來的
         for it in (items or []):
             title = str(it.get("title") or "").strip()
             path = str(it.get("path") or "").strip()
-            hit, how = by_key.get((path, title)), "路徑+名稱"
+            occ = it.get("occ")
+            want_type = it.get("smd_type")
+
+            hit, how, sure = None, "", True
+
+            # ① 同一個專案 → row_id 是權威。但要反過來驗:
+            #    id 還在、指的卻是別的測項,代表樹被改過而且改得很兇。
+            if same_ctx and it.get("row_id") is not None:
+                cand = by_rowid.get(int(it["row_id"]))
+                if cand is not None:
+                    if str(cand.get("title") or "").strip() == title:
+                        hit, how = cand, "row_id"
+                    else:
+                        conflicts.append({
+                            "title": title, "path": path,
+                            "row_id": it.get("row_id"),
+                            "why": "同一個專案裡 #%s 現在是「%s」—— 專案樹被改過"
+                                   % (it.get("row_id"),
+                                      str(cand.get("title") or "")[:40])})
+                        continue
+
+            # ②a 鄰居簽章:序號位移時自動校正回原本那一筆。
+            #
+            #     序號是位置,位置會因增刪或組內調換而位移;鄰居不會。
+            #     所以在同名組裡找簽章對得上的那一筆 —— 有唯一解就直接換過去,
+            #     使用者完全不必知道發生過什麼。
+            #
+            #     ⚠️ 簽章是**額外**的證據。分不出來時要退回序號那條路,
+            #        不能把整筆丟掉 —— 那會比沒有簽章更糟。
+            want_sig = it.get("sig")
+            if hit is None and want_sig:
+                group = by_key.get((path, title)) or []
+                fixed = [s for s in group if s.get("sig") == want_sig]
+                if len(fixed) == 1:
+                    hit = fixed[0]
+                    if occ is not None and int(fixed[0].get("occ") or 0) != int(occ):
+                        how = ("路徑+名稱+鄰居(序號 %s→%s,已自動校正)"
+                               % (occ, fixed[0].get("occ")))
+                        corrected.append({
+                            "title": title, "path": path,
+                            "from_occ": occ, "to_occ": fixed[0].get("occ"),
+                            "row_id": fixed[0].get("row_id")})
+                    else:
+                        how = "路徑+名稱+鄰居"
+                        if not same_ctx:
+                            how += "(跨專案結構對應)"
+
+            # ② 序號:跨專案時唯一能用的身分鍵。
+            #
+            #    同專案卻走到這裡 = row_id 不在了(測項被刪過)——
+            #    **這時候指紋才有意義**:樹也變了的話,序號很可能整組位移,
+            #    對到的不會是原本那一項。
+            if hit is None and occ is not None:
+                hit = by_exact.get((path, title, int(occ)))
+                if hit is not None:
+                    how = "路徑+名稱+序號"
+                    if same_ctx:
+                        # 同專案但 row_id 不見了 —— 本來就該提高警覺
+                        sure = False
+                        how += ("(原本的 row_id 不在了,而且結構已變動)"
+                                if tree_changed else "(原本的 row_id 不在了)")
+                    else:
+                        how += "(跨專案結構對應)"
+
+            # ③ 舊計畫沒存序號。這組只有一個就沒有歧義
+            if hit is None:
+                cands = by_key.get((path, title)) or []
+                if len(cands) == 1:
+                    hit, how = cands[0], "路徑+名稱"
+                elif len(cands) > 1:
+                    ambiguous.append({"title": title, "path": path,
+                                      "count": len(cands),
+                                      "why": "同路徑同名有多筆,而這個計畫沒有存序號"})
+                    continue
+
+            # ④ 路徑對不上(專案結構動過)—— 退回只比名稱
             if hit is None:
                 cands = by_title.get(title) or []
                 if len(cands) == 1:
-                    hit, how = cands[0], "名稱"
+                    hit, how, sure = cands[0], "名稱", False
                 elif len(cands) > 1:
-                    # 同名多筆又沒有路徑可分辨 —— 猜錯就是跑錯測項
                     ambiguous.append({"title": title, "path": path,
-                                      "count": len(cands)})
+                                      "count": len(cands),
+                                      "why": "路徑對不上,而同名有多筆"})
                     continue
+
             if hit is None:
                 missing.append({"title": title, "path": path,
                                 "row_id": it.get("row_id")})
                 continue
+
+            # 型別是獨立的一票。對不上就是找錯人了,寧可不跑。
+            got_type = hit.get("smd_type")
+            if (want_type is not None and got_type is not None
+                    and int(want_type) >= 0 and int(got_type) != int(want_type)):
+                conflicts.append({
+                    "title": title, "path": path, "row_id": hit.get("row_id"),
+                    "why": "型別對不上(計畫記的是 %s,對到的是 %s)"
+                           % (want_type, got_type)})
+                continue
+
             resolved.append({"row_id": int(hit["row_id"]),
                              "title": hit.get("title", ""),
                              "path": hit.get("path", ""),
-                             "matched_by": how})
+                             "matched_by": how,
+                             "confident": sure})
+
+        unsure = [x for x in resolved if not x["confident"]]
+        cross = sum(1 for x in resolved if "跨專案" in x["matched_by"])
+
+        if corrected:
+            self.state.log(
+                "已自動校正 %d 項:序號位移了,但靠前後鄰居找回原本那一筆"
+                % len(corrected))
+            for c in corrected[:5]:
+                self.state.log("    %s(序號 %s → %s)"
+                               % (c["title"][:40], c["from_occ"], c["to_occ"]))
+
+        if same_ctx and tree_changed:
+            self.state.log(
+                "⚠️ 專案樹跟這個計畫存檔時不一樣了 —— "
+                "有測項被增刪或搬動過", "warn")
+        if unsure:
+            self.state.log(
+                "⚠️ 其中 %d 項是靠序號或名稱勉強對上的 —— "
+                "序號依樹狀順序,樹改過就可能位移到別的測項" % len(unsure), "warn")
+        if cross:
+            self.state.log(
+                "%d 項是跨專案的結構對應(路徑+名稱+序號)—— "
+                "不是同一筆資料的身分證明" % cross)
 
         self.state.log(
-            "[計畫] 對應 %d 項:成功 %d ・ 找不到 %d ・ 同名無法分辨 %d"
-            % (len(items or []), len(resolved), len(missing), len(ambiguous)),
-            "info" if not (missing or ambiguous) else "warn")
+            "[計畫] 對應 %d 項:成功 %d(其中 %d 項要確認)・ "
+            "找不到 %d ・ 無法分辨 %d ・ 衝突 %d"
+            % (len(items or []), len(resolved), len(unsure),
+               len(missing), len(ambiguous), len(conflicts)),
+            "info" if not (missing or ambiguous or conflicts or unsure) else "warn")
         return {"resolved": resolved, "missing": missing,
-                "ambiguous": ambiguous, "ctx": self.state.ctx}
+                "ambiguous": ambiguous, "conflicts": conflicts,
+                "corrected": corrected,
+                "needs_review": len(unsure),
+                "tree_changed": tree_changed,
+                "fingerprint_now": now_fp,
+                "fingerprint_expected": expect_fingerprint,
+                "ctx": self.state.ctx}
 
     def check_rows(self, row_ids):
         """公開版的歸屬驗證,給 /api/run 在送出前同步呼叫。
@@ -729,9 +899,15 @@ class ComBackend(AcquaBackend):
             smds = self._catalog().list_smds(
                 project_title=self.state.open_project, search=search,
                 project_id=self._project_id())
-            is_manual = self._manual_matcher()
+            classify = self._classifier()
             for s in smds:
-                s["manual"] = is_manual(s.get("title"))
+                s["kind"] = classify(s)
+                s["manual"] = (s["kind"] == "manual")   # 舊欄位,前端還在用
+            n_script = sum(1 for s in smds if s["kind"] == "script")
+            if n_script:
+                self.state.log(
+                    f"其中 {n_script} 個是腳本測項 —— 可能會開視窗,"
+                    "遇到時會在網頁上請你回答", "warn")
             self.state.log(f"[SQL] 列出 {len(smds)} 個 SMD")
 
             need = self._catalog().missing_reference_files(smds)
@@ -963,10 +1139,14 @@ class ComBackend(AcquaBackend):
         # ⭐ 前端要拿 row_id 去勾選,不只是數量。
         #    需要人工操作的項目一律排除 —— 它們會開視窗等人,
         #    留著就沒辦法「開跑後不用管」。
-        is_manual = self._manual_matcher()
+        # 預測結果只有 row_id/title,型別要從已載入的清單補回來 ——
+        # 分類需要型別(見 _classifier 的說明)。
+        by_id = {s["row_id"]: s for s in (self.state.smds or [])}
+        classify = self._classifier()
         run_ids, manual_hits = [], []
         for x in r["will_run"]:
-            if is_manual(x.get("title")):
+            smd = by_id.get(x["row_id"], {"title": x.get("title"), "smd_type": -1})
+            if classify(smd) == "manual":
                 manual_hits.append({"row_id": x["row_id"], "title": x["title"]})
             else:
                 run_ids.append(x["row_id"])

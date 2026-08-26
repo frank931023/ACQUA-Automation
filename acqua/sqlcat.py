@@ -169,6 +169,59 @@ def list_databases(server: str) -> list:
     return out
 
 
+#: 鄰居簽章要看多遠。實測 ZoomRooms(1477 筆、43 個同名組):
+#:     ±1 只看標題 → 3 組碰撞      ±6 只看標題 → 還是 1 組碰撞
+#:     ±2 且含鄰居路徑 → 0 組碰撞
+#: 加路徑才有效,因為重複的區塊通常位在不同的 MMD 底下。
+_SIG_WINDOW = 2
+
+
+def _neighbour_sig(smds, i) -> str:
+    """一筆測項的「鄰居簽章」—— 它前後幾筆各是誰(路徑+名稱)。
+
+    為什麼需要:同一組同路徑同名的測項,彼此只有位置(序號)能分辨,
+    而位置會因為增刪或順序調換而位移 —— 位移之後身分鍵仍然「對得上」,
+    只是對到別的測項。鄰居不會跟著位移,所以它是獨立的一票。
+
+    這也是**跨專案仍然有效**的特徵:同一套測試計畫複製到另一個專案時,
+    局部順序通常保持不變,即使整體位置改變。
+    """
+    import hashlib
+    parts = []
+    for d in range(-_SIG_WINDOW, _SIG_WINDOW + 1):
+        if d == 0:
+            continue
+        j = i + d
+        if 0 <= j < len(smds):
+            parts.append("%s|%s" % (smds[j].get("path") or "",
+                                    smds[j].get("title") or ""))
+        else:
+            parts.append("")            # 樹的頭尾
+    raw = "\x00".join(parts)
+    return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:8]
+
+
+def fingerprint_of(smds) -> str:
+    """測項樹的結構指紋。
+
+    用來回答一個問題:**這個計畫存檔之後,專案樹有沒有被動過?**
+
+    序號(occ)是依樹狀順序算出來的,樹一改序號就整組位移 ——
+    而位移之後 (路徑, 名稱, 序號) 三個欄位仍然「對得上」,
+    只是對到別的測項。所以必須有一個獨立的證據來判斷樹動過沒有。
+
+    只雜湊「路徑 + 名稱」的序列:那正是決定序號的東西。
+    測項改名、搬家、增刪都會讓指紋改變;純粹改測項內容則不會 ——
+    那也正確,因為那不影響身分。
+    """
+    import hashlib
+    h = hashlib.sha1()
+    for s in smds or []:
+        h.update(("%s\t%s\n" % (s.get("path") or "",
+                                 s.get("title") or "")).encode("utf-8"))
+    return "%s:%d" % (h.hexdigest()[:16], len(smds or []))
+
+
 class SqlCatalog:
     def __init__(self, state):
         self.state = state
@@ -262,6 +315,10 @@ class SqlCatalog:
         self._tree_cache = rows
         mmds = [r for r in rows if r["ItemType"] == "IType_MMD"]
 
+        # ⚠️ 同一條路徑下同名的測項很常見 —— 實測 ZoomRooms 有 11% 這樣。
+        #    所以每一筆再記一個「在這組裡的第幾個」(依樹狀順序),
+        #    這樣 (路徑, 名稱, 序號) 在專案內必然唯一,跨庫還原才對得回來。
+        seen = {}
         out = []
         for r in rows:
             if r["ItemType"] != "IType_SMD":
@@ -270,16 +327,26 @@ class SqlCatalog:
             anc = [m["Title"] for m in mmds
                    if m["LeftNode"] < r["LeftNode"] and m["RightNode"] > r["RightNode"]]
             cond = r.get("ConditionalExecution")
+            path = " / ".join(anc)
+            title = r["Title"]
+            key = (path, title)
+            occ = seen.get(key, 0)
+            seen[key] = occ + 1
             out.append({
                 "row_id": int(r["idTreeItem"]),
-                "title": r["Title"],
+                "title": title,
                 "smd_type": int(r["SMDType"]) if r.get("SMDType") is not None else -1,
                 "group": anc[-1] if anc else "",          # 直屬 MMD
-                "path": " / ".join(anc),
+                "path": path,
+                "occ": occ,                               # 同路徑同名的第幾個
                 "needs_ref": bool(r.get("NeedsRef")),
                 "ref_file": (r.get("RefFilename") or "").strip(),
                 "conditional": bool(cond and str(cond).strip()),
             })
+
+        # 鄰居簽章要等整串排好才算得出來(out 已經是樹狀順序)
+        for i in range(len(out)):
+            out[i]["sig"] = _neighbour_sig(out, i)
 
         if search:
             s = search.lower()

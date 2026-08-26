@@ -277,9 +277,72 @@ check("新增 DUT 失敗會明講(AddMeasurementObject 回 -1)",
 check("執行時把 DUT 名稱送給 prepare",
       "measurement_object: st.mo.trim()" in pl_html)
 ap = read("app.py")
+check("換機/換庫的判斷比對 (server, database)",
+      '(srv, db) != (now.get("server"), now.get("database"))' in ap)
 check("prepare 收得到 DUT 覆寫", 'mo_override = str(body.get("measurement_object")' in ap)
 # 選單裡的名稱都是既有的,所以一律不建立(COM 也建不了)
-check("選 DUT 一律不嘗試建立", "create_if_missing=False).wait(timeout=120)" in ap)
+check("選 DUT 一律不嘗試建立", "title=mo, create_if_missing=False" in ap)
+
+print()
+print("=== I2. 涵蓋率:對所有 SMD / 專案 / 資料庫都成立嗎 ===")
+sq = read("acqua/sqlcat.py")
+wz = read("acqua/wizard.py")
+
+# 測項身分:(路徑,名稱) 實測不唯一(ZoomRooms 有 11%),所以必須帶序號
+check("測項身分帶序號", chr(34) + "occ" + chr(34) + ": occ" in sq)
+check("還原用三層索引(序號 → 路徑名稱 → 名稱)",
+      "by_exact" in com and "路徑+名稱+序號" in com)
+check("存計畫時帶序號", "occ: s.occ" in idx_html)
+
+# 分類:型別 + 標題兩層。只靠標題清單一定會漏(實測漏了 3 種)
+check("測項分類看型別也看標題",
+      "def _classifier" in com and "script_smd_types" in com)
+check("mock 後端有同樣的分類", "def _classifier" in read("acqua/backend_mock.py"))
+check("腳本測項會事先提醒", "個腳本測項" in idx_html)
+
+# 精靈變數:看它怎麼被使用,不看名字前綴
+check("精靈變數靠關係運算子篩選",
+      "_SETTABLE_RELS" in wz and "rset & _SETTABLE_RELS" in wz)
+
+# 沒有量測物件的專案跑不了,而且程式建不出來 —— 開專案當下就要講
+check("開專案時檢查有沒有量測物件", "底下沒有任何量測物件" in com)
+
+# 序號會被專案樹的編輯打亂,而且打亂之後身分鍵仍然「對得上」——
+# 必須有獨立證據才察覺得到
+check("存計畫時記下結構指紋", "tree_fingerprint" in read("acqua/testplans.py")
+      and "def fingerprint_of" in sq)
+check("還原時比對指紋", "expect_fingerprint" in com and "tree_changed" in com)
+check("同專案時 row_id 是權威且會反驗標題",
+      "same_ctx and it.get" in com and "專案樹被改過" in com)
+check("型別是獨立的一票", "型別對不上" in com)
+check("對應有把握與否會回報", '"confident": sure' in com)
+check("樹變動時執行前會問人", "res.tree_changed" in pl_html)
+# 序號會位移,鄰居不會 —— 這是自動校正的依據
+check("每筆測項都有鄰居簽章", "def _neighbour_sig" in sq and '"sig"' in sq)
+check("簽章看 ±2 且含鄰居路徑(±1 或不含路徑會碰撞)",
+      "_SIG_WINDOW = 2" in sq and 's.get("path") or ""' in sq)
+check("序號位移會自動校正回原本那一筆", "已自動校正" in com and "corrected" in com)
+check("簽章分不出來時退回序號,不丟掉整筆",
+      "簽章是**額外**的證據" in com or "不能把整筆丟掉" in com)
+check("有自動校正的實機測試",
+      os.path.exists(os.path.join(ROOT, "tools", "test_selfheal.py")))
+check("有還原的實機測試",
+      os.path.exists(os.path.join(ROOT, "tools", "test_resolve.py")))
+# 移機與長期運作:設定要能抽離、環境要能重現、啟動前要能自檢
+check("機器專屬設定可從 .env 抽離",
+      os.path.exists(os.path.join(ROOT, "acqua", "env.py"))
+      and os.path.exists(os.path.join(ROOT, ".env.example")))
+check(".env 不進版控", ".env" in read(".gitignore"))
+check("相依套件釘到完整快照", read("requirements.txt").count("==") >= 8)
+check("有啟動前自檢", os.path.exists(os.path.join(ROOT, "tools", "preflight.py")))
+check("有開機自動啟動的安裝腳本",
+      os.path.exists(os.path.join(ROOT, "tools", "install_task.ps1")))
+check("序列可以拖曳排序", "dragstart" in pl_html and "data-grip" in pl_html)
+check("縮小後點一下回到原本的視窗", "__miniRestore" in pl_html
+      and "__miniRestore" in read("templates/_runmini.html"))
+check("有涵蓋率盤點工具",
+      os.path.exists(os.path.join(ROOT, "tools", "survey.py")))
+
 
 print("\n=== I. 計畫庫的排序與分頁 ===")
 check("有排序選單", 'id="sort"' in pl_html and "function sorted(" in pl_html)

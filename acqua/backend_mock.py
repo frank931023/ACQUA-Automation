@@ -155,10 +155,13 @@ class MockBackend(AcquaBackend):
         self.state.set(smds=smds)
         return smds
 
-    def resolve_items(self, items):
+    def resolve_items(self, items, expect_fingerprint=None, same_ctx=False):
         """模擬模式:照原樣回傳,不做對應。"""
-        return {"resolved": [dict(x) for x in (items or [])],
-                "missing": [], "ambiguous": [], "ctx": self.state.ctx}
+        out = [dict(x, matched_by="mock", confident=True) for x in (items or [])]
+        return {"resolved": out, "missing": [], "ambiguous": [], "conflicts": [],
+                "needs_review": 0, "tree_changed": False,
+                "fingerprint_now": "", "fingerprint_expected": expect_fingerprint,
+                "ctx": self.state.ctx}
 
     def check_rows(self, row_ids):
         """模擬模式沒有真的資料庫,一律放行。"""
@@ -375,6 +378,23 @@ class MockBackend(AcquaBackend):
         return getattr(self, "_hw_active", self._MOCK_HW[0])
 
     # ── 設計 A:需要人工操作的測項 ────────────────
+    def _classifier(self):
+        """跟 COM 後端同樣的兩層分類(見 backend_com._classifier)。"""
+        import fnmatch
+        m = self.config.get("manual_items") or {}
+        titles = {str(x).strip() for x in (m.get("titles") or [])}
+        pats = [str(x) for x in (m.get("title_patterns") or [])]
+        script_types = {int(x) for x in (m.get("script_smd_types") or [])}
+
+        def classify(smd):
+            t = (smd.get("title") or "").strip()
+            if t in titles or any(fnmatch.fnmatch(t, p) for p in pats):
+                return "manual"
+            if int(smd.get("smd_type", -1)) in script_types:
+                return "script"
+            return ""
+        return classify
+
     def _manual_matcher(self):
         import fnmatch
         m = self.config.get("manual_items") or {}

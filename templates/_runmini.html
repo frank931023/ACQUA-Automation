@@ -8,8 +8,8 @@
 <style>
   #rmini { position:fixed; right:18px; bottom:18px; z-index:200; display:none;
            width:250px; border-radius:12px; cursor:pointer;
-           background:var(--card, #fff); color:var(--fg, #111);
-           border:1px solid var(--line, #e3e3e8);
+           background:var(--panel); color:var(--fg);
+           border:1px solid var(--line);
            box-shadow:0 10px 34px #0000002e; font-size:13px; }
   #rmini.on { display:block; }
   #rmini .h { display:flex; align-items:center; gap:8px;
@@ -21,15 +21,15 @@
   #rmini .h span { flex:1; }
   #rmini .b { padding:0 12px 12px; }
   #rmini .n { font-size:22px; font-weight:600; font-variant-numeric:tabular-nums; }
-  #rmini .n small { font-size:12px; font-weight:400; color:var(--muted, #8a8a93); }
+  #rmini .n small { font-size:12px; font-weight:400; color:var(--muted); }
   #rmini .bar { height:6px; border-radius:4px; margin:8px 0 6px;
-                background:var(--line, #e9e9ee); overflow:hidden; }
+                background:var(--line); overflow:hidden; }
   #rmini .bar i { display:block; height:100%; background:#e8a70a; transition:width .3s; }
-  #rmini .s { display:flex; gap:10px; font-size:11px; color:var(--muted, #8a8a93); }
+  #rmini .s { display:flex; gap:10px; font-size:11px; color:var(--muted); }
   #rmini .s b { font-variant-numeric:tabular-nums; }
-  #rmini .s .p b { color:var(--ok, #2e9e5b); }
-  #rmini .s .f b { color:var(--bad, #d24b4b); }
-  #rmini .t { font-size:11px; color:var(--muted, #8a8a93); margin-top:5px;
+  #rmini .s .p b { color:var(--ok); }
+  #rmini .s .f b { color:var(--fail); }
+  #rmini .t { font-size:11px; color:var(--muted); margin-top:5px;
               white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 </style>
 
@@ -54,7 +54,20 @@
 
   const el = (id) => document.getElementById(id);
   const box = el('rmini');
-  box.onclick = () => { location.href = '/acqua/'; };
+
+  // 點一下要回到「原本那個進度視窗」,而不是跳頁 ——
+  // 跳頁會讓人失去正在看的東西(序列的日誌、剛才的設定)。
+  // 宿主頁面可以提供 window.__miniRestore 把自己的視窗打開;
+  // 沒有的話才退回導覽到測項選擇頁。
+  box.onclick = () => {
+    if (typeof window.__miniRestore === 'function') {
+      window.__miniRestore();
+      box.classList.remove('on');
+      return;
+    }
+    location.href = '/acqua/';
+  };
+  box.title = '點一下展開';
 
   let t0 = null, seen = 0;
 

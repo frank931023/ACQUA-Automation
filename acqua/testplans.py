@@ -52,14 +52,20 @@ def new_setup(name="", note="", params=None) -> dict:
 def source_of(snap) -> dict:
     """從目前狀態記下「這批測項是在哪裡挑的」。
 
-    存 ctx 是為了判斷能不能直接用 row_id;存 database/project 是為了
-    跨庫執行時知道要切到哪裡。兩者缺一不可。
+    ・ctx        判斷能不能直接用 row_id(同專案才行)
+    ・database   跨庫執行時知道要切到哪裡
+    ・指紋       判斷專案樹在存檔之後有沒有被動過 ——
+                 測項的序號是依樹狀順序算的,樹一改就整組位移,
+                 而位移之後身分鍵**仍然對得上**,只是對到別的測項。
+                 沒有這個獨立證據就察覺不到。
     """
+    from .sqlcat import fingerprint_of
     return {
         "server": snap.get("server"), "database": snap.get("database"),
         "group": snap.get("open_group"), "project": snap.get("open_project"),
         "measurement_object": snap.get("measurement_object"),
         "ctx": snap.get("ctx"),
+        "tree_fingerprint": fingerprint_of(snap.get("smds") or []),
     }
 
 

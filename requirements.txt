@@ -1,9 +1,29 @@
 # ACQUA 自動化 — Python 相依套件
 #
-# ⚠️ 必須使用 32-bit Python(對齊 ACQUA 的 x86 安裝)
-#    驗證:python -c "import struct; print(struct.calcsize('P')*8)"  → 必須印出 32
+# ⚠️ 必須用 32-bit Python(對齊 ACQUA 的 x86 安裝)
+#    驗證:python -c "import struct; print(struct.calcsize('P')*8)"  → 要印出 32
+#
+# 版本是**這台機器上實測可用的完整快照**,不只釘直接相依。
+# 只釘 Flask 的話,Werkzeug/Jinja2 會各自跳版,移機後很容易出現
+# 「同一份程式碼在另一台行為不一樣」而查不出原因。
+#
+# 更新方式:在確認可用的機器上跑
+#     .venv\Scripts\python.exe -m pip freeze > requirements.txt
+# 然後把這段說明貼回檔案最上面。
+#
+# 產生時間:2026-08-26 ・ 產生自這台開發機
 
-Flask==3.0.3
+# ── 直接相依 ──
+Flask==3.1.3
+pywin32==312; sys_platform == "win32"
 
-# pywin32 只在 Windows 上安裝;mock 模式不需要它
-pywin32==306; sys_platform == "win32"
+# ── Flask 拉進來的(釘住才能重現)──
+Jinja2==3.1.6
+MarkupSafe==3.0.3
+Werkzeug==3.1.8
+blinker==1.9.0
+click==8.1.8
+colorama==0.4.6
+importlib_metadata==8.7.1
+itsdangerous==2.2.0
+zipp==3.23.1

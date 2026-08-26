@@ -1,474 +1,225 @@
 # ACQUA 測試自動化
 
-用 Python + Flask 透過 ACOPT18 COM 介面自動化 HEAD acoustics ACQUA。
-核心情境:**從專案的眾多測項中挑出要跑的,讓它自己依序跑完,收集 pass/fail 與數值結果。**
+用 COM 驅動 HEAD acoustics ACQUA,把「挑測項 → 跑 → 出報告」變成網頁上的操作,
+並且可以把多批測試接成一條序列連續跑,中間留給治具移動。
 
-> 最後更新:2026-08-10
-
-### 相關文件
-
-| 文件 | 內容 |
-|---|---|
-| **本文件** | 實作專案的架構、環境、進度、待辦 |
-| [`SETUP.md`](SETUP.md) | ⭐ **移植到另一台電腦**的完整步驟與踩坑清單 |
-| `../ACQUA_COM_自動化開發指南.md` | COM 介面的觀念與完整 API 參考 |
-| `../61_Demo_SMDs_Rev07_測項清單.md` | 資料庫裡 132 個測項的完整清單與授權模組對照 |
+```
+瀏覽器  ──HTTP──▶  Flask  ──佇列──▶  工作執行緒(STA)  ──COM──▶  ACQUA
+                                          │
+                                          └──ADO──▶  SQL Server(測項樹 / 結果 / 數值)
+```
 
 ---
 
 ## 快速開始
 
-```powershell
-# 環境已經建好了(.venv 用的是 HEAD 內建的 32-bit Python 3.9)
-.\.venv\Scripts\python.exe app.py --backend mock
-# 開瀏覽器 → http://127.0.0.1:5000
+```bash
+cd "ACQUA Automation"
+.venv\Scripts\python.exe app.py --backend com     # 真的接 ACQUA
+.venv\Scripts\python.exe app.py --backend mock    # 不接 ACQUA,純看流程
 ```
 
-模擬模式**不需要 ACQUA、不需要資料庫、不需要量測硬體**,可以直接把整套流程與 UI 跑一遍。
+開 <http://127.0.0.1:5000/>。**ACQUA 要先自己開著**——程式是附掛上去,不會幫你啟動。
 
-切換到真實 ACQUA:
+> 用 `.venv` 裡的 Python。HEAD 那份 `Python39` 沒有 flask。
 
-```powershell
-# config.json 已經建好並指向 61_Demo_SMDs_Rev07
-.\.venv\Scripts\python.exe app.py --backend com
-```
+三個頁面:
 
-> 🔴 **前提:ACOPT18 授權已確認可用。** 沒有的話 `Dispatch()` 會直接失敗。
-
----
-
-## 這台機器的環境現況(2026-08-10 更新)
-
-| 項目 | 狀態 |
+| 網址 | 做什麼 |
 |---|---|
-| ACQUA | ✅ 已安裝 `C:\Program Files (x86)\HEAD Analyzer ACQUA\Acqua6.exe` **v6.2.210** |
-| COM 註冊 | ✅ ProgID `Acqua3.AcquaApplication` → LocalServer32 → `Acqua6.exe` |
-| SQL Server | ✅ 執行個體 `ACQUADBSERVER`(SQL Server 2019)運行中 |
-| **ACQUA 資料庫** | ✅ 已建立 —— `61_Demo_SMDs_Rev07`(**132 個 SMD**),詳見下方 |
-| Python | ✅ HEAD 內建 **32-bit Python 3.9.13**,已含 pywin32 |
-| 本專案 venv | ✅ `.venv`(Python 3.9.13 32-bit + Flask 3.1.3 + pywin32 312) |
-| ACOPT18 授權 | ✅ **已確認可用**(dongle 已插入,2026-08-10 實測 COM 連線成功) |
-| 量測硬體 | ❓ 未確認(已裝 HEAD device drivers) |
-
-### 資料庫(2026-08-06 更新)
-
-已建立兩個,專案目前設定用 **`61_Demo_SMDs_Rev07`**:
-
-| 資料庫 | 位置 | 內容 |
-|---|---|---|
-| **`61_Demo_SMDs_Rev07`** ✅ 使用中 | `C:\ACQUA_DB` | HEAD 官方示範庫,**132 個 SMD / 61 個 MMD** |
-| `AUTOMATION_TEST_0806` | `C:\Users\autom\ACQUA_Databases` | 5 個空專案,**0 個 SMD**(暫不使用) |
-
-完整測項清單見 `../61_Demo_SMDs_Rev07_測項清單.md`。
-
-### ✅ 已解決:「孤兒專案」不是問題
-
-資料庫裡 `acqua.Projects.rProjectGroup` 是 NULL,原本擔心 COM 列舉不到。
-**實測結果:ACQUA 會自動建一個合成群組收容它。**
-
-```
-ProjectGroups.Count = 2
-  [0] 'Standards'            Projects.Count = 0
-  [1] '(Unsorted Projects)'  Projects.Count = 1
-        └─ 'ACQUA Demo SMDs Rev.07'   RowID=1
-```
-
-👉 **不需要改資料庫。** config 的 `project_group` 設成 `(Unsorted Projects)` 即可。
-
-### 其他待辦
-
-- ⚠️ **132 個測項各自需要對應的 ACOPT 模組授權**(6819/6820/6844/6857…)——
-  授權不足的測項會在執行時失敗
-- ⚠️ **17 個測項需要外部參考檔**(`.dat`/`.fft`),`list_smds()` 會在日誌警告
-- ⚠️ SQL Server 是 **Express 版**,單一資料庫上限 10 GB
+| `/` | 入口 |
+| `/acqua/` | 連線、開專案、勾測項、跑、出報告 |
+| `/acqua/plans` | 把多個計畫接成序列連續跑 |
 
 ---
 
-## ⭐ 實機驗證結果(2026-08-10,dongle 已插入)
+## 兩種用法
 
-### 已驗證可用
+**① 單次執行**(`/acqua/`)
+連線 → 開專案 → 選 DUT → 載入測項 → 勾 → 命名 → 執行。
 
-| 項目 | 結果 |
+**② 執行序列**(`/acqua/plans`)
+把勾好的一批存成「計畫」,再把多個計畫排成序列。每一步之間會停下來調整
+治具位置。**計畫可以來自不同資料庫**——執行時會自動切過去。
+
+```
+① ZoomRooms / Front_of_Room ・ 226 項
+   ↓ setup:0°／1m   ・ 切換到 51_MS_Teams_Rev05_SP2
+② MS Teams Speakerphone / DUT_A ・ 40 項
+```
+
+每一步可以各自指定 run 名稱、DUT、Word 檔名與位置。
+
+---
+
+## 設計上的幾個關鍵決定
+
+### 逐項送,而不是整批交給 ACQUA
+
+`StartMeasurements` 會讓 ACQUA 自己決定跑哪些,互動精靈一定會跳出來等人。
+改成用 `StartSingleMeasurement` 一筆一筆送:
+
+- 勾幾項就跑幾項
+- **中止是真的能停**——排隊的是 Python 的 for 迴圈,不送下一筆就結束了
+- 需人工的項目可以事前排除
+
+### 上下文(context)貫穿全域
+
+`ctx = server | database | idProject`。所有繫在 `row_id` 上的東西都屬於某個 ctx。
+
+> 為什麼要這麼嚴格:不同資料庫的 `idTreeItem` 各自從小編號開始、**必然重疊**。
+> 實測 `#2443` 在一個庫是 `Info: MS Teams Information`,在另一個庫是
+> `H. Analy. 3QUEST TS103`。送錯不會報錯,只會安靜地跑到別的測項。
+
+三道防線(`acqua/context.py`):
+
+1. **作廢**——換庫/換專案時,`_reset_context()` 一次清掉所有衍生狀態
+2. **ctx 比對**——前端送出時聲明「我是在哪個上下文挑的」,不符就拒絕
+3. **歸屬驗證**——開跑前確認每個 `row_id` 都屬於當前專案
+
+計畫存的是**路徑 + 名稱**而不只是 `row_id`,跨庫執行時重新對應,對不上的明白回報。
+
+### 視窗監看器取代不存在的自動化介面
+
+ACQUA 跑到某些測項會開視窗等人(PDF 檢視器、Tcl/Tk 精靈、Win32 對話框)。
+COM 沒有介面可以回答它們——`UserReaction` 的 ByRef 回傳在 pywin32 下**送不到 ACQUA**。
+
+所以 `acqua/winwatch.py` 直接用 Win32 API 找視窗、按按鈕,規則寫在
+`config.json` 的 `blocking_windows`。處理不了的就端到網頁上讓人按。
+
+### 讀數值走 SQL,不走 COM
+
+`AcquaDBMask.Connect()` 一律回 False;`FindFirstSMD("")` 回 0 筆而且不給標題。
+所以測項列舉、數值、極限值全部改走 ADO 直連 SQL(`acqua/sqlcat.py`)。
+已驗證 `idTreeItem == SMDRowID`。
+
+---
+
+## 專案結構
+
+```
+app.py                 Flask:路由 + StepRunner
+acqua/
+  worker.py            工作執行緒:COM 只在這裡碰,外面透過命令佇列
+  backend_base.py      後端介面
+  backend_com.py       真的 COM 實作
+  backend_mock.py      模擬實作(同一組介面)
+  state.py             共享狀態 + SSE 事件
+  context.py           ⭐ 上下文規則:哪些狀態屬於哪個專案
+  sqlcat.py            SQL 目錄:測項樹、數值、量測物件
+  winwatch.py          擋路視窗的偵測與回答
+  condeval.py          ConditionalExecution 的求值
+  wizard.py            從條件式反推精靈選項
+  testplans.py         計畫的本地儲存(plans/*.json)
+  prefs.py             每個資料庫上次用什麼(prefs.json)
+  runlog.py            執行紀錄(runs/current.json)
+  constants.py         TypeLib 來的列舉
+templates/
+  _ui.html             ⭐ 共用設計系統(三頁都 include)
+  _runmini.html        右下角進度視窗(跨頁)
+  index.html           測項選擇
+  plans.html           執行序列
+  home.html            入口
+tools/
+  check_context.py     上下文一致性檢查
+  check_ui.py          前端與路由的機械化盤點
+```
+
+### 為什麼 COM 只在工作執行緒碰
+
+COM 的 STA 綁執行緒。所有 COM 物件都由 `AcquaWorker` 持有,Flask 用命令佇列
+跟它溝通。中止/暫停**刻意不走佇列**——`run_smds` 正在阻塞那條執行緒,
+排進去就永遠輪不到。
+
+SQL 不同:`raw_query()` 自己確保呼叫端執行緒有 COM(ADO 也是 COM),
+所以像「DUT 下拉選單」這種查詢可以直接在請求執行緒做,不用排隊等量測跑完。
+
+> 這裡踩過一個坑:一開始寫成「用完就 `CoUninitialize`」,結果拆掉 apartment
+> 之後工作執行緒對 ACQUA 的 proxy 全部斷線。**初始化之後不要收。**
+
+---
+
+## 結果狀態碼
+
+判定完全來自 ACQUA,我們只翻譯(`acqua/constants.py`):
+
+| 碼 | 名稱 | 意思 | 算通過 |
+|---:|---|---|:--:|
+| 0 | Undefined | 未定義 | ✗ |
+| 1 | Done | 量完,**沒有判定標準** | ✓ |
+| 2 | OK | 判定通過 | ✓ |
+| 3 | **Not OK** | 量完但**超出標準** | ✗ |
+| 4 | Error | 量測過程出錯 | ✗ |
+| 5 | User canceled | 被中止 | ✗ |
+| 6 | Not possible | 缺前置條件 | ✗ |
+| 7 | Ignored | 略過 | ✓ |
+| 8 | Not OK (not required) | 沒過但非必要項 | ✓ |
+
+負數是我們自己標的,不跟 ACQUA 的號碼空間相撞:
+
+| 碼 | 名稱 | 意思 |
+|---:|---|---|
+| −1 | NoResult | 等到逾時都沒收到結果事件(**不是通過,是不知道**) |
+| −2 | Busy | ACQUA 持續忙碌,這筆沒送出去 |
+| −3 | Exception | 送出或等待時我們這邊丟了例外 |
+
+網頁上按「看明細」可以按狀態碼展開,看到是哪幾個測項。
+
+---
+
+## run 的名稱
+
+傳給 `StartSingleMeasurement` 的 `ResultComment`,ACQUA 存成結果的 `Description`,
+也就是在 ACQUA 裡看到的 run 名稱。**整批共用一個**——ACQUA 就是這樣設計的。
+
+開跑前會跳出視窗讓你命名,最近用過的 8 個存在瀏覽器裡。
+
+---
+
+## 已知限制
+
+| 限制 | 說明 |
 |---|---|
-| `Dispatch` / `DispatchWithEvents` | ✅ ACQUA 已在執行時**接上現有實例**,0.02 秒 |
-| `AppLoadFinished` | ✅ |
-| `ProjectGroups` 走訪 | ✅ 含合成群組 `(Unsorted Projects)` |
-| `SelectAsActive` + `SelectedProjectLoaded` | ✅ |
-| `SelectActiveMeasurementObject` | ✅ |
-| **SMD 列舉(SQL)** | ✅ **132 個,含標題與 MMD 分組** |
-| **變數讀寫** | ✅ `Add()` → 設 `Name/Type/Value/State` → `Save()` → 讀得回來 |
-| `MeasurementEngine` | ✅ Mfe4~Mfe11 / Labcore / TurnTable / HardwareConfig 都拿得到 |
-| `RunScript("Python", code)` | ✅ 可執行,**腳本例外會以 COM 錯誤傳回** |
-| `PythonAvailable` | ✅ True |
-| Flask 全流程(com 模式) | ✅ 連線→列群組→開專案→選 DUT→列 132 測項→寫變數 |
+| 不能新增量測物件 | `AddMeasurementObject` 實測**一律回 −1 且不寫任何資料**。新 DUT 要在 ACQUA 裡建,網頁只列出現有的讓你選 |
+| Standards 群組不能執行 | ACQUA 回「This is a standard. It cannot be modified」。要先在 ACQUA 裡複製成實際專案 |
+| `UserReaction` 無效 | pywin32 的 ByRef 出參送不回 ACQUA,所以 REDO/CANCEL 那條路是死的 |
+| 中斷後不能續跑 | `runs/current.json` 有記錄,但續跑邏輯還沒做 |
+| setup 位置是 mock | 序列中間固定停五秒。之後接 Raspberry Pi |
+| 條件式的數值比較未驗證 | `Relation` 2/3/4 的語意是推的,`condeval.py` 有標出來 |
 
-### 🔴 已知不可用 —— 架構因此改變
+---
 
-| 原本規劃 | 實測 | 改用 |
-|---|---|---|
-| `AcquaDBMask.Application.Connect()` | ❌ **四種參數組合全部回傳 False** | **直接查 SQL**(`acqua/sqlcat.py`) |
-| `GetActiveObject("AcquaDBMask...")` | ❌ 不在 ROT 裡 | 同上 |
-| `FindFirstSMD("")` 當作「列出全部」 | ❌ **回傳 0 個**,且不給標題 | 同上 |
+## 檢查程式
 
-**關鍵驗證:** `acqua.TreeItems.idTreeItem` **就是** Acqua3 的 `SMDRowID`。
+沒有測試框架,但有兩支機械化盤點:
 
-```
-FindFirstSMD("3QUEST") 回傳的 20 個 RowID
-   == SQL 查出的 20 個 idTreeItem      交集 20/20,完全一致
+```bash
+.venv\Scripts\python.exe tools\check_context.py    # 上下文一致性
+.venv\Scripts\python.exe tools\check_ui.py         # 前端與路由
 ```
 
-所以 SQL 查到的 `row_id` 可以直接餵給 `StartSingleMeasurement()`。
-這條路比 DBMask 更好 —— 一次拿到標題、MMD 階層、`SMDType`、參考檔需求。
+會抓什麼:
 
-### ✅ 真實量測驗證(2026-08-10)
+- 狀態欄位有沒有分類(新增欄位忘了決定歸屬會被叫出來)
+- JS 取用的 id 是否存在、按鈕是否有人接、fetch 的路由是否存在
+- worker 命令兩個 backend 是否都實作
+- 切換專案的防線是否還在
 
-在 `51_MS_Teams_Rev05_SP2` / `MS Teams v5 Rev05 SP2 - Speakerphone`
-跑 SMD **#3579 `Info: MS Teams Information`**(SMDType=34,不驅動硬體)。
+> 這些檢查是被真實 bug 逼出來的。舉例:區間替換不小心刪掉 `renderBlocking()`,
+> 頁面照樣載入,直到有人按下去才炸。括號平衡、語法檢查都查不出這種洞。
 
-完整事件序列:
+---
 
-```
- 0.94s  OnEvent                     [Measurement]: Setting measurement object…
- 1.00s  OnBeginMeasurements         n=1
- 1.06s  OnProgress                  Measurements started (0/1)
- 2.62s  OnBeginSingleMeasurement    Info: MS Teams Information
- 4.77s  OnEvent                     [Measurement]: Measurement done
- 4.91s  OnEvent                     [Results]: No data to store.
- 5.03s  OnProgress                  Measurement done (0/1)
- 5.09s  OnFinishedSingleMeasurement status=1        ← ByRef 回傳處
- 6.41s  OnProgress                  Measurements done (1/1)   ← 有繼續往下走
-```
+## 設定
 
-| 驗證項 | 結果 |
+`config.json`:
+
+| 區塊 | 用途 |
 |---|---|
-| **ByRef 輸出參數** | ✅ **確認生效** —— return 之後 ACQUA 繼續跑完,沒有卡住 |
-| 事件接線 | ✅ 11 個事件全數收到 |
-| Flask 端到端 | ✅ 5.2s,`passed=1 failed=0` |
-
-### 🔴 過程中修掉的三個 bug
-
-**1. `Results.rStatus` 是外鍵,不是狀態值 —— 會讓判定相反**
-
-```
-rStatus=3 → idStatusType=3 → Status_OK   (Value=2)
-rStatus=2 → idStatusType=2 → Status_Done (Value=1)
-```
-
-原本直接回傳 `rStatus`,照 `Value` 解讀會把 OK 判成 NotOK。
-已改成 join `TStatusTypes`,回傳 `status` / `status_name` / `passed` 三個欄位。
-
-**2. `StartSingleMeasurement` 之後的 race condition**
-
-`IsMeasuring` 要**約 1 秒**才翻成 True。原本只 `sleep(0.5)` 就等它變 False,
-會立刻誤判「已經跑完」→ 每一項都變成「沒收到結果」。
-
-**3. ⭐ 單筆量測不會觸發 `OnFinishedMeasurements`**
-
-只有 `StartMeasurements`(整批)才會。單筆只到 `OnProgress "Measurements done"`。
-所以完成訊號改看 `OnFinishedSingleMeasurement`,並先等 `OnBeginSingleMeasurement`
-確認真的開始了。
-
-### 🔴 另一個 API 限制
-
-**專案底下一個 MO 都沒有時,`IProjectSelected.MeasurementObjects` 直接丟
-`Index out of range`** —— 連集合物件都拿不到,所以**無法用 COM 建立第一個 MO**。
-
-實測:SP3 的 6 個專案 MO 全是 0,`AddMeasurementObject` 也叫不到。
-
-👉 **每個專案的第一個 MO 必須先在 ACQUA GUI 裡手動建立。** 之後程式才能新增第 2 個以後的。
-程式已加上明確的錯誤訊息,不會再是看不懂的 COM 例外。
-
-### ⬜ 仍未驗證
-
-- `ResultSingleValues` 的欄位對應(value / unit / limit)——
-  目前資料庫裡唯一有結果的是腳本型 SMD 與 Info 型 SMD,**都不產生數值**
-  (事件明講 `[Results]: No data to store.`)。要跑一個真正的量測型 SMD 才能核對
-- `OnFinishedMeasurements` 的 `ResultOverview` 結構(單筆量測不會觸發)
-- `ConditionalExecution` 讀 `UsedVariables` 還是 `ResultVariables`
-  (目前的庫都沒有測項設條件)
-
-> ⚠️ ACQUA 的事件描述可能混入**簡體中文**。寫日誌沒問題,但若要 `print` 到
-> cp950 主控台會丟 `UnicodeEncodeError` —— 產品程式碼是寫進日誌佇列,不受影響。
-
----
-
-## 架構
-
-```
-瀏覽器 ──HTTP/SSE──> Flask(多執行緒)
-                        │  worker.submit(命令)
-                        ↓
-                  [ 命令佇列 Queue ]
-                        │
-                        ↓
-         ⭐ AcquaWorker(單一 STA 執行緒)
-            - CoInitializeEx(APARTMENTTHREADED)
-            - 獨佔 AcquaApplication 物件
-            - 閒置時跑 PumpWaitingMessages()
-            - 唯一碰 COM 的地方
-                        │
-                        ↓
-                  [ SharedState(有鎖)]
-                        │
-              Flask 讀取 ←┘
-```
-
-**為什麼一定要這樣拆:**
-
-| 衝突 | 說明 |
-|---|---|
-| COM 事件需要 STA + 訊息幫浦 | 沒有幫浦,`OnFinishedSingleMeasurement` 永遠不會觸發,程式看起來像當掉 |
-| Flask 每個請求跑在不同執行緒 | COM 物件不能隨意跨執行緒使用 |
-| 量測是長時間阻塞操作 | 不能綁在 HTTP 請求上,必須非同步 + SSE 推播進度 |
-
-**規則:`app.py` 裡的任何程式碼都不可以直接碰 COM 物件。** 一律走 `worker.submit()`。
-
-### 檔案
-
-```
-ACQUA Automation/
-├── app.py                    Flask 入口與 REST API
-├── config.json               ⭐ 實際設定(已指向 61_Demo_SMDs_Rev07)
-├── config.example.json       設定範本
-├── requirements.txt
-├── acqua/
-│   ├── constants.py          ✅ 列舉常數(數值已從 TypeLib 實測取得)
-│   ├── state.py              執行緒安全的共用狀態
-│   ├── worker.py             ⭐ COM 工作執行緒(STA + 訊息幫浦 + 命令佇列)
-│   ├── backend_base.py       後端介面定義
-│   ├── backend_mock.py       模擬後端(無 ACQUA 也能開發)
-│   ├── backend_com.py        真實 COM 後端
-│   ├── sqlcat.py             ⭐ SQL 目錄 —— 列測項、讀數值與極限值(實際在用)
-│   └── dbmask.py             ⚠️ AcquaDBMask —— 連不上,保留僅為記錄為何放棄
-├── templates/index.html      Web UI(模式切換 + 變數面板 + 勾選測項 + 即時日誌)
-├── tools/dump_typelib.py     ⭐ 唯讀走訪 TypeLib(不啟動 ACQUA)
-└── .venv/                    32-bit Python 3.9 + Flask + pywin32
-```
-
-> ⚠️ **`dbmask.py` 目前是死碼。** `AcquaDBMask.Application.Connect()` 實測一律回傳
-> False,所以列測項與讀數值全部改走 `sqlcat.py`。保留這個檔案是為了記錄
-> 「為什麼不走 DBMask」,以及萬一未來 HEAD 修好了可以快速切回去。
-
----
-
-## ⭐ 重要發現:CHM 文件已經過時
-
-`Acqua3COM.chm` 是 2012 年的,安裝的是 ACQUA 6.2.210。用 `tools/dump_typelib.py`
-實測後發現數處差異 —— **以 TypeLib 為準,不要相信 CHM**。
-
-### 方法簽章不同
-
-| CHM 寫的 | TypeLib 實際 |
-|---|---|
-| `StartMeasurements(UseMMDSettings, MeasurementObject)` | `StartMeasurements(UseMMDSettings, MeasurementObject, **ResultComment**)` |
-| `StartSingleMeasurement(SMDRowID, UseMMDSettings, MeasurementObject)` | `StartSingleMeasurement(SMDRowID, UseMMDSettings, MeasurementObject, **ResultComment**)` |
-| (無) | **`Close()`** |
-| (無) | **`DeleteAllResultsOfActiveMeasObj()`** |
-
-### 列舉多了成員
-
-```
-EReportSelectionType:  erstEachMain = 6                      ← CHM 沒有
-EMEResult:             emeresultIgnore = 7                   ← CHM 沒有
-                       emeresultMeasDoneNotOkNotRequired = 8 ← CHM 沒有
-```
-
-### ⭐ EMEResult 實際數值(pass/fail 判定的核心)
-
-```
-emeresultUndefined                = 0
-emeresultMeasDone                 = 1
-emeresultMeasDoneOk               = 2   ← PASS
-emeresultMeasDoneNotOk            = 3   ← FAIL
-emeresultMeasError                = 4
-emeresultUserCanceled             = 5
-emeresultMeasNotPossible          = 6
-emeresultIgnore                   = 7
-emeresultMeasDoneNotOkNotRequired = 8   ← 沒過但「非必要項」,不該算失敗
-```
-
-> ⚠️ `emeresultMeasDoneNotOkNotRequired = 8` 特別重要。如果只用
-> `status == 2` 判定通過,非必要項會被誤判成 FAIL,產生假的失敗。
-> 見 `constants.py` 的 `EMEResult.PASSING`。
-
----
-
-## ⭐ 兩種執行模式(都已實作)
-
-| | `selected` 逐項勾選 | `conditional` 變數驅動 |
-|---|---|---|
-| 誰決定跑哪些 | **你的程式** | **ACQUA** |
-| COM 呼叫 | `StartSingleMeasurement` 逐項 | `StartMeasurements` 一次 |
-| 篩選依據 | 你勾的 SMD RowID 清單 | 專案樹的 `ConditionalExecution` 讀變數 |
-| 適合 | 重跑失敗項、抽測、CI 指定子集 | 依 DUT 屬性自動決定完整測試計畫 |
-| 進度回報 | 每項一個事件 | 整批事件 |
-
-**混合用法(推薦):**
-
-```
-COM 寫入 DUT 屬性變數  →  StartMeasurements  →  ACQUA 自動篩選並依序跑完
-       ↑                                              ↓
-   取代 HEAD 的問卷精靈                          事件回報每項 pass/fail
-```
-
-這樣既保有 HEAD 官方測試套件的設計(變數 + 條件執行),又能無人值守。
-
-### 變數怎麼設
-
-```python
-me = project.MeasurementEngine       # HEADACQUAlyzer.IMeasurementEngine
-vs = me.UsedVariables                # IVariables 集合
-
-v = vs.Add()                         # 沒有 AddNamed(),只能 Add() 再設 Name
-v.Name  = "DUT_speakerphone_type"
-v.Type  = 2                          # evtString
-v.Value = "Shared"
-v.State = 2                          # evsUserDefined
-vs.Save()
-```
-
-變數名稱建議沿用 HEAD 官方精靈(`SMD/dut_meas_wizard.py`)用的那組:
-`DUT_speakerphone_type`、`DUT_connection_type`、`DUT_is_deskphone`、
-`DUT_premium_reqs`、`DUT_pickup_range_*`、`DUT_stereo_calling` 等。
-
-### ⭐ 還有第三條路:`RunScript`
-
-`IMeasurementEngine` 有 **`RunScript(Language, Code)`** 和 `PythonAvailable` —— 
-可以**從 COM 直接執行 ACQUA 內部的 Python**。這等於打通了 COM(層級 2)
-與 ACQUA 內建腳本(層級 3),能呼叫只有內部才拿得到的 API。
-
-另外 `DoMeasurementEx2(..., ScriptBeforeFilename, ScriptAfterFilename)`
-可以在單筆量測前後掛腳本。
-
----
-
-## ⭐ 兩套物件模型 —— 名詞會打架
-
-| Acqua3(控制用) | AcquaDBMask(資料用) | VB6 範例 UI |
-|---|---|---|
-| `ProjectGroup` | `Project` | "project group" |
-| `Project` | **`Subproject`** | **"Selected Subproject"** |
-| `MeasurementObject` | `LocalMeasurementObject` | "Measurement Object" |
-
-VB6 範例把 Acqua3 的 Project 標成 "Subproject",就是因為底層是 Subproject。
-
-**連線的參數順序也相反:**
-
-```python
-Acqua3     : SelectDatabase(SQLServerName, DatabaseName, winAuth, user, pwd)
-AcquaDBMask: Connect(DatabaseName, SQLServerName)          # ← 資料庫在前!
-```
-
-### 什麼時候用哪一套
-
-| 需求 | 用哪個 |
-|---|---|
-| 啟動量測、收事件、產 Word 報告 | **Acqua3** |
-| 列舉 SMD(要標題) | **AcquaDBMask** — `Subproject.GetSMDsRecursive()` |
-| 讀出數值(POLQA 分數、Loudness…) | **AcquaDBMask** — `SingleValue.Value / .Unit / .Status` |
-| 程式化建立 MMD / SMD | **AcquaDBMask** — `MmdsAndSmds.AddMMD() / .AddSMD()` |
-
-### 資料模型(TypeLib 實測確認)
-
-```
-Application
- └─ Projects              ← Acqua3 叫 ProjectGroup
-     └─ Subprojects       ← Acqua3 叫 Project        「大測試」
-         ├─ LocalMeasurementObjects                  受測物 DUT
-         └─ MmdsAndSmds
-             ├─ MMD       測試群組
-             └─ SMD       ⭐ 單一測項                 「小測試」
-                 └─ MeasurementResults
-                     ├─ Status  (OK / NotOK / Done)
-                     ├─ SingleValue1 / SingleValue2   ⭐ 數值在這
-                     │     .Value .Unit .Title .Status .Precision
-                     └─ Runs
-```
-
----
-
-## 開發順序
-
-| 階段 | 內容 | 狀態 |
-|:---:|---|:---:|
-| 0 | 環境準備(venv / Flask / pywin32) | ✅ 完成 |
-| 1 | dump TypeLib 取得真實 API 與列舉數值 | ✅ 完成 |
-| — | 建立 ACQUA 資料庫 | ✅ 完成(`61_Demo_SMDs_Rev07`,132 個 SMD) |
-| — | 程式開發(兩種執行模式 + mock 驗證) | ✅ 完成 |
-| — | 確認 ACOPT18 授權 | ✅ 完成(dongle 已插入) |
-| 2 | 最小連通性:`Dispatch()` + `AppLoadFinished` | ✅ 完成 |
-| 3 | 唯讀瀏覽 + SMD 列舉、ID 對應驗證 | ✅ 完成(改走 SQL) |
-| 3b | 變數讀寫 / MeasurementEngine / RunScript | ✅ 完成 |
-| 4 | 事件接線(ByRef 回傳、`ResultOverview`) | 🟡 接線 OK,**待真實量測驗證** |
-| 5 | 實際量測 + pass/fail | ⬜ **需要硬體與授權模組** |
-| 6 | 讀取數值結果(SQL `ResultSingleValues`) | 🟡 已實作,**待有結果後核對** |
-| 7 | 產線化(CI 整合、無人值守、結果歸檔) | ⬜ |
-
-> 階段 5 之後需要實際驅動量測硬體 —— 會發出訊號、佔用治具,且耗時。
-
-### 階段 2~5 必須實測驗證的項目
-
-程式碼裡標了 `[未驗證]` 的地方:
-
-**連線與事件**
-
-- [ ] `DispatchWithEvents` + 類別屬性注入的寫法是否正常運作
-- [ ] **ByRef 輸出參數**(`UserReaction`、`Continue`)是否真的用 return 回傳
-- [ ] `StartSingleMeasurement` / `StartMeasurements` 之後等 `IsMeasuring`
-      翻轉有沒有 race condition
-- [ ] `OnFinishedMeasurements` 的 `ResultOverview` 到底是什麼結構
-
-**測項與結果**
-
-- [ ] ⚠️ **demo 專案的 `rProjectGroup` 是 NULL** → `ProjectGroups→Projects` 走訪
-      找不找得到它(找不到的話 `open_project` 會失敗,修法見上方「已知問題」)
-- [ ] ⭐ **DBMask 的 `SMD.ID` 是否等於 `StartSingleMeasurement(SMDRowID)` 要的 RowID**
-      (兩者都是資料庫 row id,理論上相同 —— 但一定要用一筆實測確認)
-- [ ] `AddSMD(strTitle, strDescription, strSMDType, strSMDCompleteFileName)`
-      後兩個參數的合法值(建議先在 GUI 建一個,再讀它的 `SMDType` 當範本)
-
-**變數驅動模式**
-
-- [ ] `MeasurementEngine.UsedVariables` vs `ResultVariables` ——
-      `ConditionalExecution` 到底讀哪一組
-- [ ] `IVariables.Add()` 後設 `.Name` 是否需要 `Save()` 才生效
-- [ ] `RunScript(Language, Code)` 的回傳值格式與錯誤處理
-- [ ] ⚠️ demo 資料庫目前 **0 個測項有設定 `ConditionalExecution`** ——
-      conditional 模式要真的篩選,得先在 ACQUA GUI 裡加條件
-
----
-
-## 工具
-
-```powershell
-# 唯讀走訪 TypeLib —— 不會啟動 ACQUA,不產生快取檔
-.\.venv\Scripts\python.exe tools\dump_typelib.py
-.\.venv\Scripts\python.exe tools\dump_typelib.py --enums-only
-.\.venv\Scripts\python.exe tools\dump_typelib.py --grep SingleValue
-```
-
----
-
-## 陷阱清單
-
-| # | 陷阱 |
-|:-:|---|
-| 1 | **忘記 `PumpWaitingMessages()`** —— 事件永遠不會來,程式像當掉 |
-| 2 | **位元數** —— ACQUA 是 x86,TypeLib 只註冊 win32。必須 32-bit Python |
-| 3 | **ByRef 輸出參數** —— pywin32 用 return 回傳,不是改參數 |
-| 4 | **`DispatchWithEvents` 不呼叫 `__init__`** —— 相依物件要用類別屬性注入 |
-| 5 | **索引基準不一致** —— Acqua3 集合從 **0** 開始;`MfeX.Settings.Names(i)` 從 **1** 開始 |
-| 6 | **`IProject` ≠ `IProjectSelected`** —— 要先 `SelectAsActive()` 再拿 `app.SelectedProject` |
-| 7 | **`EReportSelectionType` 數值不連續**(0,3,4,5,6)—— 別拿清單索引當它用 |
-| 8 | **兩套模型名詞打架** —— Acqua3 的 Project = DBMask 的 Subproject |
-| 9 | **`Connect()` 參數順序相反** —— DBMask 是資料庫在前 |
-| 10 | **`emeresultMeasDoneNotOkNotRequired`** 不該算 FAIL |
-| 11 | **Flask 的 reloader 要關掉** —— 否則 COM 執行緒會被開兩份 |
-
----
-
-## 授權與安全
-
-- `config.json` 可能含資料庫密碼 —— **不要提交進版控**
-- 建議一律用 Windows 驗證(`use_windows_auth: true`),不要存明碼密碼
-- Flask 預設只綁 `127.0.0.1`。要開放給區網前請先加上認證
+| `database` | SQL Server 與預設資料庫 |
+| `run` | `use_mmd_settings`、逾時、預設 `result_comment` |
+| `blocking_windows` | 哪些視窗自動關、哪些要問人 |
+| `manual_items` | 哪些測項需人工(標題或萬用字元) |
+| `report` | 報告暫存資料夾 |
+
+`prefs.json`(自動產生)記每個資料庫上次用的專案與 DUT,連線後會自動接回去。

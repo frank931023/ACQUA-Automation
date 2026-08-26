@@ -26,14 +26,20 @@ from __future__ import annotations
 
 from collections import defaultdict
 
-from .condeval import parse, REL_EQ, REL_NE, REL_IS_TRUE, REL_IS_FALSE
+from .condeval import (parse, REL_EQ, REL_NE, REL_IS_TRUE, REL_IS_FALSE,
+                       REL_GE, REL_LE, REL_LT, REL_GT)
 
-# 這些前綴的變數才會端到精靈上 —— 其餘多半是 ACQUA 內部或量測產生的
-# BGN* 是 BGN Wizard 的變數 —— 那個精靈也在我們要取代的名單裡
+#: 數值比較用到的關係運算子。只被這些用到的變數 = 量測過程算出來的。
+_NUMERIC_RELS = {REL_GE, REL_LE, REL_LT, REL_GT}
+
+#: 人能事先設定的關係運算子(等於 / 不等於 / 為真 / 為假)。
+_SETTABLE_RELS = {REL_EQ, REL_NE, REL_IS_TRUE, REL_IS_FALSE}
+
+#: 保留給呼叫端明確指定前綴用;預設不再靠它篩選,見 scan_variables。
 DEFAULT_PREFIXES = ("DUT_", "HRT_", "HRR_", "HHP_", "TEST_", "BGN")
 
 
-def scan_variables(tree_rows, prefixes=DEFAULT_PREFIXES):
+def scan_variables(tree_rows, prefixes=None):
     """掃出專案裡所有被條件式用到的變數。
 
     回傳 [{
@@ -44,6 +50,19 @@ def scan_variables(tree_rows, prefixes=DEFAULT_PREFIXES):
         "relations": [0, 1, ...]               出現過哪些關係運算子
     }]
     依「影響幾個測項」由多到少排序 —— 影響最大的擺前面,人比較好選。
+
+    ⭐ 哪些變數該進精靈:**看它被怎麼使用**,不是看它叫什麼名字。
+
+    只被數值比較(>= <= < >)用到的變數,值是量測過程算出來的
+    (`Lvl_CodedUS_MAX`、`RCV_SFI_VIOL` 這種),人沒辦法事先設,
+    放進精靈只會讓人以為可以填。反之只要出現過 == / != / 為真 / 為假,
+    就是人設得了的。
+
+    先前是靠寫死的前綴清單(DUT_ / HRT_ / …)。盤點發現那份清單漏掉
+    Lvl_ / RCV_ / SND_ / VOL_ / VolCntrl_ —— 結論碰巧一樣,但理由是錯的,
+    而且換一個資料庫就要再補清單一次。
+
+    `prefixes` 仍然保留:呼叫端要限定範圍時可以傳,預設不啟用。
     """
     vals = defaultdict(set)
     rels = defaultdict(set)
@@ -69,6 +88,9 @@ def scan_variables(tree_rows, prefixes=DEFAULT_PREFIXES):
         if prefixes and not name.startswith(tuple(prefixes)):
             continue
         rset = rels[name]
+        # 只被數值比較用到 = 量測過程算出來的,人設不了
+        if rset and not (rset & _SETTABLE_RELS):
+            continue
         vset = sorted(vals[name])
         if vset and (REL_EQ in rset or REL_NE in rset):
             kind = "choice"

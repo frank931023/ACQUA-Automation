@@ -20,6 +20,7 @@ import time
 from flask import (Blueprint, Flask, Response, jsonify, render_template,
                    request, send_from_directory)
 
+from acqua import env as env_settings
 from acqua.prefs import Prefs
 from acqua.runlog import RunLog
 from acqua.state import SharedState
@@ -58,8 +59,56 @@ def load_config(path=None):
             with open(candidate, encoding="utf-8") as fh:
                 cfg = json.load(fh)
             cfg["_loaded_from"] = os.path.basename(candidate)
+            # 機器專屬的東西(server / 資料庫 / 帳密 / port)從 .env 蓋過來。
+            # 分兩個檔的理由見 acqua/env.py:行為設定該進版控,
+            # 這一台機器的事實不該 —— 而且裡面有密碼。
+            cfg["_env_overrides"] = env_settings.apply_to(
+                cfg, os.path.join(BASE_DIR, ".env"))
             return cfg
     raise SystemExit("找不到 config.json 或 config.example.json")
+
+
+class StepRunner:
+    """依序執行一串 worker 命令,並記下每一步的成敗。
+
+    用途:把 ACQUA 帶到某個位置(換庫 → 開專案 → 選 MO → 載入測項)。
+    這種流程的重點不是「成功了沒」,而是**卡在哪一步、為什麼** ——
+    所以每一步都留下 {name, ok, detail},直接回給前端逐條顯示。
+    """
+
+    def __init__(self, worker, log_prefix=""):
+        self._worker = worker
+        self._prefix = log_prefix
+        self.steps = []
+
+    def run(self, name, command, timeout=300, **kwargs):
+        """送一個 worker 命令並等它完成。回傳成功與否,不丟例外。"""
+        try:
+            self._worker.submit(command, **kwargs).wait(timeout=timeout)
+            self.steps.append({"name": name, "ok": True})
+            return True
+        except Exception as exc:                            # noqa: BLE001
+            self.steps.append({"name": name, "ok": False,
+                               "detail": str(exc)[:200]})
+            if self._prefix:
+                state.log(f"{self._prefix} {name} 失敗:{exc}", "warn")
+            return False
+
+    def note(self, name, detail=""):
+        """記一個不需要送命令的步驟(例如「對應測項 3/3」)。"""
+        self.steps.append({"name": name, "ok": True, "detail": detail})
+
+    def fail(self, name, detail):
+        self.steps.append({"name": name, "ok": False, "detail": str(detail)[:200]})
+
+    @property
+    def done(self):
+        return [s["name"] for s in self.steps if s["ok"]]
+
+    def bail(self, **extra):
+        """中途失敗時的統一回應。"""
+        return jsonify(ok=False, steps=self.steps,
+                       state=state.snapshot(), **extra), 400
 
 
 def _cmd(_cmd_name, timeout=600, **kwargs):
@@ -223,22 +272,12 @@ def api_restore():
     """
     s = state.snapshot()
     want = prefs.recall(s.get("server"), s.get("database"))
-    steps = []
-
-    def step(name, fn):
-        try:
-            fn()
-            steps.append({"name": name, "ok": True})
-            return True
-        except Exception as exc:                            # noqa: BLE001
-            steps.append({"name": name, "ok": False, "detail": str(exc)[:160]})
-            state.log(f"[接回] {name} 跳過:{exc}", "warn")
-            return False
+    r = StepRunner(worker, "[接回]")
 
     if not want.get("project"):
         return jsonify(ok=True, restored=False,
                        note="這個資料庫還沒有用過,請自己選一次 —— 之後就會記住",
-                       steps=steps, state=state.snapshot())
+                       steps=r.steps, state=state.snapshot())
 
     # 專案還在不在?不在就不要嘗試,直接說清楚
     groups = {g["name"]: set(g["projects"]) for g in (s.get("project_groups") or [])}
@@ -248,22 +287,20 @@ def api_restore():
         if hit is None:
             return jsonify(ok=True, restored=False,
                            note=f"上次用的專案「{proj}」不在這個資料庫裡了",
-                           steps=steps, state=state.snapshot())
+                           steps=r.steps, state=state.snapshot())
         grp = hit                                # 群組換了名字,專案還在
 
-    if not step(f"開啟專案 {proj}", lambda: worker.submit(
-            "open_project", group=grp, project=proj).wait(timeout=300)):
-        return jsonify(ok=True, restored=False, steps=steps, state=state.snapshot())
+    if not r.run(f"開啟專案 {proj}", "open_project", group=grp, project=proj):
+        return jsonify(ok=True, restored=False, steps=r.steps,
+                       state=state.snapshot())
 
     if want.get("mo"):
-        step(f"選定量測物件 {want['mo']}", lambda: worker.submit(
-            "select_mo", title=want["mo"], create_if_missing=False).wait(timeout=120))
+        r.run(f"選定量測物件 {want['mo']}", "select_mo",
+              timeout=120, title=want["mo"], create_if_missing=False)
+    r.run("載入測項", "list_smds", timeout=180, search="")
 
-    step("載入測項", lambda: worker.submit("list_smds", search="").wait(timeout=180))
-
-    done = [x["name"] for x in steps if x["ok"]]
-    state.log("[接回] " + ("、".join(done) if done else "沒有可接回的項目"))
-    return jsonify(ok=True, restored=bool(done), steps=steps,
+    state.log("[接回] " + ("、".join(r.done) if r.done else "沒有可接回的項目"))
+    return jsonify(ok=True, restored=bool(r.done), steps=r.steps,
                    state=state.snapshot())
 
 
@@ -288,9 +325,12 @@ def api_open_project():
 def api_select_mo():
     body = request.get_json(silent=True) or {}
     target = config.get("target", {})
-    title = body.get("title") or target.get("measurement_object", "DUT_001")
-    resp = _cmd("select_mo", timeout=120, title=title,
-                create_if_missing=bool(target.get("create_mo_if_missing", True)))
+    title = body.get("title") or target.get("measurement_object", "")
+    if not title:
+        return jsonify(ok=False, error="請先選一個量測物件"), 400
+    # 前端給的名稱一律來自下拉選單(既有的),所以不嘗試建立 ——
+    # ACQUA 的 AddMeasurementObject 實測回 -1 不動作,詳見 backend_com。
+    resp = _cmd("select_mo", timeout=120, title=title, create_if_missing=False)
 
     # 只有選定成功才寫 metadata(_cmd 失敗時回傳的是 (response, status_code) 的 tuple)
     if isinstance(resp, tuple):
@@ -619,6 +659,35 @@ def api_plan_one(plan_id):
     return jsonify(ok=True, plan=d)
 
 
+@acqua_bp.route("/api/mos")
+def api_mos():
+    """目前開著的專案底下有哪些量測物件(DUT)。
+
+    走 SQL 而不是 COM:這只是填一個下拉選單,不該為它排進工作佇列 ——
+    量測正在跑的時候佇列是塞住的,那時候使用者更需要看得到清單。
+    """
+    s = state.snapshot()
+    if not (s.get("server") and s.get("database")):
+        return jsonify(ok=True, mos=[], note="尚未連線")
+
+    # ctx = server|database|idProject
+    parts = str(s.get("ctx") or "").split("|")
+    pid = int(parts[2]) if len(parts) == 3 and parts[2].isdigit() else None
+    if pid is None and not s.get("open_project"):
+        return jsonify(ok=True, mos=[], note="尚未開啟專案")
+
+    from acqua.sqlcat import SqlCatalog
+    cat = SqlCatalog(state)
+    if not cat.connect(s["server"], s["database"]):
+        return jsonify(ok=False, error="SQL 連線失敗"), 400
+    try:
+        mos = cat.list_mobjects(project_id=pid,
+                                project_title=s.get("open_project"))
+    except Exception as exc:                                # noqa: BLE001
+        return jsonify(ok=False, error=str(exc)[:160]), 400
+    return jsonify(ok=True, mos=mos, current=s.get("measurement_object") or "")
+
+
 @acqua_bp.route("/api/plans/<plan_id>/mos")
 def api_plan_mos(plan_id):
     """這個計畫的來源專案底下有哪些量測物件(DUT)可以選。
@@ -683,68 +752,68 @@ def api_plan_prepare(plan_id):
         return jsonify(ok=False, error="已經有一批測試在執行中"), 409
 
     src = plan.get("source") or {}
-    steps = []
+    r = StepRunner(worker)
 
     # 這一步要把結果寫進哪個 DUT。跨庫/跨機跑同一批時,每台受測物的名稱
-    # 本來就不同 —— 所以允許呼叫端覆寫,而且覆寫時要能自動建立
-    #(新的 DUT 名稱在目標專案裡本來就還不存在)。
+    # 本來就不同,所以允許呼叫端覆寫。
     body = request.get_json(silent=True) or {}
     mo_override = str(body.get("measurement_object") or "").strip()
 
-    def step(name, fn):
-        try:
-            fn()
-            steps.append({"name": name, "ok": True})
-            return True
-        except Exception as exc:                            # noqa: BLE001
-            steps.append({"name": name, "ok": False, "detail": str(exc)[:200]})
-            return False
-
-    snap = state.snapshot()
+    # ⚠️ 要比對 (server, database) 而不是只比資料庫名 ——
+    #    不同機器上很可能有同名的資料庫,只比名字就會以為「不用切」,
+    #    然後在錯的機器上跑完一整批。
+    cfg = config.get("database", {})
+    now = state.snapshot()
     db = src.get("database")
-    if db and db != snap.get("database"):
-        db_cfg = config.get("database", {})
-        if not step(f"切換資料庫 → {db}", lambda: worker.submit(
-                "connect", server=src.get("server") or db_cfg.get("server", ""),
-                database=db,
-                win_auth=bool(db_cfg.get("use_windows_auth", True)),
-                username=db_cfg.get("username", ""),
-                password=db_cfg.get("password", "")).wait(timeout=300)):
-            return jsonify(ok=False, steps=steps, state=state.snapshot()), 400
-        step("讀取專案清單", lambda: worker.submit(
-            "refresh_groups").wait(timeout=120))
+    srv = src.get("server") or cfg.get("server", "")
+    if db and (srv, db) != (now.get("server"), now.get("database")):
+        where = db if srv == now.get("server") else f"{srv} / {db}"
+        if not r.run(f"切換到 {where}", "connect",
+                     server=srv, database=db,
+                     win_auth=bool(cfg.get("use_windows_auth", True)),
+                     username=cfg.get("username", ""),
+                     password=cfg.get("password", "")):
+            return r.bail()
+        r.run("讀取專案清單", "refresh_groups", timeout=120)
 
-    snap = state.snapshot()
     proj = src.get("project")
-    if proj and proj != snap.get("open_project"):
-        if not step(f"開啟專案 {proj}", lambda: worker.submit(
-                "open_project", group=src.get("group") or "",
-                project=proj).wait(timeout=300)):
-            return jsonify(ok=False, steps=steps, state=state.snapshot()), 400
+    if proj and proj != state.snapshot().get("open_project"):
+        if not r.run(f"開啟專案 {proj}", "open_project",
+                     group=src.get("group") or "", project=proj):
+            return r.bail()
 
     # 選單裡的名稱都是這個專案已經有的,所以不需要(也沒辦法)建立 ——
     # AddMeasurementObject 實測回 -1 不動作,詳見 /api/plans/<id>/mos。
     mo = mo_override or src.get("measurement_object")
     if mo and mo != state.snapshot().get("measurement_object"):
-        if not step(f"選定量測物件 {mo}", lambda: worker.submit(
-                "select_mo", title=mo, create_if_missing=False).wait(timeout=120)):
-            return jsonify(ok=False, steps=steps, state=state.snapshot()), 400
+        if not r.run(f"選定量測物件 {mo}", "select_mo", timeout=120,
+                     title=mo, create_if_missing=False):
+            return r.bail()
 
-    if not step("載入測項", lambda: worker.submit(
-            "list_smds", search="").wait(timeout=300)):
-        return jsonify(ok=False, steps=steps, state=state.snapshot()), 400
+    if not r.run("載入測項", "list_smds", search=""):
+        return r.bail()
 
     try:
-        rep = worker.submit("resolve_items",
-                            items=plan.get("items") or []).wait(timeout=180)
+        # 交叉驗證要用的兩個線索:
+        #   指紋 —— 專案樹在存檔之後動過沒有(序號可不可信)
+        #   same_ctx —— 同一個專案的話 row_id 才是權威
+        rep = worker.submit(
+            "resolve_items", items=plan.get("items") or [],
+            expect_fingerprint=(src.get("tree_fingerprint") or ""),
+            same_ctx=(bool(src.get("ctx"))
+                      and src.get("ctx") == state.snapshot().get("ctx"))
+        ).wait(timeout=180)
     except Exception as exc:                                # noqa: BLE001
-        steps.append({"name": "對應測項", "ok": False, "detail": str(exc)[:200]})
-        return jsonify(ok=False, steps=steps, state=state.snapshot()), 400
+        r.fail("對應測項", exc)
+        return r.bail()
 
-    steps.append({"name": "對應測項", "ok": True,
-                  "detail": "%d / %d" % (len(rep["resolved"]),
-                                         len(plan.get("items") or []))})
-    return jsonify(ok=True, steps=steps, plan=plan, resolution=rep,
+    detail = "%d / %d" % (len(rep["resolved"]), len(plan.get("items") or []))
+    if rep.get("tree_changed"):
+        detail += " ・ ⚠️ 專案樹已變動"
+    elif rep.get("needs_review"):
+        detail += " ・ %d 項要確認" % rep["needs_review"]
+    r.note("對應測項", detail)
+    return jsonify(ok=True, steps=r.steps, plan=plan, resolution=rep,
                    row_ids=[x["row_id"] for x in rep["resolved"]],
                    ctx=state.snapshot().get("ctx"), state=state.snapshot())
 
@@ -906,6 +975,8 @@ def main():
     args = ap.parse_args()
 
     config = load_config(args.config)
+    for line in (config.get("_env_overrides") or []):
+        print("[.env] %s" % line)
     if args.backend:
         config["backend"] = args.backend
 

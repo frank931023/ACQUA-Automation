@@ -33,7 +33,10 @@ MS Teams 那套有 4,304 個測項,其中 754 個節點帶條件式。實際要�
 | 1 | 不等於 | `DUT_connection_type != 'USB'`(2 次) |
 | 6 | 為假 / 沒設定 | `DUT_is_ANC` 空值,與 7 成對出現 |
 | 7 | 為真 | `DUT_premium_reqs`(348 次,全部空值) |
-| 2 / 3 / 4 | 數值比較 | ⚠️ **未確定**,只用在量測產生的變數(`Lvl_CodedUS_MAX` 等) |
+| 2 | 大於等於 | 見下方「數值比較的推導」 |
+| 3 | 小於等於 | 同上 |
+| 4 | 小於 | 同上 |
+| 5 | 大於 | 未見實例,由 (2,3)/(4,5) 的成對關係推得 |
 
 ⚠️ **以下兩點是推論,尚未經 ACQUA 驗證:**
   - `Action`: **1 = 條件成立就跳過**;0 = 條件成立才跑
@@ -67,7 +70,55 @@ MS Teams 那套有 4,304 個測項,其中 754 個節點帶條件式。實際要�
 其他條件(例如要求某個距離變數為真),不是語意判斷錯。
 
 wizard 設的 `DUT_*` 變數只用到 Relation 0/1/6/7,那幾個是有把握的。
-數值比較(2/3/4)只出現在量測過程產生的變數上,跟事前預測無關。
+
+✅ 數值比較的推導(2026-08-25,兩個資料庫共 754 筆條件式、90 個數值實例)
+──────────────────────────────────────────────────────────────
+沒有文件也沒有 TypeLib 列舉,只能從實際資料反推。關鍵是三個互相制約的案例:
+
+**① 同一個測項上,同一個變數用了兩種 Relation**
+
+    #2424 Noise level (100Hz-19kHz) during ultrasound - MaxVol
+        Lvl_CodedUS_MAX  REL2  70
+        Lvl_CodedUS_MAX  REL4  55
+        MatchConditions=1 (OR) ・ Action=1 (成立就跳過)
+
+    ⟹ 跑的條件是 ¬(x REL2 70) ∧ ¬(x REL4 55)
+
+**② 同一個變數在另一個測項單獨出現**
+
+    #2429 Volume Control Mode for Ultrasound Level Determination
+        Lvl_CodedUS_MAX  REL4  70
+        MatchConditions=0 ・ Action=1
+
+    ⟹ 跑的條件是 ¬(x REL4 70)
+
+把 (REL2, REL4) 代入試:
+
+    (≥, <)  → ① 跑 55 ≤ x < 70   ② 跑 x ≥ 70   兩者互補且不重疊 ✅
+    (>, ≥)  → ① 跑 x < 55        ② 跑 x < 70   互相包含,而且 ① 的 70 變成廢條件 ✗
+    (<, >)  → ① 永遠不跑                                              ✗
+
+只有 (≥, <) 讓兩個測項構成一個乾淨的分段 —— 這是人為編寫測試計畫時會有的樣子。
+
+**③ REL3 只有一種讀法說得通**
+
+    #152 P16A Receive path - Single Frequency PEAK 24dB20uPa
+        RCV_SFI_VIOL  REL3  0  ・ Action=1
+
+    RCV_SFI_VIOL 是「單頻干擾違規數」,這個測項是「有違規才要做的追加量測」。
+
+    REL3 = ≤  → 違規數 ≤ 0 就跳過,也就是**有違規才跑** ✅
+    REL3 = <  → 違規數 < 0 就跳過;計數不可能為負,等於這條件從來不生效 ✗
+
+    一個永遠不生效的條件不會有人寫進 754 筆資料裡 48 次。
+
+於是 (2,3) = (≥,≤)、(4,5) = (<,>),成對關係也一致。
+
+⚠️ 這仍是推論而非文件確認。但要推翻它,得同時解釋為什麼 ① 的兩個測項不互補、
+   以及為什麼有人寫了 48 次不會生效的條件。
+
+實務上影響很小:這些變數(`Lvl_CodedUS_MAX`、`RCV_SFI_VIOL`)都是**量測過程
+產生的**,開跑前根本還不存在,所以事前預測時一律走「變數未設定」那條路。
 """
 import re
 
@@ -76,8 +127,26 @@ REL_EQ = "0"
 REL_NE = "1"
 REL_IS_FALSE = "6"
 REL_IS_TRUE = "7"
-#: 只用於量測產生的變數,語意未經證實
-REL_UNCERTAIN = {"2", "3", "4", "5"}
+REL_GE = "2"        # >=
+REL_LE = "3"        # <=
+REL_LT = "4"        # <
+REL_GT = "5"        # >  (未見實例)
+
+#: 數值比較。語意見模組說明的「數值比較的推導」。
+_NUMERIC = {
+    REL_GE: lambda a, b: a >= b,
+    REL_LE: lambda a, b: a <= b,
+    REL_LT: lambda a, b: a < b,
+    REL_GT: lambda a, b: a > b,
+}
+
+
+def _as_number(v):
+    """轉成數字。轉不動回 None —— 呼叫端得自己決定怎麼辦。"""
+    try:
+        return float(str(v).strip())
+    except (TypeError, ValueError):
+        return None
 
 _RE_COND = re.compile(r"<Condition>(.*?)</Condition>", re.S)
 _RE_VAR = re.compile(r"<Variable>(.*?)</Variable>", re.S)
@@ -142,9 +211,17 @@ def eval_condition(cond: dict, variables: dict):
     if rel == REL_NE:
         return (not present) or (str(cur).strip() != val), True
 
-    # 數值比較 —— 語意未證實,一律當作「成立」並標記為沒把握,
-    # 寧可高估要跑的項目,也不要漏掉。
-    return True, False
+    op = _NUMERIC.get(rel)
+    if op is not None:
+        # 這些變數是量測過程產生的,開跑前通常還不存在。
+        # 值不存在或不是數字時不硬猜 —— 回「成立且沒把握」,
+        # 讓上層知道這一筆的判定不可靠(寧可高估要跑的,也不要漏掉)。
+        a, b = _as_number(cur), _as_number(val)
+        if not present or a is None or b is None:
+            return True, False
+        return op(a, b), True
+
+    return True, False      # 沒看過的 Relation,同樣不硬猜
 
 
 def eval_node(xml: str, variables: dict):
@@ -170,7 +247,9 @@ def eval_node(xml: str, variables: dict):
     desc = " %s " % ("AND" if spec["match"] == "0" else "OR")
     why = desc.join(
         "%s %s %s" % (c["var"],
-                      {"0": "==", "1": "!=", "6": "is false", "7": "is true"}.get(c["rel"], "rel" + c["rel"]),
+                      {"0": "==", "1": "!=", "2": ">=", "3": "<=", "4": "<",
+                       "5": ">", "6": "is false", "7": "is true"}.get(
+                          c["rel"], "rel" + c["rel"]),
                       c["val"] or "")
         for c in spec["conditions"])
     why += "  ->  %s" % ("啟用" if enabled else "略過")

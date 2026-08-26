@@ -4,72 +4,55 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>執行序列 — ACQUA 自動化</title>
+{% include '_ui.html' %}
 <style>
-  :root {
-    --bg:#f6f7f9; --panel:#fff; --border:#e3e6ea; --fg:#1f2328; --muted:#6b7480;
-    --accent:#2f6fed; --ok:#1a7f37; --fail:#cf222e; --warn:#bc4c00;
-  }
-  * { box-sizing:border-box; }
-  body { margin:0; background:var(--bg); color:var(--fg);
-         font:14px/1.6 "Segoe UI","Microsoft JhengHei",system-ui,sans-serif; }
-  header { display:flex; align-items:center; gap:12px; padding:14px 22px;
-           background:var(--panel); border-bottom:1px solid var(--border); }
-  header h1 { font-size:16px; margin:0; }
-  header a { font-size:12px; color:var(--accent); text-decoration:none; }
-  .badge { font-size:11px; color:var(--muted); border:1px solid var(--border);
-           border-radius:20px; padding:2px 10px; }
-  main { max-width:1180px; margin:20px auto; padding:0 20px;
-         display:grid; grid-template-columns:1fr 1.15fr; gap:16px; align-items:start; }
-  @media (max-width:980px) { main { grid-template-columns:1fr; } }
-  .panel { background:var(--panel); border:1px solid var(--border);
-           border-radius:12px; padding:18px 20px; margin-bottom:16px; }
-  h2 { font-size:14px; margin:0 0 4px; }
-  .hint { font-size:12px; color:var(--muted); margin:0 0 14px; }
-  .row { display:flex; gap:8px; align-items:center; margin-bottom:10px; }
-  input[type=text], select { font:inherit; font-size:13px; padding:7px 10px;
-                     border:1px solid var(--border); border-radius:8px;
-                     background:var(--panel); color:var(--fg); }
-  select { cursor:pointer; }
-  button { font:inherit; font-size:13px; padding:7px 14px; border-radius:8px;
-           border:1px solid var(--border); background:var(--panel);
-           color:var(--fg); cursor:pointer; }
-  button:hover:not(:disabled) { border-color:var(--accent); }
-  button:disabled { opacity:.45; cursor:default; }
-  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
-  button.danger  { background:var(--fail); border-color:var(--fail); color:#fff; }
-  .empty { color:var(--muted); font-size:13px; padding:18px; text-align:center; }
+  /* ── 這一頁特有 ── */
+  main { max-width:1200px; margin:22px auto; padding:0 22px;
+         display:grid; grid-template-columns:1fr 1.2fr; gap:18px; align-items:start; }
+  @media (max-width:1000px) { main { grid-template-columns:1fr; } }
 
   /* ── 計畫庫 ── */
-  .pl { display:flex; align-items:flex-start; gap:11px; padding:11px 12px;
-        border:1px solid var(--border); border-radius:9px; margin-bottom:8px; }
-  .pl:hover { border-color:#c9ced6; }
+  .pl { display:flex; align-items:center; gap:12px; padding:10px 12px;
+        border-radius:var(--r-sm); margin-bottom:4px;
+        border:1px solid transparent; transition:background .12s; }
+  .pl:hover { background:var(--sunk); }
+  .pl:hover .btns { opacity:1; }
   .pl .t { flex:1; min-width:0; }
-  .pl .t b { display:block; font-size:13px; }
-  .pl .t small { display:block; color:var(--muted); font-size:11px; }
-  .pl .t .src { font-size:11px; color:var(--muted); margin-top:2px; }
-  .pl .t .src i { font-style:normal; color:var(--accent); }
-  .pl .btns { display:flex; flex-direction:column; gap:5px; flex:none; }
-  .pl .btns button { font-size:11px; padding:3px 9px; white-space:nowrap; }
+  .pl .t b { display:block; font-size:13px; font-weight:600; }
+  .pl .t small { display:block; color:var(--faint); font-size:11px;
+                 white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .pl .btns { display:flex; gap:4px; flex:none; opacity:.35; transition:opacity .12s; }
+  .pl .btns button { font-size:11px; padding:3px 8px; white-space:nowrap; }
 
   /* ── 執行序列 ── */
-  .step { display:flex; align-items:flex-start; gap:10px; padding:11px 12px;
-          border:1px solid var(--border); border-radius:9px; margin-bottom:8px;
-          background:var(--panel); }
-  .step.cur { border-color:var(--accent); background:#2f6fed0d; }
-  .step.done { opacity:.6; }
-  .step .no { flex:none; width:24px; height:24px; border-radius:50%;
-              background:var(--bg); border:1px solid var(--border);
-              font-size:11px; display:flex; align-items:center;
-              justify-content:center; font-variant-numeric:tabular-nums; }
+  .stepwrap { border:1px solid var(--line); border-radius:var(--r);
+              margin-bottom:8px; overflow:hidden; }
+  .stepwrap.cur { border-color:var(--accent); }
+  .stepwrap.done { opacity:.5; }
+  .step { display:flex; align-items:center; gap:11px; padding:11px 13px; }
+  .stepwrap.cur .step { background:var(--accent-soft); }
+  .step .no { flex:none; width:22px; height:22px; border-radius:50%;
+              background:var(--sunk); font-size:11px; display:flex;
+              align-items:center; justify-content:center;
+              font-variant-numeric:tabular-nums; color:var(--muted); }
+  .stepwrap.cur .step .no { background:var(--accent); color:#fff; }
   .step .t { flex:1; min-width:0; }
-  .step .t b { display:block; font-size:13px; }
-  .step .t .src { font-size:11px; color:var(--muted); }
-  .step .t .setup { font-size:11px; margin-top:3px; color:var(--warn); }
-  .step .btns { display:flex; gap:4px; flex:none; }
+  .step .t b { display:block; font-size:13px; font-weight:600; }
+  .step .t .src { font-size:11px; color:var(--faint);
+                  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .step .btns { display:flex; gap:3px; flex:none; }
   .step .btns button { font-size:11px; padding:2px 7px; }
-  /* 前後兩步的資料庫不同 —— 中間會自己切,標出來讓人知道會發生什麼 */
-  .dbswitch { font-size:11px; color:var(--accent); margin:-3px 0 8px 34px; }
-  .setupbar { font-size:11px; color:var(--warn); margin:-3px 0 8px 34px; }
+  /* 拖曳把手:只有它可以拖,不然在輸入框裡選字會變成拖整張卡 */
+  .step .grip { flex:none; cursor:grab; color:var(--faint); font-size:14px;
+                padding:0 2px; user-select:none; }
+  .step .grip:active { cursor:grabbing; }
+  .stepwrap.dragging { opacity:.4; }
+  .stepwrap.over-top { box-shadow:0 -2px 0 0 var(--accent) inset; }
+  .stepwrap.over-bottom { box-shadow:0 2px 0 0 var(--accent) inset; }
+  /* 前後兩步的資料庫不同 —— 中間會自己切,先標出來 */
+  .between { display:flex; gap:10px; align-items:center; padding:5px 13px 5px 46px;
+             font-size:11px; color:var(--faint); }
+  .between .sw { color:var(--accent); }
 
   .ov { position:fixed; inset:0; background:#0006; backdrop-filter:blur(2px);
         display:none; align-items:center; justify-content:center; z-index:100; }
@@ -81,14 +64,14 @@
   .bx label input { display:block; width:100%; margin-top:4px; }
   .big { font-size:34px; font-weight:600; font-variant-numeric:tabular-nums; margin:10px 0 2px; }
   .big small { font-size:14px; font-weight:400; color:var(--muted); }
-  .pbar { height:8px; border-radius:5px; background:var(--border); overflow:hidden; margin:10px 0; }
+  .pbar { height:8px; border-radius:5px; background:var(--line); overflow:hidden; margin:10px 0; }
   .pbar i { display:block; height:100%; background:var(--accent); transition:width .3s; }
-  .cur2 { padding:10px 12px; border:1px solid var(--border); border-radius:8px;
+  .cur2 { padding:10px 12px; border:1px solid var(--line); border-radius:8px;
           background:var(--bg); margin-top:10px; }
   .cur2 .p { font-size:11px; color:var(--muted); }
   .cur2 .n2 { font-size:13px; font-weight:600; word-break:break-word; }
   .cnt { display:flex; gap:8px; margin-top:12px; }
-  .cnt div { flex:1; text-align:center; padding:8px; border:1px solid var(--border);
+  .cnt div { flex:1; text-align:center; padding:8px; border:1px solid var(--line);
              border-radius:8px; font-size:11px; color:var(--muted); }
   .cnt b { display:block; font-size:17px; color:var(--fg); }
   .cnt .p b { color:var(--ok); } .cnt .f b { color:var(--fail); }
@@ -100,7 +83,7 @@
   .blk .bs { display:flex; gap:7px; flex-wrap:wrap; margin-top:9px; }
   .log { margin-top:12px; max-height:110px; overflow-y:auto;
          font:11px/1.6 Consolas,monospace; color:var(--muted);
-         border-top:1px solid var(--border); padding-top:9px; }
+         border-top:1px solid var(--line); padding-top:9px; }
   .prep { margin-top:10px; font-size:12px; }
   .prep div { padding:2px 0; }
   .prep .bad { color:var(--fail); }
@@ -115,22 +98,22 @@
   .done { margin-top:12px; padding:12px 14px; border-radius:9px;
           border:1px solid var(--ok); background:#1a7f370d; }
   .done .h { font-size:13px; font-weight:600; color:var(--ok); margin-bottom:6px; }
-  .done .f { font-size:11px; padding:4px 0; border-top:1px dashed var(--border); }
+  .done .f { font-size:11px; padding:4px 0; border-top:1px dashed var(--line); }
   .done .f b { display:block; }
   .done .f small { color:var(--muted); word-break:break-all; }
   .ok-msg { color:var(--ok); font-weight:600; }
 
-  /* 每一步自己的設定:run 名稱 + Word 輸出 */
-  .stcfg { margin:6px 0 0 34px; display:grid; gap:5px;
-           grid-template-columns:1fr 1fr; }
-  .stcfg label { font-size:10px; color:var(--muted); display:block; }
-  .stcfg label span { display:block; margin-bottom:2px; }
-  .stcfg input { width:100%; font-size:12px; padding:5px 8px; }
+  /* 每一步自己的設定 */
+  .stcfg { display:grid; gap:7px; grid-template-columns:1fr 1fr;
+           padding:0 13px 12px 46px; }
+  .stcfg label { font-size:10px; color:var(--faint); margin:0; }
+  .stcfg label span { display:block; margin-bottom:3px; }
+  .stcfg input, .stcfg select { font-size:12px; padding:5px 8px; }
   .stcfg .wide { grid-column:1 / -1; }
 
   /* 計畫細節 */
   .det { max-height:46vh; overflow-y:auto; margin-top:10px;
-         border:1px solid var(--border); border-radius:8px;
+         border:1px solid var(--line); border-radius:8px;
          padding:9px 11px; background:var(--bg); }
   .det div { font-size:11px; padding:2px 0; }
   .det small { color:var(--muted); }
@@ -151,52 +134,40 @@
   <!-- ── 左:計畫庫 ────────────────────────────── -->
   <section class="panel">
     <h2>計畫庫</h2>
-    <p class="hint">計畫是在 <a href="/acqua">測項選擇</a> 那一頁勾好測項後存出來的。
-      每個計畫記得自己是在<b>哪個資料庫的哪個專案</b>挑的 ——
-      執行時會自動切過去,不必先手動開好。</p>
-    <div class="row">
-      <input type="text" id="q" placeholder="搜尋:名稱 / 說明 / 資料庫 / 專案 / setup"
-             style="flex:1">
-      <button id="btn-qclear">清除</button>
+    <div class="row" style="margin-bottom:8px">
+      <input type="text" id="q" placeholder="搜尋計畫…" style="flex:1">
+      <button class="ghost" id="btn-qclear">清除</button>
     </div>
-    <div class="row">
-      <select id="sort">
+    <div class="row" style="margin-bottom:10px">
+      <select id="sort" style="width:auto">
         <option value="created_desc">建立時間:新 → 舊</option>
         <option value="created_asc">建立時間:舊 → 新</option>
         <option value="title_asc">名稱:A → Z</option>
         <option value="title_desc">名稱:Z → A</option>
         <option value="count_desc">項目數:多 → 少</option>
       </select>
-      <button id="btn-reload">重新讀取</button>
-      <button id="btn-addall">整頁加入序列</button>
+      <button class="ghost" id="btn-reload">重讀</button>
+      <button class="ghost" id="btn-addall">整頁加入</button>
       <span style="flex:1"></span>
-      <span class="hint" id="q-n" style="margin:0"></span>
+      <span class="hint" id="q-n"></span>
     </div>
     <div id="list"><div class="empty">載入中…</div></div>
-    <div class="row" id="pager" style="margin-top:10px">
-      <button id="pg-prev">← 上一頁</button>
-      <span class="hint" id="pg-n" style="margin:0;flex:1;text-align:center"></span>
-      <button id="pg-next">下一頁 →</button>
+    <div class="row" id="pager" style="margin-top:12px">
+      <button class="ghost" id="pg-prev">←</button>
+      <span class="hint" id="pg-n" style="flex:1;text-align:center"></span>
+      <button class="ghost" id="pg-next">→</button>
     </div>
   </section>
 
   <!-- ── 右:執行序列 ──────────────────────────── -->
   <section class="panel">
     <h2>執行序列</h2>
-    <p class="hint">由上到下依序執行。每一步之間會停下來讓你調整
-      <b>setup 位置</b>(移動治具 / 馬達 / 換待測物)——
-      之後這一步會改成自動發 HTTP 給 Raspberry Pi。</p>
-
-    <div class="row">
-      <input type="text" id="seq-name" placeholder="這一輪的名稱(選填,會併進每筆結果的名稱)"
-             style="flex:1">
-    </div>
-    <div class="row">
-      <button class="primary" id="btn-run" disabled>▶ 依序執行</button>
-      <button id="btn-pause" disabled>⏸ 暫停</button>
-      <button class="danger" id="btn-stop" disabled>■ 中止</button>
-      <span style="flex:1"></span>
-      <button id="btn-clear">清空</button>
+    <div class="row" style="margin-bottom:10px">
+      <input type="text" id="seq-name" placeholder="這一輪的名稱(選填)" style="flex:1">
+      <button class="primary" id="btn-run" disabled>▶ 執行</button>
+      <button id="btn-pause" disabled>⏸</button>
+      <button class="danger" id="btn-stop" disabled>■</button>
+      <button class="ghost" id="btn-clear">清空</button>
     </div>
 
     <div id="seq"><div class="empty">序列是空的 —— 從左邊把計畫加進來</div></div>
@@ -207,12 +178,9 @@
 <div class="ov" id="setupov">
   <div class="bx">
     <h3>setup 位置</h3>
-    <div class="hint" id="su-plan" style="margin:0"></div>
-    <p class="hint">這一步要把治具 / 待測物擺成什麼樣子。<br>
-      <b>目前只會在序列中間停下來提示你</b> —— 細節底定之後會接上
-      soundproofroom 的座標,由 Flask 發 HTTP 給 Raspberry Pi 自動就位。</p>
+    <div class="hint" id="su-plan"></div>
     <label>位置名稱<input type="text" id="su-name" placeholder="例如 0°／1m／桌面中央"></label>
-    <label>備註<input type="text" id="su-note" placeholder="要做什麼、注意什麼"></label>
+    <label>備註<input type="text" id="su-note" placeholder="選填"></label>
     <div class="acts">
       <button class="primary" id="su-save">儲存</button>
       <button id="su-cancel">取消</button>
@@ -225,7 +193,9 @@
   <div class="bx" style="width:min(680px,94vw)">
     <h3 id="dt-title">計畫細節</h3>
     <div class="hint" id="dt-meta" style="margin:0"></div>
+    <div class="hint" id="dt-desc" style="margin:6px 0 0"></div>
     <div class="hint" id="dt-setup" style="margin:6px 0 0"></div>
+    <div class="hint" id="dt-when" style="margin:6px 0 0"></div>
     <div class="det" id="dt-items"></div>
     <div class="acts">
       <button class="primary" id="dt-close">關閉</button>
@@ -243,8 +213,7 @@
       <div class="n2" id="dl-title">—</div>
     </div>
     <div class="hint" id="dl-meta" style="margin:8px 0 0"></div>
-    <p class="hint" style="margin:12px 0 0">刪掉不能復原。
-      請把<b>計畫名稱</b>完整打一次,確認你要刪的是這一個。</p>
+    <p class="hint" style="margin:14px 0 0">刪掉不能復原 —— 請完整輸入計畫名稱。</p>
     <label style="display:block;margin-top:10px">
       <input type="text" id="dl-input" placeholder="在這裡輸入計畫名稱"
              style="width:100%" spellcheck="false">
@@ -274,7 +243,7 @@
       <div class="h">🔧 Moving to new setup</div>
       <div id="sp-name">—</div>
       <div class="pbar" style="margin:8px 0 4px"><i id="sp-bar" style="width:0%"></i></div>
-      <div id="sp-left" style="font-size:11px;color:var(--muted)"></div>
+      <div id="sp-left" style="font-size:11px;color:var(--faint)"></div>
     </div>
     <div class="done" id="r-done" style="display:none">
       <div class="h" id="dn-h">✓ 全部完成</div>
@@ -288,10 +257,13 @@
       <div class="bs" id="blk-b"></div>
     </div>
     <div class="log" id="r-log"></div>
-    <div class="acts">
+    <div class="acts" id="r-acts">
       <button id="r-pause">⏸ 暫停</button>
-      <button class="danger" id="r-stop">■ 中止整個序列</button>
+      <button class="danger" id="r-stop">■ 中止</button>
       <button id="r-hide">縮小</button>
+    </div>
+    <div class="acts" id="r-acts-done" style="display:none">
+      <button class="primary" id="r-close">關閉視窗</button>
     </div>
   </div>
 </div>
@@ -397,10 +369,8 @@ function render() {
     <div class="pl">
       <div class="t">
         <b>${esc(p.title)}</b>
-        ${p.description ? `<small>${esc(p.description)}</small>` : ''}
-        <div class="src">${srcLine(p)}</div>
-        <small>${p.count} 項 ・ 建立於 ${esc((p.created || '').replace('T', ' '))}
-          ${(p.setup && p.setup.name) ? ' ・ setup:' + esc(p.setup.name) : ''}</small>
+        <small>${p.count} 項${
+          (p.setup && p.setup.name) ? ' ・ ' + esc(p.setup.name) : ''}</small>
       </div>
       <div class="btns">
         <button data-add="${esc(p.id)}">加入序列</button>
@@ -424,51 +394,54 @@ function render() {
       const p = byId(st.id) || {};
       const s = p.source || {};
       const su = p.setup || {};
-      let head = '';
+
+      // 兩步之間會發生什麼,先講出來:調整 setup、必要時換資料庫
+      const bits = [];
       if (i > 0) {
-        head += `<div class="setupbar">↓ 停下來調整 setup${
-          su.name ? ':' + esc(su.name) : '(未設定位置)'}</div>`;
+        bits.push(su.name ? `setup:${esc(su.name)}` : 'setup(未設定)');
       }
       if (s.database && s.database !== prevDb) {
-        head += `<div class="dbswitch">↻ 會自動切換到資料庫 ${esc(s.database)}</div>`;
+        bits.push(`<span class="sw">切換到 ${esc(s.database)}</span>`);
       }
       prevDb = s.database || prevDb;
+      const head = bits.length ? `<div class="between">↓ ${bits.join(' ・ ')}</div>` : '';
+
       const cls = running
         ? (i < curStep ? ' done' : (i === curStep ? ' cur' : ''))
         : '';
       return head + `
-        <div class="step${cls}">
-          <div class="no">${i + 1}</div>
-          <div class="t">
-            <b>${esc(p.title || '(已刪除)')}</b>
-            <div class="src">${srcLine(p)} ・ ${p.count || 0} 項</div>
-            ${su.name ? `<div class="setup">setup:${esc(su.name)}${
-                su.note ? ' —— ' + esc(su.note) : ''}</div>` : ''}
+        <div class="stepwrap${cls}">
+          <div class="step">
+            <span class="grip" draggable="true" data-grip="${i}"
+                  title="拖曳調整順序">⠿</span>
+            <div class="no">${i + 1}</div>
+            <div class="t">
+              <b>${esc(p.title || '(已刪除)')}</b>
+              <div class="src">${srcLine(p)} ・ ${p.count || 0} 項</div>
+            </div>
+            <div class="btns">
+              <button class="ghost" data-up="${i}" ${i === 0 ? 'disabled' : ''}>↑</button>
+              <button class="ghost" data-down="${i}"
+                      ${i === seq.length - 1 ? 'disabled' : ''}>↓</button>
+              <button class="ghost" data-rm="${i}">✕</button>
+            </div>
           </div>
-          <div class="btns">
-            <button data-up="${i}" ${i === 0 ? 'disabled' : ''}>↑</button>
-            <button data-down="${i}" ${i === seq.length - 1 ? 'disabled' : ''}>↓</button>
-            <button data-rm="${i}">✕</button>
+          <div class="stcfg">
+            <label class="wide"><span>run 名稱</span>
+              <input type="text" data-f="run_name" data-i="${i}"
+                     value="${esc(st.run_name)}"
+                     placeholder="留空 = 這一輪的名稱 · ${esc(p.title || '')}"></label>
+            <label class="wide"><span>DUT</span>
+              <select data-f="mo" data-i="${i}" data-plan="${esc(st.id)}">
+                <option value="">${esc(s.measurement_object || '(依計畫)')}</option>
+              </select></label>
+            <label><span>Word 檔名</span>
+              <input type="text" data-f="doc_name" data-i="${i}"
+                     value="${esc(st.doc_name)}" placeholder="留空 = 不出報告"></label>
+            <label><span>Word 位置</span>
+              <input type="text" data-f="doc_dir" data-i="${i}"
+                     value="${esc(st.doc_dir)}" placeholder="D:/報告/2026"></label>
           </div>
-        </div>
-        <div class="stcfg">
-          <label class="wide"><span>這一步的 run 名稱(ACQUA 的 Description)</span>
-            <input type="text" data-f="run_name" data-i="${i}"
-                   value="${esc(st.run_name)}"
-                   placeholder="留空 = 上面那一輪的名稱 · ${esc(p.title || '')}"></label>
-          <label class="wide"><span>DUT(量測物件)—— 選單是這個專案現有的;
-              要新的請先在 ACQUA 裡建立</span>
-            <select data-f="mo" data-i="${i}" data-plan="${esc(st.id)}">
-              <option value="">${esc(s.measurement_object || '(用計畫記的那個)')}</option>
-            </select></label>
-          <label><span>Word 檔名</span>
-            <input type="text" data-f="doc_name" data-i="${i}"
-                   value="${esc(st.doc_name)}"
-                   placeholder="留空 = 不出報告"></label>
-          <label><span>Word 存放位置</span>
-            <input type="text" data-f="doc_dir" data-i="${i}"
-                   value="${esc(st.doc_dir)}"
-                   placeholder="例如 D:/報告/2026"></label>
         </div>`;
     }).join('');
   }
@@ -564,9 +537,14 @@ async function openDetail(id) {
   $('#dt-title').textContent = p.title;
   $('#dt-meta').textContent =
     [s.database, s.project, s.measurement_object].filter(Boolean).join(' / ');
+  $('#dt-desc').textContent = p.description || '';
   $('#dt-setup').textContent = su.name
     ? `setup:${su.name}${su.note ? ' —— ' + su.note : ''}`
     : 'setup:未設定';
+  $('#dt-when').textContent =
+    `建立於 ${(p.created || '').replace('T', ' ')}`
+    + (p.updated && p.updated !== p.created
+       ? ` ・ 最後更新 ${p.updated.replace('T', ' ')}` : '');
   $('#dt-items').innerHTML = '<div>讀取中…</div>';
   $('#detov').classList.add('on');
 
@@ -669,6 +647,59 @@ $('#btn-qclear').onclick = () => {
 $('#sort').onchange = (e) => { sortBy = e.target.value; page = 1; render(); };
 $('#pg-prev').onclick = () => { if (page > 1) { page--; render(); } };
 $('#pg-next').onclick = () => { page++; render(); };
+// ── 拖曳排序 ──────────────────────────────────
+// 只有把手可以拖 —— 整張卡都能拖的話,在輸入框裡選字就會變成拖卡片。
+let dragFrom = null;
+
+$('#seq').addEventListener('dragstart', (e) => {
+  const g = e.target.closest('[data-grip]');
+  if (!g) { e.preventDefault(); return; }
+  dragFrom = +g.dataset.grip;
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', String(dragFrom));   // Firefox 需要
+  g.closest('.stepwrap').classList.add('dragging');
+});
+
+$('#seq').addEventListener('dragover', (e) => {
+  if (dragFrom === null) return;
+  e.preventDefault();                       // 不擋掉就不會觸發 drop
+  e.dataTransfer.dropEffect = 'move';
+  const wrap = e.target.closest('.stepwrap');
+  $('#seq').querySelectorAll('.stepwrap').forEach(w =>
+    w.classList.remove('over-top', 'over-bottom'));
+  if (!wrap) return;
+  // 游標在上半 = 插在它前面,下半 = 插在它後面
+  const r = wrap.getBoundingClientRect();
+  wrap.classList.add(e.clientY < r.top + r.height / 2 ? 'over-top' : 'over-bottom');
+});
+
+$('#seq').addEventListener('drop', (e) => {
+  if (dragFrom === null) return;
+  e.preventDefault();
+  const wraps = [...$('#seq').querySelectorAll('.stepwrap')];
+  const wrap = e.target.closest('.stepwrap');
+  let to = wraps.indexOf(wrap);
+  if (to < 0) { cleanupDrag(); return; }
+  const r = wrap.getBoundingClientRect();
+  if (e.clientY >= r.top + r.height / 2) to += 1;      // 放到它後面
+  if (to > dragFrom) to -= 1;                          // 自己被抽走了,索引往前移
+  if (to !== dragFrom && to >= 0 && to < seq.length) {
+    const [moved] = seq.splice(dragFrom, 1);
+    seq.splice(to, 0, moved);
+    saveSeq();
+  }
+  cleanupDrag();
+  render();
+});
+
+$('#seq').addEventListener('dragend', cleanupDrag);
+
+function cleanupDrag() {
+  dragFrom = null;
+  $('#seq').querySelectorAll('.stepwrap').forEach(w =>
+    w.classList.remove('dragging', 'over-top', 'over-bottom'));
+}
+
 $('#btn-reload').onclick = loadPlans;
 // 只加「這一頁看得到的」—— 按鈕旁邊就是分頁,加了看不見的東西會嚇到人
 $('#btn-addall').onclick = () => {
@@ -777,7 +808,12 @@ $('#btn-stop').onclick = $('#r-stop').onclick = async () => {
   await fetch('/acqua/api/cancel', {method: 'POST'});
   log('已要求中止');
 };
-$('#r-hide').onclick = closeRunOv;
+$('#r-hide').onclick = () => {
+  // 「縮小」只是把大框收起來,序列照跑 —— 右下角那個小視窗接手。
+  // 點小視窗就會叫這個函式把大框放回來。
+  $('#runov').classList.remove('on');
+};
+window.__miniRestore = () => $('#runov').classList.add('on');
 
 // 暫停/繼續 —— 停在兩筆之間,在途那筆會跑完。
 // 序列本身也會停:當前計畫沒結束就不會進到下一步。
@@ -852,13 +888,33 @@ async function runSeq() {
       (res.missing || []).forEach(m =>
         log('   ⚠ 找不到測項:' + (m.path ? m.path + ' / ' : '') + m.title));
       (res.ambiguous || []).forEach(m =>
-        log(`   ⚠ 同名 ${m.count} 筆無法分辨,已跳過:${m.title}`));
+        log(`   ⚠ 同名 ${m.count} 筆無法分辨,已跳過:${m.title}(${m.why || ''})`));
+      (res.conflicts || []).forEach(m =>
+        log(`   ✗ 證據互相矛盾,已跳過:${m.title} —— ${m.why || ''}`));
 
       const row_ids = prep.row_ids || [];
       if (!row_ids.length) { log('   沒有可執行的測項,跳過這一步'); continue; }
-      if (res.missing?.length || res.ambiguous?.length) {
-        const n = (res.missing || []).length + (res.ambiguous || []).length;
-        if (!confirm(`「${p.title}」有 ${n} 項對應不到,只會跑 ${row_ids.length} 項。\n`
+
+      // ⚠️ 專案樹被改過的話,測項序號會整組位移 —— 而位移之後身分鍵仍然
+      //    「對得上」,只是對到別的測項。這種靜默錯誤一定要問過人。
+      if (res.tree_changed) {
+        log('   ⚠ 專案樹跟這個計畫存檔時不一樣了');
+        if (!confirm(`「${p.title}」的專案樹在存檔之後被改過。\n\n`
+                   + `測項是靠「路徑 + 名稱 + 序號」對回去的,\n`
+                   + `樹一改序號就會位移,對到的可能不是原本那一項。\n\n`
+                   + `仍要用這 ${row_ids.length} 項執行嗎?`)) {
+          log('使用者取消 —— 建議重新挑一次測項存成新計畫'); break;
+        }
+      } else if (res.needs_review) {
+        if (!confirm(`「${p.title}」有 ${res.needs_review} 項的對應沒有十足把握\n`
+                   + `(計畫沒有存結構指紋,或是靠名稱勉強對上的)。\n\n`
+                   + `仍要執行嗎?`)) { log('使用者取消'); break; }
+      }
+
+      const bad = (res.missing || []).length + (res.ambiguous || []).length
+                + (res.conflicts || []).length;
+      if (bad) {
+        if (!confirm(`「${p.title}」有 ${bad} 項對應不到,只會跑 ${row_ids.length} 項。\n`
                    + '要繼續嗎?(詳情看執行視窗的日誌)')) {
           log('使用者取消'); break;
         }
@@ -947,6 +1003,8 @@ function showDone(secs) {
     : '<div style="margin-top:8px;font-size:11px;color:var(--muted)">'
       + '沒有產生 Word(序列裡沒有步驟填了輸出檔名)</div>';
   $('#r-done').style.display = '';
+  $('#r-acts').style.display = 'none';        // 跑完了,暫停/中止沒有意義
+  $('#r-acts-done').style.display = '';
 
   let left = 5;
   const tick = () => {
@@ -962,7 +1020,10 @@ function closeRunOv() {
   clearInterval(doneTimer); doneTimer = null;
   $('#runov').classList.remove('on');
   $('#r-done').style.display = 'none';
+  $('#r-acts').style.display = '';
+  $('#r-acts-done').style.display = 'none';
 }
+$('#r-close').onclick = closeRunOv;
 
 // 想看清楚檔案路徑時,滑鼠一動就別自動關
 $('#runov').addEventListener('mousemove', () => {

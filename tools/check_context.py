@@ -188,11 +188,11 @@ check("計畫存 setup 位置(未來接 Raspberry Pi)", "def new_setup(" in tp)
 check("舊格式計畫會被補成新格式", "def _migrate(d: dict)" in tp)
 check("存計畫時帶路徑(跨庫才對得回來)", "path: s.path" in idx)
 check("prepare 會切庫 / 開專案 / 選 MO / 載入 / 對應",
-      all(k in ap for k in ('"切換資料庫', '"開啟專案', '"選定量測物件',
-                            '"載入測項"', '"resolve_items"')))
+      all(k in ap for k in ('切換到 {where}', '開啟專案 {proj}',
+                            '選定量測物件 {mo}', '"載入測項"', '"resolve_items"')))
 check("序列頁有 setup 編輯", 'id="setupov"' in pl2 and "su-save" in pl2)
-check("序列頁會標出要切換資料庫", "會自動切換到資料庫" in pl2)
-check("步驟之間停下來提示 setup", "waitSetup(" in pl2)
+check("序列頁會標出要切換資料庫", "切換到 ${esc(s.database)}" in pl2)
+check("步驟之間會處理 setup", "movingToSetup(" in pl2)
 check("序列存在瀏覽器,重整不會不見", "acqua.sequence" in pl2)
 check("對應不到會問過使用者才繼續", "對應不到,只會跑" in pl2)
 

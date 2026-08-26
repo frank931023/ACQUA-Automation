@@ -29,3 +29,9 @@ reports/
 # 暫存
 *.tmp
 *.bak
+
+# 機器專屬設定(含密碼)—— 不進版控,見 .env.example
+.env
+
+# 執行紀錄
+logs/
