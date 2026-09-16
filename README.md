@@ -23,13 +23,15 @@ cd "ACQUA Automation"
 
 > 用 `.venv` 裡的 Python。HEAD 那份 `Python39` 沒有 flask。
 
-三個頁面:
+五個頁面:
 
 | 網址 | 做什麼 |
 |---|---|
 | `/` | 入口 |
 | `/acqua/` | 連線、開專案、勾測項、跑、出報告 |
 | `/acqua/plans` | 把多個計畫接成序列連續跑 |
+| `/soundproofroom` | 測試室 3D。**即時模式**看實機位置並確認後移動、**設定模式**離線排擺位 |
+| `/setups` | 擺位清單。點進去可以逐軸改數字、套用到實機 |
 
 ---
 
@@ -111,6 +113,8 @@ acqua/
   condeval.py          ConditionalExecution 的求值
   wizard.py            從條件式反推精靈選項
   testplans.py         計畫的本地儲存(plans/*.json)
+  crane.py             ⭐ 天車橋接:3D 邏輯軸 ←→ Pi 韌體指令(mock / http 兩種後端)
+  roomsetups.py        擺位的本地儲存(setups/*.json)
   prefs.py             每個資料庫上次用什麼(prefs.json)
   runlog.py            執行紀錄(runs/current.json)
   constants.py         TypeLib 來的列舉
@@ -120,6 +124,9 @@ templates/
   index.html           測項選擇
   plans.html           執行序列
   home.html            入口
+  soundproofroom.html  3D 頁(免 build 模式)
+  setups.html          擺位清單
+  setup_detail.html    單一擺位:逐軸編輯 + 套用到實機
 tools/
   check_context.py     上下文一致性檢查
   check_ui.py          前端與路由的機械化盤點
@@ -136,6 +143,24 @@ SQL 不同:`raw_query()` 自己確保呼叫端執行緒有 COM(ADO 也是 COM),
 
 > 這裡踩過一個坑:一開始寫成「用完就 `CoUninitialize`」,結果拆掉 apartment
 > 之後工作執行緒對 ACQUA 的 proxy 全部斷線。**初始化之後不要收。**
+
+---
+
+### 讓機構動之前一定先問
+
+3D 頁的即時模式裡,拉桿**不會**直接驅動機構 —— 放手後跳確認框,按確定才
+下指令。理由不是「多一道保險比較好」,而是:
+
+- 機構有物理行程,而且一動就是真的在動。手滑碰到拉桿讓天車跑起來太貴。
+- 在按下確定之前,**畫面上不會有任何東西動**。如果拉桿一動 3D 就跟著動,
+  使用者會以為東西已經移過去了 —— 那個錯覺比「沒動」危險得多。
+- 韌體**沒有中止指令**。送出去就只能等它走完。既然事後救不回來,唯一的
+  機會就是事前問清楚:哪一根軸、從哪到哪、走幾毫米、大概幾秒、哪一台 Pi。
+
+同一個理由讓「套用整組擺位」是**一根軸一根軸依序**走的:機構的行程互相
+重疊,同時動撞到了也看不出是誰撞的。
+
+細節見 `acqua/crane.py` 的檔頭與 `soundproofroom/README.md`。
 
 ---
 

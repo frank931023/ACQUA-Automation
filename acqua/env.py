@@ -39,7 +39,7 @@ MAPPING = {
     "ACQUA_WEB_HOST":         ("web", "host"),
     "ACQUA_WEB_PORT":         ("web", "port"),
     "ACQUA_REPORT_DIR":       ("report", "output_dir"),
-    # 未來:序列中間的「移動治具」會發 HTTP 給這個控制器
+    # 天車控制中心的位址。空的 = 用模擬位置(見 acqua/crane.py)
     "ACQUA_SETUP_CONTROLLER": ("setup_controller", "url"),
 }
 

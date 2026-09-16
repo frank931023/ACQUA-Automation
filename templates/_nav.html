@@ -6,7 +6,7 @@
    內容再長也只在 drawer 裡面捲。
 
    宿主頁面要提供:
-     window.__navPage   目前頁面的代號('run' / 'plans' / 'room')
+     window.__navPage   目前頁面的代號('run' / 'plans' / 'room' / 'setups')
    會用到的共用 API(有才用,沒有就跳過):
      /acqua/api/status      顯示連線狀態
      /acqua/api/clear-run   清除殘留
@@ -67,6 +67,7 @@
   <a href="/acqua/" id="nav-run" title="Test run">▶</a>
   <a href="/acqua/plans" id="nav-plans" title="Sequence">⧉</a>
   <a href="/soundproofroom" id="nav-room" title="Room">◍</a>
+  <a href="/setups" id="nav-setups" title="Setup list">▤</a>
   <div class="sp"></div>
   <div class="st" id="nav-dot" title="Connection"></div>
 </nav>
@@ -79,6 +80,7 @@
       <a href="/acqua/" data-p="run"><i>▶</i>Test run</a>
       <a href="/acqua/plans" data-p="plans"><i>⧉</i>Sequence</a>
       <a href="/soundproofroom" data-p="room"><i>◍</i>Room</a>
+      <a href="/setups" data-p="setups"><i>▤</i>Setup list</a>
     </div>
     <div class="sec">
       <div>Connection</div>

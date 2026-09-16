@@ -1,0 +1,355 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Setup — ACQUA Automation</title>
+{% include '_ui.html' %}
+<style>
+  /* 左邊資訊與動作,右邊逐軸的值。右邊是主角 —— 一個擺位就是那 19 個數字。 */
+  .work { grid-template-columns:minmax(280px,.75fr) 1.25fr; }
+  @media (max-width:980px) { .work { grid-template-columns:1fr; } }
+
+  .crumb { font-size:11px; color:var(--faint); margin-bottom:8px; flex:none; }
+  .crumb a { color:var(--muted); text-decoration:none; }
+  .crumb a:hover { color:var(--brand); }
+
+  h1 { font-size:19px; margin:0 0 4px; font-weight:650; letter-spacing:-.01em;
+       word-break:break-word; }
+  .desc { font-size:13px; color:var(--muted); line-height:1.7; margin:0 0 14px;
+          white-space:pre-wrap; word-break:break-word; }
+  .desc.none { color:var(--faint); font-style:italic; }
+
+  .meta { font-size:11px; color:var(--faint); line-height:1.9;
+          border-top:1px solid var(--line); padding-top:10px; margin-top:4px; }
+  .meta b { color:var(--muted); font-weight:600; }
+
+  .tag { font-size:10px; padding:2px 7px; border-radius:20px; white-space:nowrap;
+         border:1px solid var(--line); color:var(--muted); }
+  .tag.live { color:var(--brand); border-color:var(--brand-line);
+              background:var(--brand-soft); }
+
+  .acts2 { display:flex; flex-direction:column; gap:7px; margin-top:14px; flex:none; }
+  .acts2 button, .acts2 a { width:100%; }
+  .acts2 a { text-decoration:none; display:block; }
+
+  /* ── 逐軸:左邊名稱,右邊數字 ── */
+  .ax { display:flex; align-items:center; gap:12px; padding:7px 2px; }
+  .ax + .ax { border-top:1px solid var(--line); }
+  .ax .n { flex:1; min-width:0; font-size:13px; }
+  .ax .n small {
+    display:block; font:10px/1.5 Consolas,"Cascadia Mono",monospace;
+    color:var(--faint);
+  }
+  .ax .v { flex:none; display:flex; align-items:center; gap:6px; }
+  .ax .v input {
+    width:96px; text-align:right; font-variant-numeric:tabular-nums;
+    padding:5px 8px; border-radius:var(--r-sm);
+    border:1px solid var(--line); background:var(--panel); color:var(--fg);
+  }
+  .ax .v input:focus { outline:none; border-color:var(--brand); }
+  /* 改過但還沒存的要看得出來 —— 不然按了 Save 才知道自己動到什麼 */
+  .ax.dirty .v input { border-color:var(--warn); background:#b7791f0d; }
+  .ax.dirty .n { font-weight:600; }
+  .ax.bad .v input { border-color:var(--fail); background:#d1493f0d; }
+  .ax .u { font-size:11px; color:var(--faint); width:16px; }
+
+  /* 存檔列固定在底下,不跟著清單捲 —— 改到第 15 根軸時還看得到 Save */
+  .savebar {
+    display:flex; align-items:center; gap:8px; flex:none;
+    margin-top:12px; padding-top:12px; border-top:1px solid var(--line);
+  }
+  .savebar .hint { flex:1; margin:0; }
+  .savebar .hint.on { color:var(--warn); font-weight:600; }
+
+  .ov { position:fixed; inset:0; z-index:200; display:none;
+        align-items:center; justify-content:center; padding:20px;
+        background:#0a201d66; backdrop-filter:blur(3px); }
+  .ov.on { display:flex; }
+  .bx { background:var(--panel); border:1px solid var(--line); border-radius:14px;
+        padding:20px 22px; width:min(480px,94vw); max-height:92vh;
+        display:flex; flex-direction:column; box-shadow:0 18px 56px #00302a2e; }
+  .bx h3 { margin:0 0 6px; font-size:15px; font-weight:600; flex:none; }
+  .bx .note { font-size:12px; color:var(--muted); line-height:1.7; flex:none; }
+  .chg { margin-top:12px; overflow-y:auto; border:1px solid var(--line);
+         border-radius:var(--r-sm); }
+  .chg div { display:flex; justify-content:space-between; gap:10px;
+             padding:7px 10px; font-size:12px; color:var(--muted);
+             font-variant-numeric:tabular-nums; }
+  .chg div + div { border-top:1px solid var(--line); }
+  .chg b { color:var(--brand); }
+  .chg s { color:var(--faint); }
+</style>
+</head>
+<body>
+<script>window.__navPage = 'setups';</script>
+<div class="shell">
+{% include '_nav.html' %}
+<div class="work">
+
+  <div class="panel">
+    <div class="crumb"><a href="/setups">← Setup list</a></div>
+    <div class="grow">
+      <div style="display:flex;align-items:baseline;gap:8px">
+        <h1 id="name">…</h1>
+        <span id="src"></span>
+      </div>
+      <p class="desc" id="desc"></p>
+      <div class="meta" id="meta"></div>
+    </div>
+
+    <div class="acts2">
+      <a href="#" id="a-edit"><button>Open in 3D (setup mode)</button></a>
+      <a href="#" id="a-apply"><button class="primary">Apply to hardware…</button></a>
+      <button id="a-rename">Rename / edit note…</button>
+      <button class="danger" id="a-del">Delete this setup</button>
+      <p class="hint">“Apply” opens the 3D page in live mode and asks for
+        confirmation there before anything moves.</p>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Axis by axis</h2>
+    <div class="grow" id="rows"></div>
+    <div class="savebar">
+      <p class="hint" id="dirty">No unsaved changes</p>
+      <button id="a-revert" disabled>Revert</button>
+      <button class="primary" id="a-save" disabled>Save</button>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<!-- 存檔前確認 -->
+<div class="ov" id="saveov">
+  <div class="bx">
+    <h3>Save these changes?</h3>
+    <div class="note">Only the saved numbers change. <b>Nothing moves</b> —
+      the hardware stays exactly where it is.</div>
+    <div class="chg" id="chg"></div>
+    <div class="acts">
+      <button class="ghost" id="sv-cancel">Cancel</button>
+      <button class="primary" id="sv-ok">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- 改名 / 改說明 -->
+<div class="ov" id="renov">
+  <div class="bx">
+    <h3>Rename this setup</h3>
+    <div class="note">Only the name and note change — the saved positions stay
+      exactly as they are.</div>
+    <label>Name</label>
+    <input type="text" id="rn-name">
+    <label>Note</label>
+    <textarea id="rn-desc" rows="3"></textarea>
+    <div class="acts">
+      <button class="ghost" id="rn-cancel">Cancel</button>
+      <button class="primary" id="rn-ok">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- 刪除確認 -->
+<div class="ov" id="delov">
+  <div class="bx">
+    <h3>Delete this setup?</h3>
+    <div class="note" id="del-what"></div>
+    <div class="note" style="margin-top:10px;color:var(--fail)">
+      This cannot be undone. It does <b>not</b> move the hardware — whatever
+      position the machines are in now, they stay in.</div>
+    <div class="acts">
+      <button class="ghost" id="del-cancel">Keep it</button>
+      <button class="danger" id="del-ok">Delete</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const ID = {{ setup_id | tojson }};
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g,
+  (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const when = (s) => (s || '').replace('T', ' ').slice(0, 16);
+const API = '/api/room/setups/' + encodeURIComponent(ID);
+
+let setup = null;
+let axes = [];          // 後端給的軸定義(含行程與單位)
+let saved = {};         // 存檔裡的值 —— 用來判斷哪些被改過
+
+const dp = (a) => (a.unit === 'deg' ? 1 : 3);
+const fmt = (a, v) => Number(v).toFixed(dp(a));
+const unit = (a) => (a.unit === 'deg' ? '°' : 'm');
+
+/** 目前輸入框裡的值。看不懂的回 null(不是 0 —— 空白不該變成「移到原點」)*/
+function readInput(a) {
+  const el = document.querySelector(`input[data-ax="${a.id}"]`);
+  if (!el) return null;
+  const v = parseFloat(el.value);
+  return Number.isFinite(v) ? v : null;
+}
+
+function changes() {
+  const out = [];
+  for (const a of axes) {
+    const v = readInput(a);
+    if (v === null) continue;
+    if (Math.abs(v - saved[a.id]) > 1e-9) out.push({ a, from: saved[a.id], to: v });
+  }
+  return out;
+}
+
+/** 每次輸入都重算:哪些改過、哪些超出行程、Save 能不能按 */
+function refreshDirty() {
+  let bad = 0;
+  for (const a of axes) {
+    const row = document.querySelector(`.ax[data-ax="${a.id}"]`);
+    const v = readInput(a);
+    const off = v === null || v < a.min - 1e-9 || v > a.max + 1e-9;
+    row.classList.toggle('bad', off);
+    row.classList.toggle('dirty', !off && v !== null
+      && Math.abs(v - saved[a.id]) > 1e-9);
+    if (off) bad++;
+  }
+  const n = changes().length;
+  const d = $('#dirty');
+  d.classList.toggle('on', n > 0 || bad > 0);
+  d.textContent = bad
+    ? `${bad} value(s) outside the axis travel`
+    : (n ? `${n} unsaved change${n > 1 ? 's' : ''}` : 'No unsaved changes');
+  $('#a-save').disabled = bad > 0 || n === 0;
+  $('#a-revert').disabled = n === 0 && bad === 0;
+}
+
+function paintAxes() {
+  $('#rows').innerHTML = axes.map((a) => `
+    <div class="ax" data-ax="${esc(a.id)}">
+      <div class="n">${esc(a.label)}<small>${esc(a.pi)} · ${esc(a.ch)} ·
+        ${fmt(a, a.min)} … ${fmt(a, a.max)} ${unit(a)}</small></div>
+      <div class="v">
+        <input type="number" data-ax="${esc(a.id)}"
+               step="${a.unit === 'deg' ? '0.5' : '0.005'}"
+               min="${a.min}" max="${a.max}" value="${fmt(a, saved[a.id])}">
+        <span class="u">${unit(a)}</span>
+      </div>
+    </div>`).join('')
+    || '<div class="empty">This setup has no axes.</div>';
+
+  $('#rows').querySelectorAll('input[data-ax]')
+    .forEach((el) => el.addEventListener('input', refreshDirty));
+  refreshDirty();
+}
+
+function paintHead() {
+  $('#name').textContent = setup.name;
+  $('#src').innerHTML = setup.source === 'live'
+    ? '<span class="tag live" title="Captured from the real hardware">live</span>'
+    : '<span class="tag" title="Drawn in the 3D page">drawn</span>';
+  const desc = $('#desc');
+  desc.textContent = setup.description || 'No note.';
+  desc.className = 'desc' + (setup.description ? '' : ' none');
+
+  $('#meta').innerHTML = `
+    <div><b>Axes</b> ${setup.count}</div>
+    <div><b>Created</b> ${esc(when(setup.created))}</div>
+    <div><b>Updated</b> ${esc(when(setup.updated))}</div>
+    <div><b>Id</b> <code>${esc(setup.id)}</code></div>
+    ${setup.dropped && setup.dropped.length
+      ? `<div style="color:var(--warn)"><b>Dropped on save</b>
+           ${setup.dropped.map(esc).join(', ')} — no such axis</div>` : ''}`;
+
+  $('#a-edit').href = '/soundproofroom?setup=' + encodeURIComponent(setup.id);
+  $('#a-apply').href = '/soundproofroom?mode=live&apply=' + encodeURIComponent(setup.id);
+}
+
+async function load() {
+  const r = await fetch(API);
+  if (!r.ok) { location.href = '/setups'; return; }
+  const d = await r.json();
+  setup = d.setup;
+  axes = d.axes || [];
+  saved = {};
+  for (const a of axes) saved[a.id] = a.target;
+  paintHead();
+  paintAxes();
+}
+
+// 只在進頁時載一次。這一頁顯示的是**存檔裡的數字**,不是實機位置 ——
+// 沒有東西會自己變,所以不需要輪詢,也不會在使用者打字時把輸入框洗掉。
+load();
+
+// ── 存 ──
+$('#a-save').onclick = () => {
+  const ch = changes();
+  if (!ch.length) return;
+  $('#chg').innerHTML = ch.map((c) => `<div>
+      <span>${esc(c.a.label)}</span>
+      <span><s>${fmt(c.a, c.from)}</s> → <b>${fmt(c.a, c.to)} ${unit(c.a)}</b></span>
+    </div>`).join('');
+  $('#saveov').classList.add('on');
+};
+$('#sv-cancel').onclick = () => $('#saveov').classList.remove('on');
+$('#sv-ok').onclick = async () => {
+  const body = {};
+  for (const a of axes) {
+    const v = readInput(a);
+    body[a.id] = v === null ? saved[a.id] : v;
+  }
+  await fetch(API, {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({axes: body}),
+  });
+  $('#saveov').classList.remove('on');
+  await load();
+};
+
+$('#a-revert').onclick = () => paintAxes();
+
+// ── 改名 ──
+$('#a-rename').onclick = () => {
+  $('#rn-name').value = setup.name;
+  $('#rn-desc').value = setup.description || '';
+  $('#renov').classList.add('on');
+  $('#rn-name').focus();
+};
+$('#rn-cancel').onclick = () => $('#renov').classList.remove('on');
+$('#rn-ok').onclick = async () => {
+  const name = $('#rn-name').value.trim();
+  if (!name) { $('#rn-name').focus(); return; }
+  await fetch(API, {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({name, description: $('#rn-desc').value.trim()}),
+  });
+  $('#renov').classList.remove('on');
+  load();
+};
+
+// ── 刪除 ──
+$('#a-del').onclick = () => {
+  $('#del-what').innerHTML = `<b>${esc(setup.name)}</b> — ${setup.count} axes,
+    saved ${esc(when(setup.created))}.`;
+  $('#delov').classList.add('on');
+};
+$('#del-cancel').onclick = () => $('#delov').classList.remove('on');
+$('#del-ok').onclick = async () => {
+  await fetch(API, {method: 'DELETE'});
+  location.href = '/setups';
+};
+
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return;
+  ['#saveov', '#renov', '#delov'].forEach((s) => $(s).classList.remove('on'));
+});
+
+// 改了東西還沒存就要離開時擋一下 —— 這一頁沒有自動存檔
+window.addEventListener('beforeunload', (e) => {
+  if (!changes().length) return;
+  e.preventDefault();
+  e.returnValue = '';
+});
+</script>
+{% include '_runmini.html' %}
+</body>
+</html>

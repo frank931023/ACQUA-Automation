@@ -88,3 +88,234 @@ button.on {
   border-color: var(--accent); background: #009B851f; color: var(--accent);
   font-weight: 600;
 }
+
+/* ══════════════════════════════════════════════════
+   兩個模式、確認框、即時狀態
+   ══════════════════════════════════════════════════ */
+
+:root {
+  --warn: #d29922;
+  --bad: #f85149;
+}
+
+/* ── 模式切換 ──
+   做成兩格分段控制而不是下拉或開關:兩個模式的行為差很多(一個碰不到
+   機構,一個一動就是真的動),必須隨時看得出現在在哪一個,不能藏在
+   收起來的選單裡。 */
+.modesw {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 0;
+  border: 1px solid var(--border); border-radius: 8px;
+  overflow: hidden; margin-bottom: 14px;
+}
+.modesw button {
+  border: none; border-radius: 0; padding: 8px 6px; font-size: 12px;
+  background: #0d1116; color: var(--muted);
+}
+.modesw button + button { border-left: 1px solid var(--border); }
+.modesw button:hover { color: var(--fg); background: #1c2129; }
+.modesw button.on { background: var(--accent); color: #fff; font-weight: 600; }
+/* 即時模式底色帶一點暖色 —— 進到「會讓機構動」的模式時,整個側欄要有
+   感覺上的差別,不只是一顆按鈕亮起來。 */
+body[data-mode=live] #panel { background: #191a17; }
+body[data-mode=live] .modesw button.on { background: var(--warn); color: #241c05; }
+
+/* ── 動作列 ── */
+.modebar .lbl {
+  display: block; font-size: 10px; color: var(--muted); margin: 12px 0 4px;
+  text-transform: uppercase; letter-spacing: .05em;
+}
+.modebar button.wide { margin-top: 6px; }
+.modebar .editing {
+  font-size: 11px; color: var(--muted); padding: 7px 9px; margin-bottom: 8px;
+  border: 1px solid var(--border); border-radius: 6px; background: #0d1116;
+}
+.modebar .editing b { color: var(--accent); }
+.modebar .lim { margin-top: 9px; line-height: 1.6; }
+
+select, textarea, input[type=text] {
+  width: 100%; font: inherit; font-size: 12px; padding: 6px 8px;
+  border-radius: 6px; border: 1px solid var(--border);
+  background: #0d1116; color: var(--fg);
+}
+select { cursor: pointer; }
+textarea { resize: vertical; line-height: 1.5; }
+select:focus, textarea:focus, input[type=text]:focus {
+  outline: none; border-color: var(--accent);
+}
+
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+button.primary:hover { background: #00b39a; border-color: #00b39a; }
+button.danger { color: var(--bad); border-color: #f8514955; }
+button.danger:hover { background: #f851491a; border-color: var(--bad); }
+button.ghost { border-color: transparent; color: var(--muted); }
+button.ghost:hover { color: var(--fg); background: #ffffff10; }
+button:disabled { opacity: .4; cursor: default; }
+button:disabled:hover { border-color: var(--border); background: #0d1116; }
+
+.presets { margin: -6px 0 13px; }
+
+/* ── 控制項在即時模式下多出來的東西 ── */
+.ctl .row .val.est { color: var(--warn); }          /* 估計值,不是量到的 */
+.ctl .tgt {
+  font-size: 10px; color: var(--warn); margin-top: 4px; line-height: 1.5;
+}
+.ctl .tgt b { color: var(--fg); }
+.ctl.moving { position: relative; }
+.ctl.moving .row .name { color: var(--accent); }
+.ctl.moving::before {
+  content: ''; position: absolute; left: -10px; top: 2px; bottom: 2px; width: 2px;
+  background: var(--accent); border-radius: 1px;
+}
+input[type=range]:disabled { opacity: .45; cursor: default; }
+
+/* ── 即時狀態區 ── */
+#livestatus:not(:empty) { margin-bottom: 16px; }
+.lv {
+  border: 1px solid var(--border); border-left-width: 3px;
+  border-radius: 6px; padding: 9px 11px; margin-bottom: 7px;
+  font-size: 12px; background: #0d1116;
+}
+.lv b { font-weight: 600; }
+.lv .sub { font-size: 11px; color: var(--muted); margin-top: 3px; line-height: 1.6; }
+.lv code {
+  background: #ffffff12; padding: 1px 4px; border-radius: 3px; font-size: 10px;
+}
+.lv.ok { border-left-color: var(--accent); }
+.lv.ok b { color: var(--accent); }
+.lv.warn { border-left-color: var(--warn); }
+.lv.warn b { color: var(--warn); }
+.lv.bad { border-left-color: var(--bad); }
+.lv.bad b { color: var(--bad); }
+.lv.job { border-left-color: var(--accent); }
+.lv.job b { color: var(--accent); }
+.lv button { margin-top: 9px; }
+.lvnote { font-size: 11px; color: var(--warn); line-height: 1.6; margin: -2px 0 8px; }
+
+.pb { height: 4px; border-radius: 2px; background: var(--border);
+      overflow: hidden; margin: 8px 0 6px; }
+.pb i { display: block; height: 100%; background: var(--accent);
+        transition: width .35s ease; }
+
+.devs { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 8px; }
+.dev {
+  font: 10px/1 Consolas, monospace; padding: 4px 6px; border-radius: 4px;
+  border: 1px solid var(--border); color: var(--muted); cursor: default;
+}
+.dev.ok { color: var(--accent); border-color: #009B8555; background: #009B8514; }
+.dev.warn { color: var(--warn); border-color: #d2992255; background: #d2992214; }
+.dev.bad { color: var(--bad); border-color: #f8514955; background: #f8514914; }
+
+/* ══ 對話框 ══
+   自己做而不是用 confirm():移動確認框要講的東西比一行字多(哪根軸、
+   從哪到哪、走多遠、幾秒、送出去的指令),而且 confirm() 會把 3D 的
+   render loop 一起凍住,按下去之前畫面是死的。 */
+.ov {
+  position: fixed; inset: 0; z-index: 400; display: none;
+  align-items: center; justify-content: center; padding: 20px;
+  background: #03080799; backdrop-filter: blur(3px);
+}
+.ov.on { display: flex; }
+.bx {
+  background: var(--panel); border: 1px solid var(--border); border-radius: 13px;
+  padding: 20px 22px; width: min(460px, 94vw); max-height: 92vh;
+  overflow-y: auto; box-shadow: 0 20px 60px #0009;
+}
+.bx h3 { margin: 0 0 12px; font-size: 15px; font-weight: 600; }
+.bx label {
+  display: block; font-size: 10px; color: var(--muted); margin: 12px 0 4px;
+  text-transform: uppercase; letter-spacing: .05em;
+}
+.bx .req { color: var(--bad); }
+.bx .err {
+  margin-top: 10px; font-size: 11px; color: var(--bad);
+  padding: 7px 9px; border-radius: 6px; background: #f851491a;
+}
+.bxnote {
+  font-size: 11px; color: var(--muted); line-height: 1.7; margin-top: 12px;
+  padding: 9px 11px; border-radius: 6px; background: #0d1116;
+  border-left: 3px solid var(--border);
+}
+.bxnote b { color: var(--fg); }
+.bxnote code { background: #ffffff12; padding: 1px 4px; border-radius: 3px; }
+.bxnote.warn { border-left-color: var(--warn); color: #d7c9a4; }
+.bxnote.warn b { color: var(--warn); }
+.acts { display: flex; gap: 8px; margin-top: 18px; }
+.acts button { flex: 1; padding: 8px 12px; }
+
+/* 移動確認框的主體 —— 「從哪到哪」要一眼看完,所以放大、對齊 */
+.mv { text-align: center; padding: 4px 0 2px; }
+.mv .mvname { font-size: 13px; font-weight: 600; margin-bottom: 10px; }
+.mv .mvrow {
+  display: flex; align-items: baseline; justify-content: center; gap: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.mv .from { font-size: 19px; color: var(--muted); }
+.mv .arrow { font-size: 15px; color: var(--muted); }
+.mv .to { font-size: 25px; font-weight: 650; color: var(--accent); }
+.mv .mvmeta { font-size: 11px; color: var(--muted); margin-top: 9px; }
+.mv .mvmeta b { color: var(--fg); }
+.mv .mvcmd {
+  font: 10px/1.6 Consolas, monospace; color: var(--faint, var(--muted));
+  margin-top: 7px;
+}
+.mv .mvcmd code { background: #ffffff12; padding: 2px 5px; border-radius: 3px; }
+
+.mvlist {
+  margin-top: 10px; max-height: 240px; overflow-y: auto;
+  border: 1px solid var(--border); border-radius: 7px;
+}
+.mvlist > div {
+  display: flex; justify-content: space-between; gap: 10px;
+  padding: 7px 10px; font-size: 11px; color: var(--muted);
+}
+.mvlist > div + div { border-top: 1px solid var(--border); }
+.mvlist b { color: var(--accent); font-variant-numeric: tabular-nums; }
+
+/* ── 提示條 ── */
+#toasts {
+  position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%);
+  z-index: 500; display: flex; flex-direction: column; gap: 6px;
+  align-items: center; pointer-events: none;
+}
+.toast {
+  font-size: 12px; padding: 9px 15px; border-radius: 8px;
+  background: var(--panel); border: 1px solid var(--border);
+  border-left: 3px solid var(--accent); color: var(--fg);
+  box-shadow: 0 8px 26px #0008; max-width: 70vw;
+  animation: tin .18s ease-out;
+}
+.toast.warn { border-left-color: var(--warn); }
+.toast.bad { border-left-color: var(--bad); }
+.toast.out { opacity: 0; transition: opacity .25s; }
+@keyframes tin { from { transform: translateY(8px); opacity: 0; } }
+
+/* ── 切模式的確認框 ──
+   兩個模式底下同一根拉桿的意思完全不一樣(一邊畫圖,一邊對真機構下指令),
+   所以切換不做成無聲的 toggle。框上一條一條講清楚會變成什麼樣。 */
+.mdsw { margin-top: 14px; }
+.mdsw .r {
+  display: flex; gap: 10px; align-items: flex-start;
+  padding: 8px 0; font-size: 12px; color: var(--muted); line-height: 1.6;
+}
+.mdsw .r + .r { border-top: 1px solid var(--border); }
+.mdsw .r i { font-style: normal; flex: none; width: 20px; text-align: center; }
+.mdsw .r b { color: var(--fg); font-weight: 600; }
+.mdsw.live .r b { color: var(--warn); }
+
+/* 切到即時模式之前先探一次,結果放最上面 —— 「切過去才發現讀不到」
+   那個資訊來得太晚。 */
+.mdst {
+  border-radius: 7px; padding: 10px 12px; font-size: 12px;
+  border: 1px solid var(--border); border-left-width: 3px; background: #0d1116;
+}
+.mdst b { font-weight: 600; }
+.mdst div { font-size: 11px; color: var(--muted); margin-top: 4px; line-height: 1.6; }
+.mdst code {
+  background: #ffffff12; padding: 1px 4px; border-radius: 3px; font-size: 10px;
+}
+.mdst.ok { border-left-color: var(--accent); }
+.mdst.ok b { color: var(--accent); }
+.mdst.warn { border-left-color: var(--warn); }
+.mdst.warn b { color: var(--warn); }
+.mdst.bad { border-left-color: var(--bad); }
+.mdst.bad b { color: var(--bad); }

@@ -1,0 +1,30 @@
+{
+  "id": "20260915-150650-7201",
+  "created": "2026-09-15T15:06:50.365",
+  "name": "0915-1",
+  "description": "0915-10915-10915-10915-10915-10915-10915-10915-10915-10915-10915-10915-10915-10915-10915-10915-10915-1",
+  "updated": "2026-09-15T15:06:50.365",
+  "axes": {
+    "speakers.x": 0.0,
+    "speakers.lift": 1.3,
+    "screen.z": 1.33,
+    "screen.lift": 1.25,
+    "hats.z": 0.75,
+    "hats.x": 0.0,
+    "hats.mrp": 1.2,
+    "hats.rot": 0.0,
+    "hats.head": 0.0,
+    "tableFront.z": 0.66,
+    "tableFront.lift": 0.9,
+    "tableBack.z": -0.95,
+    "tableBack.lift": 1.2,
+    "micRig1.z": 0.55,
+    "micRig1.x": -0.35,
+    "micRig1.h": 0.95,
+    "micRig2.z": 0.72,
+    "micRig2.x": 0.4,
+    "micRig2.h": 1.25
+  },
+  "count": 19,
+  "source": "setup"
+}

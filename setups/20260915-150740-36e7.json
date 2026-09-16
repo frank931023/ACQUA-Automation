@@ -1,0 +1,30 @@
+{
+  "id": "20260915-150740-36e7",
+  "created": "2026-09-15T15:07:40.770",
+  "name": "0915-2-0915-2-0915-2-0915-2-0915-2-0915-2-0915-2-0915-2-0915-2-0915-2-0915-2-0915-2-0915-2-0915-2-0915-2-",
+  "description": "0915-2-0915-2-0915-2-",
+  "updated": "2026-09-15T15:08:07.262",
+  "axes": {
+    "speakers.x": -0.58,
+    "speakers.lift": 1.3,
+    "screen.z": 2.33,
+    "screen.lift": 1.25,
+    "hats.z": 0.75,
+    "hats.x": 0.0,
+    "hats.mrp": 1.5,
+    "hats.rot": 0.0,
+    "hats.head": 0.0,
+    "tableFront.z": 0.66,
+    "tableFront.lift": 0.9,
+    "tableBack.z": -0.95,
+    "tableBack.lift": 2.3,
+    "micRig1.x": -0.18,
+    "micRig1.z": 0.55,
+    "micRig1.h": 0.95,
+    "micRig2.x": 0.4,
+    "micRig2.z": 0.72,
+    "micRig2.h": 1.25
+  },
+  "count": 19,
+  "source": "setup"
+}

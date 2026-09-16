@@ -21,8 +21,11 @@ import time
 from flask import (Blueprint, Flask, Response, jsonify, render_template,
                    request, send_from_directory)
 
+from acqua import crane
 from acqua import env as env_settings
+from acqua.crane import axes_manifest as crane_axes_manifest, make_crane
 from acqua.prefs import Prefs
+from acqua.roomsetups import RoomSetups, clean_axes
 from acqua.runlog import RunLog
 from acqua.state import SharedState
 from acqua.testplans import TestPlans, new_setup, source_of
@@ -45,6 +48,15 @@ config = {}
 # 測試計畫存在本地 plans/ 資料夾,不寫回 ACQUA 資料庫
 plans = TestPlans(BASE_DIR)
 prefs = Prefs(BASE_DIR)
+# 量測擺位存在本地 setups/ 資料夾,與測試計畫分開 —— 見 acqua/roomsetups.py
+#
+# 目錄可以用 --setups-dir 或 ACQUA_SETUPS_DIR 換掉。這不是為了彈性,是為了
+# **不要讓測試踩到真資料**:測試伺服器跟正在用的服務如果共用同一個
+# setups/,測試開場的「清乾淨」就會把使用者存的擺位一起刪掉。
+room_setups = RoomSetups(os.environ.get("ACQUA_SETUPS_DIR") or BASE_DIR)
+#: 天車位置橋接。真正的位址在 load_config() 之後才知道,所以這裡先放 None,
+#: 由 main() 建起來。import 時就連線會讓 `python -c "import app"` 也去打網路。
+bridge = None
 
 #: 最後一次收到請求的時間。閒置退出用 —— 見 _idle_watchdog。
 _last_seen = [time.monotonic()]
@@ -143,7 +155,7 @@ def _cmd(_cmd_name, timeout=600, **kwargs):
 # ── 首頁 ────────────────────────────────────────────
 @app.route("/")
 def home():
-    """入口頁 —— 只放兩個按鈕,分別進到兩個子系統。"""
+    """入口頁 —— 四張卡,分別進到各個子系統。"""
     return render_template("home.html")
 
 
@@ -188,6 +200,195 @@ def soundproofroom_asset(filename):
     if _room_is_built():
         return send_from_directory(ROOM_DIST, filename)
     return ("Not built yet", 404)
+
+
+# ── 量測擺位(setup)清單頁 ────────────────────────
+#
+# 跟 /acqua/plans 分開:那一頁排的是「要跑哪些測項」,這一頁存的是
+# 「機構擺在哪裡」。同一個擺位會被好幾批測項共用,綁在一起改一次位置
+# 要去改三個計畫檔。
+@app.route("/setups")
+def setups_page():
+    return render_template("setups.html")
+
+
+@app.route("/setups/<setup_id>")
+def setup_detail_page(setup_id):
+    d = room_setups.load(setup_id)
+    if d is None:
+        return render_template("setups.html", missing=setup_id), 404
+    return render_template("setup_detail.html", setup_id=setup_id)
+
+
+# ── 天車即時位置與移動 ───────────────────────────
+#
+# 全部在 /api/room 底下。刻意不掛進 acqua_bp —— 這組 API 跟 ACQUA 的
+# COM 工作佇列完全無關,量測正在跑的時候也該能讀位置。
+def _no_bridge():
+    """bridge 是 main() 建的(位址要等 config 讀完才知道)。
+
+    有人用 `flask run` 之類的方式跳過 main() 起服務時,每一支 /api/room/*
+    都會爆 AttributeError: 'NoneType' —— 那看起來像程式壞了,其實是沒照
+    app.py 的入口起。回一個講得清楚的 503,照 _cmd() 檢查 worker 的做法。
+    """
+    return jsonify(ok=False,
+                   error="Crane bridge is not initialised - start the service "
+                         "with `python app.py` (not `flask run`)"), 503
+
+
+@app.route("/api/room/axes")
+def api_room_axes():
+    """軸清單(行程以場景單位表示)。
+
+    前端拿這個跟 spec.js 交叉比對 —— 兩邊的行程刻意各存一份(後端不能
+    拿瀏覽器送來的範圍當行程上限),所以要有個地方會在不一致時示警,
+    不然就變成「一份寫死的數字,沒人知道它跟另一份不一樣」。
+    """
+    if bridge is None:
+        return _no_bridge()
+    return jsonify(ok=True, axes=crane_axes_manifest(), devices=crane.DEVICES,
+                   backend=bridge.kind)
+
+
+@app.route("/api/room/live")
+def api_room_live():
+    """即時模式的唯一資料來源:每根軸的位置 + 目前移動作業 + 裝置狀態。
+
+    讀的是背景執行緒維護的快取,所以這支很快,前端可以放心每秒打一次。
+    """
+    if bridge is None:
+        return _no_bridge()
+    return jsonify(ok=True, **bridge.snapshot())
+
+
+@app.route("/api/room/move", methods=["POST"])
+def api_room_move():
+    """手動移動一根軸。前端會先跳確認框,但**這裡不依賴那件事** ——
+    行程夾限、單軸互斥都在 bridge.submit() 裡再做一次。"""
+    if bridge is None:
+        return _no_bridge()
+    body = request.get_json(silent=True) or {}
+    axis = str(body.get("axis") or "")
+    if axis not in crane.AXES:
+        return jsonify(ok=False, error="未知的軸:%s" % axis), 400
+    try:
+        target = float(body.get("target"))
+    except (TypeError, ValueError):
+        return jsonify(ok=False, error="target 不是數字"), 400
+
+    try:
+        job = bridge.submit([(axis, target)])
+    except RuntimeError as exc:                             # 已經有移動在跑
+        return jsonify(ok=False, error=str(exc), **bridge.snapshot()), 409
+    state.log("天車移動:%s → %.3f" % (crane.AXES[axis].label, target))
+    return jsonify(ok=True, job=job)
+
+
+@app.route("/api/room/apply", methods=["POST"])
+def api_room_apply():
+    """把一整組擺位送去實機 —— 一次一根軸,依序走完。
+
+    吃 setup_id(存好的擺位)或 axes(當下畫面上的值)。依序而不是一起動:
+    機構的行程互相重疊,同時動撞到了也看不出是誰撞的。
+    """
+    if bridge is None:
+        return _no_bridge()
+    body = request.get_json(silent=True) or {}
+    if body.get("setup_id"):
+        d = room_setups.load(body["setup_id"])
+        if d is None:
+            return jsonify(ok=False, error="找不到這個擺位"), 404
+        axes, label = d.get("axes") or {}, d.get("name") or ""
+    else:
+        axes = clean_axes(body.get("axes")).get("axes") or {}
+        label = body.get("label") or "目前畫面"
+
+    # 已經到位的軸不必再送 —— 送了會多等一趟 Arduino 的來回,而且執行
+    # 紀錄裡會塞滿「從 1.20 移動到 1.20」這種看不出重點的步驟。
+    now = bridge.snapshot()["axes"]
+    moves = [(k, v) for k, v in sorted(axes.items())
+             if abs(float(now.get(k, {}).get("value", 0)) - float(v)) > 1e-3]
+    if not moves:
+        return jsonify(ok=True, job=None, note="每一根軸都已經在位置上了")
+
+    try:
+        job = bridge.submit(moves, label="套用擺位:%s" % label)
+    except RuntimeError as exc:
+        return jsonify(ok=False, error=str(exc), **bridge.snapshot()), 409
+    state.log("套用擺位「%s」到實機(%d 根軸)" % (label, len(moves)))
+    return jsonify(ok=True, job=job)
+
+
+@app.route("/api/room/stop", methods=["POST"])
+def api_room_stop():
+    """停掉移動作業。
+
+    ⚠️ 只擋得住還沒送出去的那幾軸。**正在走的那一段機構會走完** ——
+       韌體沒有中止指令。回應裡帶 partial 讓前端照這個講,不要寫成
+       「已停止」讓人以為機構立刻不動了。
+    """
+    if bridge is None:
+        return _no_bridge()
+    was_moving = bridge.busy()
+    snap = bridge.abort()
+    # 沒有東西在動的時候不要記 —— 執行紀錄裡出現「已中止」會讓人以為
+    # 剛剛有一次移動被打斷過。
+    if was_moving:
+        state.log("天車移動已中止(正在走的那一段仍會走完)", "warn")
+    return jsonify(ok=True, partial=True, **snap)
+
+
+# ── 擺位的增刪改查 ───────────────────────────────
+@app.route("/api/room/setups", methods=["GET", "POST"])
+def api_room_setups():
+    if request.method == "GET":
+        # 一起回存放位置。使用者會想知道「我的擺位在哪個資料夾」,而測試
+        # 靠它確認自己沒有打到正在用的服務(刪錯地方一次就夠了)。
+        return jsonify(ok=True, setups=room_setups.list(), dir=room_setups.dir)
+
+    body = request.get_json(silent=True) or {}
+    if not (body.get("axes") or {}):
+        return jsonify(ok=False, error="沒有任何軸的位置 —— 存不出擺位"), 400
+    d = room_setups.save(
+        setup_id=body.get("id"),
+        name=body.get("name", ""),
+        description=body.get("description", ""),
+        axes=body.get("axes"),
+        source=body.get("source") or "setup")
+    state.log("已儲存擺位「%s」(%d 根軸)" % (d["name"], d["count"]))
+    return jsonify(ok=True, setup=d, setups=room_setups.list())
+
+
+@app.route("/api/room/setups/<setup_id>", methods=["GET", "POST", "DELETE"])
+def api_room_setup_one(setup_id):
+    if request.method == "DELETE":
+        ok = room_setups.delete(setup_id)
+        return jsonify(ok=ok, setups=room_setups.list())
+
+    d = room_setups.load(setup_id)
+    if d is None:
+        return jsonify(ok=False, error="找不到這個擺位"), 404
+
+    if request.method == "POST":
+        # 只給了名稱/說明就不動位置 —— 改個名字不該把擺位洗掉。
+        body = request.get_json(silent=True) or {}
+        d = room_setups.save(
+            setup_id=setup_id,
+            name=body.get("name", d.get("name", "")),
+            description=body.get("description", d.get("description", "")),
+            axes=body.get("axes") if body.get("axes") is not None else d.get("axes"),
+            source=body.get("source") or d.get("source") or "setup")
+        return jsonify(ok=True, setup=d, setups=room_setups.list())
+
+    # 連軸的定義一起回(行程、單位、在哪台 Pi)—— 詳細頁的輸入框要靠它
+    # 做範圍提示與驗證。分兩支 API 的話畫面會先畫出一半再跳動。
+    #
+    # 刻意**不**讀實機位置:這一頁顯示的是存檔裡的數字,不是機構現在在哪。
+    # 兩者混在同一張表上,使用者會分不清自己在改哪一個。
+    axes = d.get("axes") or {}
+    rows = [{**a, "target": axes[a["id"]]}
+            for a in crane_axes_manifest() if a["id"] in axes]
+    return jsonify(ok=True, setup=d, axes=rows)
 
 
 # ── 狀態與事件串流 ───────────────────────────────────
@@ -1141,7 +1342,7 @@ def _idle_watchdog(seconds, port):
 
 
 def main():
-    global worker, config
+    global worker, config, bridge, room_setups
 
     app.register_blueprint(acqua_bp)
 
@@ -1149,11 +1350,18 @@ def main():
     ap.add_argument("--config")
     ap.add_argument("--backend", choices=["mock", "com"])
     ap.add_argument("--port", type=int)
+    ap.add_argument("--setups-dir", metavar="DIR",
+                    help="擺位存放的位置(預設是專案底下的 setups/)。"
+                         "測試請務必指到別的地方,不然會刪到真的擺位")
     ap.add_argument("--idle-exit", type=int, default=None, metavar="SEC",
                     help="沒人用且沒在跑超過這麼多秒就自動退出(0 = 不退出)")
     ap.add_argument("--open", action="store_true",
                     help="伺服器起來之後自動開瀏覽器")
     args = ap.parse_args()
+
+    if args.setups_dir:
+        room_setups = RoomSetups(args.setups_dir)
+        print("setups : %s" % room_setups.dir)
 
     config = load_config(args.config)
     for line in (config.get("_env_overrides") or []):
@@ -1165,6 +1373,14 @@ def main():
     print(f"backend: {config.get('backend')}")
     if config.get("backend") == "mock":
         print("         (mock - does not talk to a real ACQUA)")
+
+    # 天車橋接:位址空的就用模擬位置。刻意印出來 —— 「我以為在看實機,
+    # 其實是模擬的」是這類頁面最貴的誤會。
+    crane_url = (config.get("setup_controller") or {}).get("url") or ""
+    bridge = make_crane(crane_url)
+    print("crane  : %s" % (crane_url if bridge.kind == "http"
+                           else "mock (simulated positions - set "
+                                "ACQUA_SETUP_CONTROLLER to drive real hardware)"))
 
     state.runlog = RunLog(BASE_DIR)
     pending = state.runlog.unfinished()
@@ -1200,7 +1416,8 @@ def main():
 
     print(f"\nOpen  http://{host}:{port}")
     print(f"   Test run    http://{host}:{port}/acqua")
-    print(f"   Test room   http://{host}:{port}/soundproofroom\n")
+    print(f"   Test room   http://{host}:{port}/soundproofroom")
+    print(f"   Setup list  http://{host}:{port}/setups\n")
 
     if args.open:
         _open_browser_when_ready(f"http://{host}:{port}/acqua/", port)

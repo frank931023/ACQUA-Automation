@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Setup list — ACQUA Automation</title>
+{% include '_ui.html' %}
+<style>
+  /* 一欄到底。擺位清單是「挑一個進去看」的頁面,不是工作台 ——
+     排成一直排比格狀好掃,而且列高固定,不會因為說明長短忽高忽低。 */
+  .work { grid-template-columns:1fr; }
+
+  .top { display:flex; align-items:center; gap:10px; flex:none; margin-bottom:12px; }
+  .top h1 { font-size:18px; margin:0; font-weight:650; letter-spacing:-.01em; }
+  .top .n { font-size:11px; color:var(--faint); }
+  .top .sp { flex:1; }
+  .top input[type=text] { width:200px; }
+  .top a { text-decoration:none; }
+
+  /* ── 一列一個擺位 ── */
+  a.sr {
+    display:flex; align-items:center; gap:12px; text-decoration:none; color:inherit;
+    padding:11px 12px; border-radius:var(--r-sm);
+    border:1px solid transparent; transition:background .12s, border-color .12s;
+  }
+  a.sr:hover { background:var(--sunk); border-color:var(--line); }
+  a.sr + a.sr { border-top:1px solid var(--line); border-radius:0; }
+  a.sr + a.sr:hover { border-radius:var(--r-sm); }
+
+  a.sr .t { flex:1; min-width:0; }
+  a.sr .t b { display:block; font-size:13px; font-weight:650; }
+  /* 說明只給一行 —— 長短不該讓每一列高度不一樣 */
+  a.sr .t small {
+    display:block; font-size:11px; color:var(--faint); margin-top:2px;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  a.sr .t small.none { font-style:italic; }
+  a.sr .meta {
+    flex:none; display:flex; align-items:center; gap:14px;
+    font-size:11px; color:var(--faint); font-variant-numeric:tabular-nums;
+  }
+  a.sr .go { flex:none; color:var(--brand); font-weight:600; font-size:12px; }
+
+  .tag { font-size:10px; padding:2px 7px; border-radius:20px; white-space:nowrap;
+         border:1px solid var(--line); color:var(--muted); flex:none; }
+  .tag.live { color:var(--brand); border-color:var(--brand-line);
+              background:var(--brand-soft); }
+
+  /* 沒有任何擺位時要說下一步做什麼,不是只寫「沒資料」 */
+  .zero { text-align:center; padding:50px 20px; }
+  .zero .ic { font-size:32px; color:var(--line-2); margin-bottom:12px; }
+  .zero h3 { margin:0 0 7px; font-size:15px; font-weight:600; }
+  .zero p { margin:0 auto 16px; font-size:13px; color:var(--muted);
+            max-width:430px; line-height:1.7; }
+  .zero a { text-decoration:none; }
+
+  @media (max-width:640px) {
+    a.sr .meta { display:none; }          /* 窄螢幕先犧牲軸數與日期 */
+    .top input[type=text] { width:120px; }
+  }
+</style>
+</head>
+<body>
+<script>window.__navPage = 'setups';</script>
+<div class="shell">
+{% include '_nav.html' %}
+<div class="work">
+  <div class="panel">
+    <div class="top">
+      <h1>Setup list</h1>
+      <span class="n" id="count"></span>
+      <span class="sp"></span>
+      <input type="text" id="q" placeholder="Filter by name or note…">
+      <a href="/soundproofroom?mode=setup"><button class="primary">New setup in 3D →</button></a>
+    </div>
+
+    <div class="grow" id="list"><div class="empty">Loading…</div></div>
+
+    <div class="row" id="pager" style="margin-top:12px">
+      <button class="ghost" id="pg-prev">←</button>
+      <span class="hint" id="pg-n" style="flex:1;text-align:center"></span>
+      <button class="ghost" id="pg-next">→</button>
+    </div>
+  </div>
+</div>
+</div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g,
+  (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+/** 只顯示到分 —— 秒對「上次改是什麼時候」沒有意義 */
+const when = (s) => (s || '').replace('T', ' ').slice(0, 16);
+
+const PAGE = 10;                 // 一頁最多幾個擺位(跟序列頁一致)
+let all = [], page = 1;
+
+{% if missing %}
+const MISSING = {{ missing | tojson }};
+{% else %}
+const MISSING = null;
+{% endif %}
+
+function render() {
+  const q = $('#q').value.trim().toLowerCase();
+  // 名稱與說明都算 —— 使用者記得哪個就用哪個找
+  const hits = q ? all.filter((s) =>
+    (s.name + ' ' + (s.description || '')).toLowerCase().includes(q)) : all;
+
+  const pages = Math.max(1, Math.ceil(hits.length / PAGE));
+  if (page > pages) page = pages;          // 過濾之後頁數可能縮水
+  const shown = hits.slice((page - 1) * PAGE, page * PAGE);
+
+  $('#count').textContent = all.length
+    ? (q ? `${hits.length} of ${all.length}` : `${all.length} saved`) : '';
+  $('#pg-n').textContent = hits.length ? `Page ${page} of ${pages}` : '';
+  $('#pg-prev').disabled = page <= 1;
+  $('#pg-next').disabled = page >= pages;
+  // 一頁就放得下的時候不要顯示換頁列 —— 空的上一頁/下一頁只是雜訊
+  $('#pager').style.display = hits.length > PAGE ? '' : 'none';
+
+  if (!all.length) {
+    $('#list').innerHTML = `<div class="zero">
+      <div class="ic">▤</div>
+      <h3>No setups saved yet</h3>
+      <p>A <b>setup</b> is where every piece of equipment stands for one
+         measurement — rail positions, table heights, HATS turntable and head tilt.
+         Arrange the room in the 3D page, press <b>Save</b>, and it shows up here.</p>
+      <a href="/soundproofroom?mode=setup"><button class="primary">Open the 3D room →</button></a>
+    </div>`;
+    return;
+  }
+  if (!hits.length) {
+    $('#list').innerHTML = `<div class="empty">Nothing matches “${esc(q)}”.</div>`;
+    return;
+  }
+
+  $('#list').innerHTML = shown.map((s) => `
+    <a class="sr" href="/setups/${encodeURIComponent(s.id)}">
+      <div class="t">
+        <b>${esc(s.name)}</b>
+        <small class="${s.description ? '' : 'none'}">${
+          esc(s.description || 'No note')}</small>
+      </div>
+      ${s.source === 'live'
+        ? '<span class="tag live" title="Captured from the real hardware">live</span>'
+        : '<span class="tag" title="Drawn in the 3D page">drawn</span>'}
+      <div class="meta">
+        <span>${s.count} axes</span>
+        <span>${when(s.updated || s.created)}</span>
+      </div>
+      <span class="go">Open →</span>
+    </a>`).join('');
+}
+
+async function load() {
+  try {
+    const r = await fetch('/api/room/setups');
+    const text = await r.text();
+    let d;
+    try { d = JSON.parse(text); }
+    catch {
+      // 後端回的不是 JSON —— 幾乎一定是這個 Flask 行程還是舊的
+      throw new Error(/^\s*<(!doctype|html)/i.test(text)
+        ? 'The server does not have this API yet — restart app.py.'
+        : `Server returned HTTP ${r.status}, not JSON.`);
+    }
+    all = d.setups || [];
+  } catch (e) {
+    $('#list').innerHTML =
+      `<div class="empty" style="color:var(--fail)">${esc(e.message)}</div>`;
+    $('#pager').style.display = 'none';
+    return;
+  }
+  render();
+  if (MISSING) {
+    $('#list').insertAdjacentHTML('afterbegin',
+      `<div class="empty" style="color:var(--fail)">
+         Setup <code>${esc(MISSING)}</code> no longer exists.</div>`);
+  }
+}
+
+// 換了搜尋條件就回第一頁,不然會停在空白頁
+$('#q').addEventListener('input', () => { page = 1; render(); });
+$('#pg-prev').onclick = () => { if (page > 1) { page--; render(); } };
+$('#pg-next').onclick = () => { page++; render(); };
+load();
+</script>
+{% include '_runmini.html' %}
+</body>
+</html>

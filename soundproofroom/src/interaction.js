@@ -27,6 +27,9 @@ export function createInteraction({ renderer, camera, controls, targets, onChang
 
   let dragging = null;
   let hovered = null;
+  //: 即時模式要把拖曳整個關掉 —— 3D 畫的是實機的位置,用滑鼠去推它只會
+  //  騙自己。關掉之後 OrbitControls 照常,所以還是轉得動視角。
+  let enabled = true;
 
   const byKey = Object.fromEntries(targets.map((t) => [t.key, t]));
 
@@ -83,7 +86,7 @@ export function createInteraction({ renderer, camera, controls, targets, onChang
   }
 
   function onDown(ev) {
-    if (ev.button !== 0) return;
+    if (!enabled || ev.button !== 0) return;
     updatePointer(ev);
     const t = pick();
     if (!t) return;
@@ -107,6 +110,7 @@ export function createInteraction({ renderer, camera, controls, targets, onChang
   }
 
   function onMove(ev) {
+    if (!enabled) return;
     updatePointer(ev);
 
     if (!dragging) {
@@ -161,6 +165,17 @@ export function createInteraction({ renderer, camera, controls, targets, onChang
       onChange?.(key, axis, v, 'slider');
     },
     get(key, axis) { return values[key]?.[axis]; },
+    /** 開關拖曳。關掉時順手把 hover 的高亮與游標清掉。 */
+    setEnabled(v) {
+      enabled = !!v;
+      if (!enabled) {
+        setHighlight(hovered, false);
+        hovered = null;
+        dragging = null;
+        controls.enabled = true;
+        renderer.domElement.style.cursor = 'default';
+      }
+    },
     dispose() {
       el.removeEventListener('pointerdown', onDown);
       window.removeEventListener('pointermove', onMove);

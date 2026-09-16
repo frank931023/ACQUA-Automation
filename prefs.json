@@ -21,6 +21,11 @@
       "group": "MS Teams v5 Rev05 SP3 - Speakerphone",
       "project": "MS Teams v5 Rev05 SP3 - Speakerphone",
       "used": "2026-08-26T17:32:50"
+    },
+    ".\\ACQUADBSERVER|61_Demo_SMDs_Rev07": {
+      "group": "Headset Tests",
+      "project": "ANC Performance",
+      "used": "2026-08-30T17:37:28"
     }
   },
   "report_dir": "C:\\Users\\autom\\OneDrive\\Desktop"
