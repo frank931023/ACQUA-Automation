@@ -134,7 +134,7 @@ ACOPT18 ACQUA COM Interface\
 │
 ├── ACQUA Automation\                                      ⭐ 自動化實作專案(見其 README.md)
 │   ├── app.py / config.json / requirements.txt
-│   ├── acqua\  (constants, state, worker, backend_com, backend_mock, dbmask)
+│   ├── acqua\  (constants, state, worker, backend_base, backend_com, backend_mock)
 │   ├── templates\index.html
 │   ├── tools\dump_typelib.py                             唯讀走訪 TypeLib
 │   └── .venv\                                            32-bit Python 3.9 + Flask + pywin32

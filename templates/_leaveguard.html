@@ -1,0 +1,29 @@
+{# 離開站台前的提醒。index.html 與 plans.html 本來各有一份一模一樣的。
+
+   量測跑在伺服器的工作執行緒裡 —— 換頁、關頁都不會讓它停,右下角的進度
+   視窗會跟著你到別的頁面。所以站內換頁完全不攔;只有真的要離開站台時才
+   提醒一聲,因為那之後沒人看得到「需要回答的視窗」。
+
+   每一頁判斷「現在忙不忙」的方式不一樣(有的看 S.running,有的還要看自己
+   的序列旗標),所以那一段留給頁面自己填:
+
+       window.__isBusy = () => !!(S && S.running);
+#}
+<script>
+(function () {
+  let leavingInternally = false;
+  document.addEventListener('click', (e) => {
+    const a = e.target.closest ? e.target.closest('a[href]') : null;
+    if (a && a.origin === location.origin) leavingInternally = true;
+  }, true);
+  window.addEventListener('beforeunload', (e) => {
+    if (leavingInternally) return;            // 站內換頁,進度跟著走
+    if (window.__isBusy && window.__isBusy()) {
+      e.preventDefault();
+      e.returnValue = 'Tests keep running in the background, but nobody will '
+                    + 'answer ACQUA dialogs once this page is closed.';
+      return e.returnValue;
+    }
+  });
+})();
+</script>

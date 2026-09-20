@@ -105,11 +105,18 @@ check("plans 送出 row_ids 時帶 prepare 回來的 ctx", "ctx: prep.ctx" in pl
 check("run 路由比對 ctx", "want_ctx != cur_ctx" in read("app.py"))
 
 print("\n=== 5. 換頁不該中斷測試 ===")
+# 攔截邏輯本身抽到 _leaveguard.html(兩頁本來各有一份一樣的),
+# 頁面只負責回答「現在忙不忙」。所以要分兩邊檢查:
+#   共用片段裡有攔截邏輯,而且每一頁都有掛上去 + 給了 __isBusy。
+_guard = read("templates/_leaveguard.html")
+check("共用片段實作了站內換頁不攔截", "leavingInternally" in _guard)
+check("共用片段會問頁面忙不忙", "__isBusy" in _guard)
 for f in ("templates/index.html", "templates/plans.html"):
     src = read(f)
-    check("%s 站內換頁不攔截" % os.path.basename(f), "leavingInternally" in src)
-    check("%s 沒有殘留錯誤說法(會卡住)" % os.path.basename(f),
-          "會讓 ACQUA 卡住" not in src)
+    base = os.path.basename(f)
+    check("%s 掛了離站守衛" % base, "_leaveguard.html' %}" in src)
+    check("%s 有給 __isBusy" % base, "window.__isBusy" in src)
+    check("%s 沒有殘留錯誤說法(會卡住)" % base, "會讓 ACQUA 卡住" not in src)
 
 print("=== 6. 路由送出的命令都註冊了嗎 ===")
 # check_rows 曾經漏註冊 —— 症狀是「連正確的測項也被擋下」,而且錯誤訊息

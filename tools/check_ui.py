@@ -309,9 +309,14 @@ check("還原用三層索引(序號 → 路徑名稱 → 名稱)",
 check("存計畫時帶序號", "occ: s.occ" in idx_html)
 
 # 分類:型別 + 標題兩層。只靠標題清單一定會漏(實測漏了 3 種)
+_base = read("acqua/backend_base.py")
 check("測項分類看型別也看標題",
-      "def _classifier" in com and "script_smd_types" in com)
-check("mock 後端有同樣的分類", "def _classifier" in read("acqua/backend_mock.py"))
+      "def _classifier" in _base and "script_smd_types" in _base)
+# 分類規則只跟 config 有關,兩個後端共用基底那一份 ——
+# 各自留一份的話,總有一天會改了一邊忘了另一邊。
+check("兩個後端共用同一份分類(沒有各自複製)",
+      "def _classifier" not in com
+      and "def _classifier" not in read("acqua/backend_mock.py"))
 check("腳本測項會事先提醒", "script item(s) in this batch" in idx_html)
 
 # 精靈變數:看它怎麼被使用,不看名字前綴

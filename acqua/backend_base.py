@@ -133,3 +133,43 @@ class AcquaBackend(ABC):
     def active_hardware_setting(self):
         """目前選用的硬體設定名稱。"""
         return None
+
+    # ── 需要人工操作的測項 ──────────────────────────
+    # 兩個後端本來各有一份一模一樣的實作。判斷規則只跟 config 有關,
+    # 跟走 COM 還是模擬完全無關,所以放在這裡。
+    def _classifier(self):
+        """回傳一個函式:這個測項屬於哪一類。
+
+        兩層,因為「會不會開視窗」沒有單一欄位可以判斷:
+
+            "manual"  已確認會開視窗(標題在設定裡)。自動勾選一律排除,
+                      否則整批就沒辦法無人值守。
+            "script"  SMDType 是腳本型別但沒被確認。**照常可跑** ——
+                      實測 ZoomRooms 的 `switch devices`(同樣是腳本)
+                      跑得完且不開任何視窗。只在開跑前提醒。
+            ""        一般測項。
+
+        為什麼不能只靠標題:盤點發現三個已確認的互動項全是 SMDType 43,
+        但同樣是 43 的 `Select automatic/manual volume control` 卻不在
+        清單裡 —— 靠人維護標題清單一定會漏。
+        為什麼不能只靠型別:43 只代表「腳本」,不代表一定互動。
+        """
+        import fnmatch
+        m = self.config.get("manual_items") or {}
+        titles = {str(x).strip() for x in (m.get("titles") or [])}
+        pats = [str(x) for x in (m.get("title_patterns") or [])]
+        script_types = {int(x) for x in (m.get("script_smd_types") or [])}
+
+        def classify(smd):
+            t = (smd.get("title") or "").strip()
+            if t in titles or any(fnmatch.fnmatch(t, p) for p in pats):
+                return "manual"
+            if int(smd.get("smd_type", -1)) in script_types:
+                return "script"
+            return ""
+        return classify
+
+    def _manual_matcher(self):
+        """只看標題判斷「要不要人工操作」—— 拿不到 SMDType 時用。"""
+        classify = self._classifier()
+        return lambda title: classify({"title": title}) == "manual"

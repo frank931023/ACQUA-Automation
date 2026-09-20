@@ -48,7 +48,6 @@
   progress { width:100%; height:7px; margin-top:9px; }
   .hint { font-size:12px; color:var(--muted); margin-top:8px; }
   .empty { padding:22px; text-align:center; color:var(--muted); font-size:13px; }
-  .modes { display:flex; gap:8px; }
   .mode { flex:1; display:flex; align-items:flex-start; gap:8px; padding:9px 11px;
           border:1px solid var(--line); border-radius:8px; cursor:pointer; margin:0; }
   .mode:has(input:checked) { border-color:var(--brand); background:#4f8ef714; }
@@ -66,7 +65,6 @@
          color:var(--fg); margin:0; }
   .opt input { width:15px; height:15px; accent-color:var(--brand); flex:none; margin:0; }
   .opt.dim { opacity:.42; cursor:not-allowed; }
-  .vhint { font-size:11px; color:var(--muted); margin-left:auto; font-variant-numeric:tabular-nums; }
   .pred { margin-top:12px; padding:11px 13px; border-radius:9px;
           border:1px solid var(--brand); background:#4f8ef714; }
   .pred b { font-size:19px; font-variant-numeric:tabular-nums; color:var(--brand); }
@@ -152,8 +150,6 @@
   .rep-f input { display:block; width:100%; margin-top:4px; font-size:13px;
                  padding:7px 9px; box-sizing:border-box; }
 
-  /* ── 標頭上的小按鈕 ── */
-  header .hbtn { font-size:11px; padding:4px 10px; }
 
   /* ── 存成計畫的確認清單 ── */
   .pv-items { max-height:220px; overflow-y:auto; margin-top:6px;
@@ -309,15 +305,6 @@
   #hw-list .hw .nm { flex:1; word-break:break-all; }
   #hw-list .hw .dt { font-size:10px; color:var(--muted); flex:none; }
 
-  /* ── 變數驅動:頁面上的摘要條 ── */
-  .vsum { display:flex; align-items:center; gap:12px; padding:12px 14px;
-          border:1px solid var(--line); border-radius:10px; background:var(--bg);
-          margin-bottom:12px; }
-  .vsum-txt { flex:1; min-width:0; }
-  .vsum-txt b { display:block; font-size:13px; font-weight:600;
-                word-break:break-word; line-height:1.5; }
-  .vsum-txt small { display:block; font-size:11px; color:var(--muted); margin-top:2px; }
-  .vsum button { flex:none; }
 
   /* ── 變數驅動 modal:比一般對話框寬,內容可捲動 ── */
   .rbx.vbx { width:min(780px,96vw); max-height:88vh;
@@ -677,8 +664,7 @@
       <div class="stat fail"><b id="s-fail">0</b>Fail</div>
     </div>
     <div class="row" style="margin-top:8px">
-      <button class="primary" id="btn-detail" style="flex:1">Details by status</button>
-      <button id="btn-records">History</button>
+      <button id="btn-records" style="flex:1">History &amp; status breakdown</button>
     </div>
   </section>
 
@@ -1527,8 +1513,9 @@ async function openRecords() {
   renderRecords();
   $('#recov').classList.add('on');
 }
+// 統計區塊本身可點（有 cursor:pointer 與 title 提示),按鈕是給
+// 不會想到去點數字的人用的。兩個入口就夠,不需要第三個。
 $('#btn-records').onclick = openRecords;
-$('#btn-detail').onclick  = openRecords;
 $('#stats').onclick       = openRecords;
 $('#btn-rec-close').onclick = () => $('#recov').classList.remove('on');
 $('#btn-rec-csv').onclick   = () => { location.href = '/acqua/api/results.csv'; };
@@ -1541,22 +1528,9 @@ $('#btn-rec-csv').onclick   = () => { location.href = '/acqua/api/results.csv'; 
 let paused = false;
 let _wasRunning = false;
 
-// 量測跑在伺服器的工作執行緒裡 —— 換頁、關頁都不會讓它停,右下角的進度
-// 視窗會跟著你到別的頁面。所以站內換頁完全不攔;只有真的要離開站台時才
-// 提醒一聲,因為那之後沒人看得到「需要回答的視窗」。
-let leavingInternally = false;
-document.addEventListener('click', (e) => {
-  const a = e.target.closest ? e.target.closest('a[href]') : null;
-  if (a && a.origin === location.origin) leavingInternally = true;
-}, true);
-window.addEventListener('beforeunload', (e) => {
-  if (leavingInternally) return;            // 站內換頁,進度跟著走
-  if (S && S.running) {
-    e.preventDefault();
-    e.returnValue = 'Tests keep running in the background, but nobody will answer ACQUA dialogs once this page is closed.';
-    return e.returnValue;
-  }
-});
+// 離開站台的提醒在 _leaveguard.html(plans.html 也用同一份)。
+// 這裡只告訴它怎麼判斷「現在忙不忙」。
+window.__isBusy = () => !!(S && S.running);
 $('#btn-pause').onclick = async () => {
   await fetch(paused ? '/acqua/api/resume' : '/acqua/api/pause', {method:'POST'});
   addLog(paused ? 'Resumed' : 'Paused', paused ? 'info' : 'warn');
@@ -2173,5 +2147,6 @@ document.addEventListener('visibilitychange', () => {
   await checkLastRun();
 })();
 </script>
+{% include '_leaveguard.html' %}
 </body>
 </html>

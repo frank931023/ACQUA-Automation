@@ -1103,26 +1103,14 @@ function waitDone() {
 }
 
 
-// 量測跑在伺服器的工作執行緒裡 —— 換頁、關頁都不會讓它停,右下角的進度
-// 視窗會跟著你到別的頁面。所以站內換頁完全不攔;只有真的要離開站台時才
-// 提醒一聲,因為那之後沒人看得到「需要回答的視窗」。
-let leavingInternally = false;
-document.addEventListener('click', (e) => {
-  const a = e.target.closest ? e.target.closest('a[href]') : null;
-  if (a && a.origin === location.origin) leavingInternally = true;
-}, true);
-window.addEventListener('beforeunload', e => {
-  if (leavingInternally) return;            // 站內換頁,進度跟著走
-  if (running || S.running) {
-    e.preventDefault();
-    e.returnValue = 'Tests keep running in the background, but nobody will answer ACQUA dialogs once this page is closed.';
-    return e.returnValue;
-  }
-});
+// 離開站台的提醒在 _leaveguard.html(index.html 也用同一份)。
+// 序列自己的 running 旗標也要算進去,不是只看後端在不在跑。
+window.__isBusy = () => !!(running || (S && S.running));
 
 loadPlans();
 poll();
 </script>
 {% include '_runmini.html' %}
+{% include '_leaveguard.html' %}
 </body>
 </html>

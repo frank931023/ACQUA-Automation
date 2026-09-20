@@ -377,34 +377,6 @@ class MockBackend(AcquaBackend):
     def active_hardware_setting(self):
         return getattr(self, "_hw_active", self._MOCK_HW[0])
 
-    # ── 設計 A:需要人工操作的測項 ────────────────
-    def _classifier(self):
-        """跟 COM 後端同樣的兩層分類(見 backend_com._classifier)。"""
-        import fnmatch
-        m = self.config.get("manual_items") or {}
-        titles = {str(x).strip() for x in (m.get("titles") or [])}
-        pats = [str(x) for x in (m.get("title_patterns") or [])]
-        script_types = {int(x) for x in (m.get("script_smd_types") or [])}
-
-        def classify(smd):
-            t = (smd.get("title") or "").strip()
-            if t in titles or any(fnmatch.fnmatch(t, p) for p in pats):
-                return "manual"
-            if int(smd.get("smd_type", -1)) in script_types:
-                return "script"
-            return ""
-        return classify
-
-    def _manual_matcher(self):
-        import fnmatch
-        m = self.config.get("manual_items") or {}
-        titles = {str(x).strip() for x in (m.get("titles") or [])}
-        pats = [str(x) for x in (m.get("title_patterns") or [])]
-        def is_manual(title):
-            t = (title or "").strip()
-            return t in titles or any(fnmatch.fnmatch(t, p) for p in pats)
-        return is_manual
-
     def wizard_options(self):
         """模擬版:直接給一組跟真機同名的選項,方便測 UI。"""
         groups = [
