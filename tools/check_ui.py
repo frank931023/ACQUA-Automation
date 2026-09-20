@@ -393,6 +393,11 @@ check("停止有對應路由",
       "/api/shutdown" in app_py and "/api/shutdown" in _gate)
 check("測試進行中不准關", "A test is running" in app_py)
 check("關掉會真的釋放 port", "os._exit(0)" in app_py)
+# 踩過兩次的規則:CoUninitialize 會拆掉整個 apartment,不是只放掉自己用的。
+# 收工路徑拆完再 os._exit,連帶把跟 ACQUA 的 RPC 通道留在壞狀態。
+check("收工不呼叫 CoUninitialize",
+      "self._pythoncom.CoUninitialize()" not in read("acqua/backend_com.py")
+      and "CoUninitialize()" not in read("acqua/sqlcat.py"))
 
 
 print("\n" + ("結論:全部通過" if not fails

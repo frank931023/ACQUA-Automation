@@ -225,11 +225,18 @@ class ComBackend(AcquaBackend):
         self.project = None
         self.mo = None
         self.sql = None
-        if self._pythoncom is not None:
-            try:
-                self._pythoncom.CoUninitialize()
-            except Exception:
-                pass
+        # ⚠️ 這裡**刻意不呼叫 CoUninitialize**。
+        #
+        # 它會拆掉整個 apartment,而不只是「放掉我們用的東西」。
+        # 同一條規則在 sqlcat.py 也寫過 —— 那是踩過才知道的:
+        # 拆完之後所有 COM 呼叫都變成「物件未連接到伺服器」。
+        #
+        # 更糟的是收工路徑(/api/shutdown、閒置自動退出)會在這之後
+        # 0.4 秒就 os._exit,RPC 來不及把跟 ACQUA 之間的通道收乾淨,
+        # 有機會把 ACQUA 那端的 COM 伺服器一起拖進壞狀態。
+        #
+        # 行程本來就要結束了,apartment 會跟著行程消失,不需要手動拆。
+        self._pythoncom = None
 
     # ── 內部工具 ────────────────────────────────────
     @staticmethod
