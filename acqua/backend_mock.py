@@ -358,6 +358,30 @@ class MockBackend(AcquaBackend):
             return
         self._run_titles([s["row_id"] for s in kept])
 
+    # ── 麥克風供電(模擬)──────────────────────────
+    # 模擬模式也要能切,不然沒接硬體時前端那個下拉選單無從測試。
+    def mic_power(self):
+        from . import labcore
+        pair = getattr(self, "_mic_pair", labcore.DEFAULT_PAIR)
+        on = labcore.PAIRS[pair]
+        return {"available": True, "pair": pair,
+                "pairs": [labcore.POL_200V if p == on else labcore.POL_OFF
+                          for p in (0, 1)],
+                "supply_label": "±60 V",
+                "routed": [2] if pair == "1-2" else [4]}
+
+    def set_mic_power(self, pair):
+        from . import labcore
+        if pair not in labcore.PAIRS:
+            raise ValueError("不認得的通道組:%r" % pair)
+        self._mic_pair = pair
+        self.state.log("【模擬模式】麥克風供電切到 %s"
+                       % labcore.PAIR_LABELS[pair])
+        st = self.mic_power()
+        st["requested"] = pair
+        st["applied"] = True
+        return st
+
     # ── 硬體設定(模擬)────────────────────────────
     _MOCK_HW = ["BK+GRAS Mouth_3QUEST_v5_HRPF off_251029",
                 "BK+GRAS Mouth_2talker_v5_HRPF off_251028",

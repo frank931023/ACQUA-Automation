@@ -381,6 +381,29 @@ check("換搜尋或排序會回第一頁", pl_html.count("page = 1;") >= 3)
 check("過濾後頁數縮水會自動修正", "if (page > pages) page = pages;" in pl_html)
 
 
+print("\n=== K. 麥克風供電 ===")
+# ACQUA 會自己切接線但**不碰供電**。接線跳到沒供電的通道上時,
+# 量測照樣回報 PASS 而數據是錯的(2026-09-21 實測)。這一塊沒有
+# 別人管,所以從前端到硬體整條路都要接得起來。
+_lc = read("acqua/labcore.py")
+_pl = read("templates/plans.html")
+app_py = read("app.py")
+check("有 labCORE 供電模組", "def set_pair" in _lc and "def read_state" in _lc)
+check("切換前先問硬體支不支援", "CanPolarizationVoltage" in _lc)
+check("兩對一起套用(BeginUpdate)", "BeginUpdate" in _lc)
+check("寫完會讀回來驗證", "applied" in _lc)
+check("會偵測接線與供電不一致", "def mismatch" in _lc)
+check("有 /api/mic-power 路由", "/api/mic-power" in app_py)
+check("只收 1-2 / 3-4", "pair must be" in app_py)
+check("序列每一步可指定", 'data-f="mic"' in _pl)
+check("預設是 Channels 1 & 2", "MIC_DEFAULT = '1-2'" in _pl)
+check("prepare 會收到並套用",
+      "mic_power" in _pl and "set_mic_power" in app_py)
+check("兩個後端都實作",
+      "def set_mic_power" in read("acqua/backend_com.py")
+      and "def set_mic_power" in read("acqua/backend_mock.py"))
+
+
 print("\n=== J. 服務活性與收工 ===")
 _gate = read("templates/_gate.html")
 _wk = read("acqua/worker.py")
@@ -400,6 +423,11 @@ check("測試進行中不准關", "A test is running" in app_py)
 check("關掉會真的釋放 port", "os._exit(0)" in app_py)
 # 踩過兩次的規則:CoUninitialize 會拆掉整個 apartment,不是只放掉自己用的。
 # 收工路徑拆完再 os._exit,連帶把跟 ACQUA 的 RPC 通道留在壞狀態。
+# threading.Thread 自己有 _stop() 這個內部方法。拿同名屬性蓋掉它,
+# is_alive() 會在「執行緒已結束」那一刻丟 TypeError ——
+# 剛好在最需要知道它死了的時候爆掉(2026-10-05 踩過)。
+check("worker 沒有蓋掉 Thread 的內部名稱",
+      "self._stop =" not in read("acqua/worker.py"))
 check("收工不呼叫 CoUninitialize",
       "self._pythoncom.CoUninitialize()" not in read("acqua/backend_com.py")
       and "CoUninitialize()" not in read("acqua/sqlcat.py"))

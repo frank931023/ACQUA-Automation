@@ -134,6 +134,17 @@ class AcquaBackend(ABC):
         """目前選用的硬體設定名稱。"""
         return None
 
+    # ── 麥克風供電 ──────────────────────────────────
+    # ACQUA 自己會切接線,但**不碰**供電。接線跳到沒供電的通道上時,
+    # 量測照樣回報 PASS,數據卻是錯的 —— 所以這一塊要我們自己管。
+    def mic_power(self) -> dict:
+        """目前的極化電壓狀態。見 acqua/labcore.py。"""
+        return {"available": False, "pair": None, "routed": []}
+
+    def set_mic_power(self, pair: str) -> dict:
+        """把 200V 切到指定的通道組('1-2' 或 '3-4')。"""
+        return {"available": False, "applied": False}
+
     # ── 需要人工操作的測項 ──────────────────────────
     # 兩個後端本來各有一份一模一樣的實作。判斷規則只跟 config 有關,
     # 跟走 COM 還是模擬完全無關,所以放在這裡。

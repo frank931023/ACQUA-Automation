@@ -59,7 +59,11 @@ class AcquaWorker(threading.Thread):
         self._config = config
         self.state = state
         self.backend = None
-        self._stop = threading.Event()
+        # ⚠️ 不能叫 _stop ——  threading.Thread 自己有一個內部方法叫
+        #    _stop(),被屬性蓋掉之後 is_alive() 會在「執行緒已結束」
+        #    那一刻丟 TypeError: 'Event' object is not callable。
+        #    也就是剛好在最需要知道它死了的時候爆掉。
+        self._stop_event = threading.Event()
         self.ready = threading.Event()
         self.init_error = None
         #: 正在執行的命令名稱(閒置時為 None)。
@@ -133,7 +137,7 @@ class AcquaWorker(threading.Thread):
         return self.backend.answer_blocking_window(hwnd, action)
 
     def stop(self):
-        self._stop.set()
+        self._stop_event.set()
 
     # ── 工作執行緒本體 ──────────────────────────────
     def run(self):
@@ -148,7 +152,7 @@ class AcquaWorker(threading.Thread):
             self.ready.set()
             return
 
-        while not self._stop.is_set():
+        while not self._stop_event.is_set():
             try:
                 cmd = self._q.get(timeout=0.05)
             except queue.Empty:
@@ -206,6 +210,8 @@ class AcquaWorker(threading.Thread):
             "wizard_options": lambda **kw: self.backend.wizard_options(),
             "list_hardware": lambda **kw: self.backend.list_hardware_settings(),
             "set_hardware": lambda **kw: self.backend.set_hardware_setting(**kw),
+            "mic_power": lambda **kw: self.backend.mic_power(),
+            "set_mic_power": lambda **kw: self.backend.set_mic_power(**kw),
             "predict_run_set": lambda **kw: self.backend.predict_run_set(**kw),
             "read_results": lambda **kw: self.backend.read_results(**kw),
         }

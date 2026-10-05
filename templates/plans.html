@@ -286,14 +286,18 @@ const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c =>
 // 序列存在瀏覽器裡 —— 它是「這次要怎麼跑」,不是計畫本身的一部分,
 // 所以不寫進 plans/*.json,重整頁面也不會不見。
 const SEQ_KEY = 'acqua.sequence';
-// 一步 = {id, run_name, doc_name, doc_dir}
-// 舊版存的是純 id 陣列 —— 使用者瀏覽器裡已經有那種資料了,要能吃下去。
-const newStep = (id) => ({id, run_name: '', mo: '', doc_name: '', doc_dir: ''});
+// 一步 = {id, run_name, mo, mic, doc_name, doc_dir}
+// 舊版存的是純 id 陣列,也有存過沒有 mic 欄位的版本 ——
+// 使用者瀏覽器裡已經有那些資料了,都要能吃下去。
+const MIC_DEFAULT = '1-2';
+const newStep = (id) => ({id, run_name: '', mo: '', mic: MIC_DEFAULT,
+                          doc_name: '', doc_dir: ''});
 const loadSeq = () => {
   try {
     return JSON.parse(localStorage.getItem(SEQ_KEY) || '[]').map(x =>
       typeof x === 'string' ? newStep(x)
         : {id: x.id, run_name: x.run_name || '', mo: x.mo || '',
+           mic: x.mic || MIC_DEFAULT,
            doc_name: x.doc_name || '', doc_dir: x.doc_dir || ''});
   } catch (e) { return []; }
 };
@@ -442,6 +446,14 @@ function render() {
             <label class="wide"><span>DUT</span>
               <select data-f="mo" data-i="${i}" data-plan="${esc(st.id)}">
                 <option value="">${esc(s.measurement_object || '(from plan)')}</option>
+              </select></label>
+            <!-- 極化電壓是成對的(卡上就是 1&2 一組、3&4 一組),
+                 所以選的單位是「對」。ACQUA 會自己切接線但不碰供電,
+                 接線跳到沒供電的通道上會靜默產生廢資料。 -->
+            <label class="wide"><span>Microphone power</span>
+              <select data-f="mic" data-i="${i}">
+                <option value="1-2" ${st.mic !== '3-4' ? 'selected' : ''}>Channels 1 &amp; 2 — 200 V</option>
+                <option value="3-4" ${st.mic === '3-4' ? 'selected' : ''}>Channels 3 &amp; 4 — 200 V</option>
               </select></label>
             <label><span>Word file name</span>
               <input type="text" data-f="doc_name" data-i="${i}"
@@ -887,7 +899,8 @@ async function runSeq() {
       log(`[${i + 1}/${seq.length}] Preparing "${p.title}"`);
       const prep = await post(
         '/acqua/api/plans/' + encodeURIComponent(st.id) + '/prepare',
-        {measurement_object: st.mo.trim()});
+        {measurement_object: st.mo.trim(),
+         mic_power: st.mic || MIC_DEFAULT});
       (prep.steps || []).forEach(s =>
         log('   ' + (s.ok ? '✓ ' : '✗ ') + s.name + (s.detail ? ' — ' + s.detail : '')));
       if (!prep.ok) { log('Prepare failed — sequence stopped'); break; }

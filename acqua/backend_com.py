@@ -1502,6 +1502,22 @@ class ComBackend(AcquaBackend):
         except Exception:                                   # noqa: BLE001
             return None
 
+    # ── 麥克風供電 ──────────────────────────────────
+    # 走 MfeControlLib,不是 Acqua3 —— 詳見 acqua/labcore.py 開頭。
+    # 已經在工作執行緒上(CoInitialize 過),可以直接呼叫。
+    def mic_power(self):
+        from . import labcore
+        return labcore.read_state()
+
+    def set_mic_power(self, pair):
+        from . import labcore
+        st = labcore.set_pair(pair)
+        self.state.log("麥克風供電切到 %s（%s)"
+                       % (labcore.PAIR_LABELS.get(pair, pair),
+                          "成功" if st.get("applied") else "沒生效"),
+                       "info" if st.get("applied") else "warn")
+        return st
+
     def list_hardware_settings(self):
         """列出所有硬體設定,標出目前選用的那組。"""
         try:

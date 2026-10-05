@@ -22,6 +22,7 @@ from flask import (Blueprint, Flask, Response, jsonify, render_template,
                    request, send_from_directory)
 
 from acqua import crane
+from acqua.labcore import PAIR_LABELS as MIC_PAIR_LABELS
 from acqua import env as env_settings
 from acqua.crane import axes_manifest as crane_axes_manifest, make_crane
 from acqua.prefs import Prefs
@@ -1116,6 +1117,14 @@ def api_plan_prepare(plan_id):
     if not r.run("載入測項", "list_smds", search=""):
         return r.bail()
 
+    # 麥克風供電。ACQUA 會自己切接線,但不碰供電 —— 接線跳到沒供電的
+    # 通道上時量測照樣 PASS,數據卻是錯的。所以這一步要我們自己做,
+    # 而且要在跑之前。沒指定就不動,維持現況。
+    mic_pair = str(body.get("mic_power") or "").strip()
+    if mic_pair:
+        r.run("麥克風供電切到 %s" % MIC_PAIR_LABELS.get(mic_pair, mic_pair),
+              "set_mic_power", timeout=60, pair=mic_pair)
+
     try:
         # 交叉驗證要用的兩個線索:
         #   指紋 —— 專案樹在存檔之後動過沒有(序號可不可信)
@@ -1139,6 +1148,27 @@ def api_plan_prepare(plan_id):
     return jsonify(ok=True, steps=r.steps, plan=plan, resolution=rep,
                    row_ids=[x["row_id"] for x in rep["resolved"]],
                    ctx=state.snapshot().get("ctx"), state=state.snapshot())
+
+
+@acqua_bp.route("/api/mic-power", methods=["GET", "POST"])
+def api_mic_power():
+    """[*] 麥克風極化電壓走哪一組通道。
+
+    GET  → 現況(含接線實際用到哪幾個通道,以及兩者對不對得上)
+    POST → {pair: "1-2" | "3-4"}  切換
+
+    為什麼要有這個:ACQUA 量測時會自動切**接線**,但**不碰供電**。
+    接線跳到沒供電的通道上時,量測照樣回報 PASS,數據卻是錯的 ——
+    實測 2026-09-21 確認過。那一塊沒有別人管,只能我們管。
+    """
+    if request.method == "GET":
+        return _cmd("mic_power", timeout=60)
+    body = request.get_json(silent=True) or {}
+    pair = str(body.get("pair") or "").strip()
+    if pair not in ("1-2", "3-4"):
+        return jsonify(ok=False,
+                       error="pair must be '1-2' or '3-4'"), 400
+    return _cmd("set_mic_power", timeout=60, pair=pair)
 
 
 @acqua_bp.route("/api/hardware", methods=["GET", "POST"])
