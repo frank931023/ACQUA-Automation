@@ -54,8 +54,8 @@ class LabCoreUnavailable(RuntimeError):
     """連不上 labCORE。呼叫端自己決定要不要當成致命錯誤。"""
 
 
-def _mic_settings():
-    """拿到麥克風卡的設定物件。
+def connect():
+    """回 (device, 麥克風卡的設定物件)。
 
     ⚠️ 要在已經 CoInitialize 過的執行緒上呼叫（工作執行緒就是)。
     """
@@ -99,10 +99,56 @@ def routed_mic_channels(dev) -> list:
     return sorted(out)
 
 
+def wiring(dev) -> list:
+    """目前作用中的接線,每條是 [[區塊, 接腳], [區塊, 接腳]]。
+
+    只用來「看」和「比對」—— 這一塊 ACQUA 自己會切,不要寫。
+    """
+    out = []
+    conns = dev.AudioWiring.ActiveConnections
+    for i in range(conns.Count):
+        c = conns.Items(i)
+        try:
+            p1, p2 = c.Pin1, c.Pin2
+            out.append(sorted([[p1.Block.ID, p1.ID], [p2.Block.ID, p2.ID]]))
+        except Exception:                                   # noqa: BLE001
+            continue
+    return sorted(out)
+
+
+def read_usb(dev) -> dict:
+    """USB Audio Host 區塊的現況。沒有這個區塊就回 None。
+
+    跟麥克風供電一樣:ACQUA 不碰這裡。目前只讀不寫 —— 要寫的時候
+    介面都在(Devices / ActiveDevice / Playback|CaptureSettings)。
+    """
+    blocks = dev.AudioWiring.Blocks
+    settings = None
+    for i in range(blocks.Count):
+        if blocks.Items(i).ID == "usbaudio|0|":
+            settings = blocks.Items(i).Settings
+            break
+    if settings is None:
+        return None
+
+    def side(o):
+        return {"channels": o.Channels, "sample_rate": o.SampleRate,
+                "format": o.Format}
+
+    return {
+        "any_device": bool(settings.AnyDeviceAvailable),
+        "device_count": settings.Devices.Count,
+        "state": settings.State,
+        "auto_resampling": settings.AutoResampling,
+        "playback": side(settings.PlaybackSettings),
+        "capture": side(settings.CaptureSettings),
+    }
+
+
 def read_state() -> dict:
     """目前的供電狀態。不會丟例外 —— 連不上就回 available=False。"""
     try:
-        dev, mic = _mic_settings()
+        dev, mic = connect()
     except LabCoreUnavailable as exc:
         return {"available": False, "error": str(exc)[:160],
                 "pair": None, "pairs": [], "routed": []}
@@ -136,7 +182,7 @@ def set_pair(pair: str) -> dict:
         raise ValueError("不認得的通道組:%r（可用:%s)"
                          % (pair, "、".join(PAIRS)))
 
-    dev, mic = _mic_settings()
+    dev, mic = connect()
     want = PAIRS[key]
 
     # 先問硬體支不支援 200V,不要硬塞。這張卡實測不支援 28V。

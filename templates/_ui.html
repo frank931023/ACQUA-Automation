@@ -125,4 +125,55 @@
   ::-webkit-scrollbar-thumb { background:var(--line-2); border-radius:4px; }
   ::-webkit-scrollbar-thumb:hover { background:var(--faint); }
   ::-webkit-scrollbar-track { background:transparent; }
+
+  /* 兩段式確認:按一下只是把按鈕「舉起來」,再按一次才真的執行 */
+  button.arming { background:var(--fail); border-color:var(--fail); color:#fff; }
 </style>
+
+<script>
+/* 需要二次確認的動作共用這一支。
+
+   用兩段式而不是 confirm():confirm() 會搶走焦點、擋住整個分頁,
+   而這些按鈕常常出現在量測正在跑的時候 —— 不該把人卡住。
+   按一下變紅色並改字,幾秒內沒有第二下就自己放下。
+
+   用法:
+       armConfirm(document.querySelector('#btn-stop'),
+                  () => doTheThing(),
+                  {label: 'Stop the run?'});
+*/
+window.armConfirm = function (btn, onConfirm, opts) {
+  if (!btn) return;
+  const o = opts || {};
+  const label = o.label || 'Confirm';
+  const wait = o.timeout || 4000;
+  const original = btn.textContent;
+  let armed = false, timer = null;
+
+  const reset = () => {
+    armed = false;
+    clearTimeout(timer);
+    btn.classList.remove('arming');
+    btn.textContent = original;
+  };
+
+  btn.addEventListener('click', (e) => {
+    e.preventDefault();
+    if (btn.disabled) return;
+    if (!armed) {
+      armed = true;
+      btn.classList.add('arming');
+      btn.textContent = label;
+      timer = setTimeout(reset, wait);
+      return;
+    }
+    reset();
+    onConfirm();
+  });
+  // 按鈕被停用時(例如量測已經結束)要把舉起的狀態放下,
+  // 否則下次啟用時它還停在「Confirm」。
+  new MutationObserver(() => { if (btn.disabled && armed) reset(); })
+    .observe(btn, {attributes: true, attributeFilter: ['disabled']});
+  return reset;
+};
+</script>

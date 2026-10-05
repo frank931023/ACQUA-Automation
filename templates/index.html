@@ -1535,10 +1535,8 @@ $('#btn-pause').onclick = async () => {
   await fetch(paused ? '/acqua/api/resume' : '/acqua/api/pause', {method:'POST'});
   addLog(paused ? 'Resumed' : 'Paused', paused ? 'info' : 'warn');
 };
-$('#btn-cancel').onclick = async () => {
-  const r = await (await fetch('/acqua/api/cancel', {method:'POST'})).json();
-  addLog('Stop: ' + (r.note || ''), 'warn');
-};
+armConfirm($('#btn-cancel'), () => requestCancel(false),
+           {label: 'Stop the run?'});
 
 // ── 通知:讓人不用一直盯著螢幕 ────────────────
 // 遇到需要人操作的時候才叫人,平常安靜跑完。
@@ -1962,30 +1960,42 @@ function syncMini(s, done, total, eta) {
   $('#m-name').textContent = cur.title || '';
 }
 
-$('#r-stop').onclick = async () => {
-  $('#r-title').textContent = 'Stopping (after the current item)';
-  $('#runov').classList.add('stopping');
+// 中止要二次確認 —— 停下來之後剩下的測項要重挑重跑,一整晚的批次
+// 被誤觸就沒了。用兩段式而不是 confirm(),不會把正在跑的畫面卡住。
+async function requestCancel(fromOverlay) {
+  if (fromOverlay) {
+    $('#r-title').textContent = 'Stopping (after the current item)';
+    $('#runov').classList.add('stopping');
+  }
   addLog('Stop requested — ACQUA stops after the current item', 'warn');
-  await fetch('/acqua/api/cancel', {method: 'POST'});
-};
+  const r = await (await fetch('/acqua/api/cancel', {method: 'POST'})).json();
+  if (r.note) addLog('Stop: ' + r.note, 'warn');
+}
+armConfirm($('#r-stop'), () => requestCancel(true), {label: 'Stop the run?'});
 $('#r-hide').onclick = () => {
-
-// 這個框不該把人關住:Esc 或點背景都等於「縮小」,量測照跑。
-// (真的要停請按中止 —— 縮小只是把畫面收起來。)
-$('#runov').addEventListener('click', (e) => {
-  if (e.target.id === 'runov' && !$('#runov').classList.contains('failed')) hideRunOverlay();
-});
-document.addEventListener('keydown', (e) => {
-  if (e.key !== 'Escape') return;
-  const ov = $('#runov');
-  if (!ov.classList.contains('on')) return;
-  ov.classList.contains('failed') ? ov.classList.remove('on') : hideRunOverlay();
-});
   runHidden = true;
   $('#runov').classList.remove('on');
   $('#mini').classList.add('on');
   refreshStatus();
 };
+
+// 這個框不該把人關住:Esc 或點背景都等於「縮小」,量測照跑。
+// (真的要停請按中止 —— 縮小只是把畫面收起來。)
+//
+// ⚠️ 這兩個監聽器必須在最外層註冊一次。先前它們被誤植在
+//    #r-hide 的 handler **裡面**,結果是:要先按過一次「Minimise」
+//    Esc 和點背景才會生效,而且每按一次就多疊一組監聽器。
+$('#runov').addEventListener('click', (e) => {
+  if (e.target.id === 'runov' && !$('#runov').classList.contains('failed')) {
+    $('#r-hide').onclick();
+  }
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return;
+  const ov = $('#runov');
+  if (!ov.classList.contains('on')) return;
+  ov.classList.contains('failed') ? ov.classList.remove('on') : $('#r-hide').onclick();
+});
 // 點小視窗任一處就展開回大框
 $('#mini-head').onclick = () => {
   runHidden = false;

@@ -16,8 +16,8 @@ export const fmt = {
   /** 依單位挑一個 */
   by: (unit) => (unit === 'deg' ? fmt.deg : fmt.len),
   /** 秒數講成人看得懂的 */
-  secs: (s) => (s < 60 ? `${Math.round(s)} 秒`
-    : `${Math.floor(s / 60)} 分 ${Math.round(s % 60)} 秒`),
+  secs: (s) => (s < 60 ? `${Math.round(s)}s`
+    : `${Math.floor(s / 60)}m ${Math.round(s % 60)}s`),
 };
 
 export const esc = (s) => String(s ?? '').replace(/[&<>"']/g,
@@ -39,7 +39,7 @@ export async function jsonFetch(url, opts) {
   try {
     r = await fetch(url, opts);
   } catch (e) {
-    throw new Error(`連不到 ${url}(伺服器沒在跑?)`);
+    throw new Error(`Cannot reach ${url} - is the server running?`);
   }
   const text = await r.text();
   try {
@@ -47,10 +47,10 @@ export async function jsonFetch(url, opts) {
   } catch {
     if (/^\s*<(!doctype|html)/i.test(text)) {
       throw new Error(r.status === 404
-        ? `後端沒有 ${url} 這支 API —— 伺服器還是舊的,重開 app.py 就會有了。`
-        : `後端回了一頁 HTML 而不是 JSON(HTTP ${r.status})`);
+        ? `The server has no ${url} endpoint - it is running an older build. Restart app.py.`
+        : `The server returned HTML instead of JSON (HTTP ${r.status})`);
     }
-    throw new Error(`後端回的不是 JSON(HTTP ${r.status})`);
+    throw new Error(`The server did not return JSON (HTTP ${r.status})`);
   }
 }
 
@@ -80,7 +80,7 @@ function teardown(ov, onKey) {
  * @param ok       確認鈕文字
  * @param danger   確認鈕要不要用警示色
  */
-export function confirmBox({ title, html = '', ok = '確定', cancel = '取消',
+export function confirmBox({ title, html = '', ok = 'OK', cancel = 'Cancel',
                              danger = false } = {}) {
   return new Promise((resolve) => {
     const ov = shell(`
@@ -110,7 +110,7 @@ export function confirmBox({ title, html = '', ok = '確定', cancel = '取消',
  * 表單框。fields = [{key, label, placeholder, value, textarea, required}]
  * 回傳 Promise<{key: value} | null>(取消是 null)。
  */
-export function formBox({ title, note = '', fields = [], ok = '儲存' } = {}) {
+export function formBox({ title, note = '', fields = [], ok = 'Save' } = {}) {
   return new Promise((resolve) => {
     const rows = fields.map((f) => `
       <label>${esc(f.label)}${f.required ? ' <span class="req">*</span>' : ''}</label>
@@ -126,7 +126,7 @@ export function formBox({ title, note = '', fields = [], ok = '儲存' } = {}) {
       ${rows}
       <div class="err" style="display:none"></div>
       <div class="acts">
-        <button class="ghost" data-a="no">取消</button>
+        <button class="ghost" data-a="no">Cancel</button>
         <button class="primary" data-a="yes">${esc(ok)}</button>
       </div>`);
 
@@ -137,7 +137,7 @@ export function formBox({ title, note = '', fields = [], ok = '儲存' } = {}) {
       const missing = fields.filter((f) => f.required && !out[f.key]);
       if (missing.length) {
         const err = ov.querySelector('.err');
-        err.textContent = `請填「${missing[0].label}」`;
+        err.textContent = `${missing[0].label} is required`;
         err.style.display = '';
         ov.querySelector(`[data-k="${missing[0].key}"]`).focus();
         return null;

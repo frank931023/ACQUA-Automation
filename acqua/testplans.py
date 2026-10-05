@@ -37,14 +37,16 @@ from datetime import datetime
 _SAFE = re.compile(r"[^A-Za-z0-9_.-]")
 
 
-def new_setup(name="", note="", params=None) -> dict:
-    """一個「setup 位置」。
+def new_setup(name="", note="", params=None, setup_id="") -> dict:
+    """一個「setup 位置」—— 指向 setups/ 裡存好的某個擺位。
 
-    ⚠️ 細節尚未底定 —— 未來會對應 soundproofroom 的座標,由 Flask 發 HTTP
-       給 Raspberry Pi 驅動馬達。現在只存下來並在執行序列中間停下來等人,
-       等規格定了再把 params 接上去,不用改動計畫檔的結構。
+    `setup_id` 才是權威,`name` 只是存下來方便顯示(擺位改名之後
+    不用回頭改每個計畫)。舊的計畫檔只有 name,所以兩個都留著。
+
+    ⚠️ 目前只會在執行序列中間停下來等人工調整。接上 Raspberry Pi 之後
+       會用這個 id 去 /api/room/apply 把機構移到位,計畫檔的結構不用改。
     """
-    return {"name": name or "", "note": note or "",
+    return {"setup_id": setup_id or "", "name": name or "", "note": note or "",
             "params": dict(params or {}),
             "_note": "尚未自動化:目前只會在序列中間停下來提示人工調整"}
 

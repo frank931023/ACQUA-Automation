@@ -109,7 +109,7 @@ class RoomSetups:
             data = {"id": setup_id or self._new_id(), "created": now}
 
         data.update({
-            "name": (name or "").strip() or "(未命名擺位)",
+            "name": (name or "").strip() or "(unnamed position)",
             "description": (description or "").strip(),
             "updated": now,
             "axes": cleaned["axes"],

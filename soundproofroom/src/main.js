@@ -146,78 +146,78 @@ const interaction = createInteraction({
 // id 一律 `<物件>.<軸>`,與 acqua/crane.py 的 AXES 同名(見檔頭的警告)。
 const PANEL = [
   {
-    title: '喇叭陣列(2 × 4,落地式)',
+    title: 'Speaker array (2 x 4, floor standing)',
     items: [
-      { id: 'speakers.x', label: '地面橫移軌位置 X', unit: 'm',
+      { id: 'speakers.x', label: 'Floor traverse X', unit: 'm',
         range: C.speakerRail.travel, format: fmt.pos,
         drag: { key: 'speakers', axis: 'x' },
-        hint: '橫移軌長 2.00 m ・ 站在地面,不是吊在天花板' },
-      { id: 'speakers.lift', label: '陣列中心高度', unit: 'm',
+        hint: 'Traverse rail 2.00 m - floor standing, not ceiling mounted' },
+      { id: 'speakers.lift', label: 'Array centre height', unit: 'm',
         range: C.speakerStand.lift,
         apply: (v) => setArrayLift(speakers, v),
-        hint: `立柱伸縮 ${C.speakerStand.lift.min} ~ ${C.speakerStand.lift.max} m` },
+        hint: `Column travel ${C.speakerStand.lift.min} - ${C.speakerStand.lift.max} m` },
     ],
   },
   {
-    title: '大螢幕(喇叭對面)',
+    title: 'Large screen (facing the speakers)',
     items: [
-      { id: 'screen.z', label: '前後位置 Z', unit: 'm',
+      { id: 'screen.z', label: 'Depth Z', unit: 'm',
         range: C.screen.travelZ, format: fmt.pos,
         drag: { key: 'screen', axis: 'z' } },
-      { id: 'screen.lift', label: '螢幕中心高度', unit: 'm',
+      { id: 'screen.lift', label: 'Screen centre height', unit: 'm',
         range: C.screen.lift, apply: (v) => setScreenLift(screen, v),
-        hint: `面板 ${C.screen.width} × ${C.screen.height} m(推估)` },
+        hint: `Panel ${C.screen.width} x ${C.screen.height} m (estimated)` },
     ],
   },
   {
     title: 'HATS(B&K 4128)',
     items: [
-      { id: 'hats.z', label: '縱向位置 Z(下層軌)', unit: 'm',
+      { id: 'hats.z', label: 'Depth Z (lower rail)', unit: 'm',
         range: C.floorRailZ.travel, format: fmt.pos,
-        drag: { key: 'hats', axis: 'z' }, hint: '縱向滑軌長 4.61 m' },
-      { id: 'hats.x', label: '橫向位置 X(上層軌)', unit: 'm',
+        drag: { key: 'hats', axis: 'z' }, hint: 'Depth rail 4.61 m' },
+      { id: 'hats.x', label: 'Lateral X (upper rail)', unit: 'm',
         range: C.floorRailX.travel, format: fmt.pos,
-        drag: { key: 'hats', axis: 'x' }, hint: '橫移滑軌長 1.60 m(推估)' },
-      { id: 'hats.mrp', label: 'MRP 高度', unit: 'm',
+        drag: { key: 'hats', axis: 'x' }, hint: 'Lateral rail 1.60 m (estimated)' },
+      { id: 'hats.mrp', label: 'MRP height', unit: 'm',
         range: { ...C.hats.stand, default: C.hats.stand.test },
         apply: (v) => setHatsHeight(hats, v),
-        hint: 'HMS II.3 立架 ・ 標稱 1.20 m ・ 0.75 ~ 1.50 m' },
-      { id: 'hats.rot', label: '轉盤角度', unit: 'deg', step: 1,
+        hint: 'HMS II.3 stand - nominal 1.20 m - range 0.75 to 1.50 m' },
+      { id: 'hats.rot', label: 'Turntable angle', unit: 'deg', step: 1,
         range: { min: -180, max: 180, default: C.hats.turntable.defaultAngleDeg },
         apply: (v) => setHatsAngle(hats, v) },
-      { id: 'hats.head', label: '頭部前傾角', unit: 'deg', step: 0.5,
+      { id: 'hats.head', label: 'Head pitch', unit: 'deg', step: 0.5,
         range: C.hats.headAngle,
         apply: (v) => setHeadAngle(hats, v),
-        hint: '規格標「垂直 或 17°」,這裡做成連續可調' },
+        hint: 'Spec says vertical or 17 deg - continuous here' },
       { type: 'preset', target: 'hats.head', values: C.hats.headAngle.presets,
         format: (v) => `${v}°` },
     ],
   },
   {
-    title: '桌台(升降 + 前後)',
+    title: 'Tables (lift + depth)',
     items: tables.flatMap(({ item }) => [
-      { id: `${item.key}.z`, label: `${item.label} — 前後 Z`, unit: 'm',
+      { id: `${item.key}.z`, label: `${item.label} - depth Z`, unit: 'm',
         range: item.travelZ, format: fmt.pos,
         drag: { key: item.key, axis: 'z' } },
-      { id: `${item.key}.lift`, label: `${item.label} — 高度`, unit: 'm',
+      { id: `${item.key}.lift`, label: `${item.label} - height`, unit: 'm',
         range: { ...item.lift, default: item.lift.test },
         apply: (v) => setTableHeight(tableGroup(item.key), v),
-        hint: `測試 ${item.lift.test} m ・ 最高 ${item.lift.max} m` },
+        hint: `Test ${item.lift.test} m - max ${item.lift.max} m` },
     ]),
   },
   {
-    title: '天花板麥克風吊架 × 2',
+    title: 'Ceiling mic rigs x 2',
     items: micRigs.flatMap(({ item }) => [
-      { id: `${item.key}.z`, label: `${item.label} — 縱向 Z`, unit: 'm',
+      { id: `${item.key}.z`, label: `${item.label} - depth Z`, unit: 'm',
         range: item.travelZ, format: fmt.pos,
         drag: { key: item.key, axis: 'z' } },
-      { id: `${item.key}.x`, label: `${item.label} — 橫向 X`, unit: 'm',
+      { id: `${item.key}.x`, label: `${item.label} - lateral X`, unit: 'm',
         range: item.travelX, format: fmt.pos,
         drag: { key: item.key, axis: 'x' } },
-      { id: `${item.key}.h`, label: `${item.label} — 高度 Y`, unit: 'm',
+      { id: `${item.key}.h`, label: `${item.label} - height Y`, unit: 'm',
         range: { ...C.micRig.height, default: item.heightDefault },
         apply: (v) => setMicHeight(micGroup(item.key), v),
-        hint: 'GRAS 40AC / 40AF ・ 0.70 ~ 1.50 m' },
+        hint: 'GRAS 40AC / 40AF - 0.70 to 1.50 m' },
       { type: 'preset', target: `${item.key}.h`, values: C.micRig.height.presets,
         format: (v) => `${v} m` },
     ]),
@@ -233,15 +233,15 @@ const PANEL = [
 // ?mode=live 進來。切過之後記在 localStorage,下次照上次的。
 const MODES = {
   live: {
-    label: '即時模式',
-    hint: '<b>3D 顯示實機目前位置</b>・拉桿 = 提出移動目標,放手後會問你要不要移動'
-        + '<br><b>拖曳物件已關閉</b> ・ 左鍵拖曳:旋轉視角 ・ 滾輪:縮放 ・ 右鍵:平移',
+    label: 'Live mode',
+    hint: '<b>The 3D view shows where the hardware actually is.</b> A slider proposes a target; you are asked before anything moves.'
+        + '<br><b>Dragging objects is off.</b> Left-drag: orbit - Wheel: zoom - Right-drag: pan',
   },
   setup: {
-    label: '設定模式',
-    hint: '<b>左鍵拖曳物件</b>:喇叭陣列・大螢幕・HATS・兩張桌台・兩組麥克風吊架'
-        + '<br><b>左鍵拖曳空白處</b>:旋轉視角 ・ <b>滾輪</b>:縮放 ・ <b>右鍵</b>:平移'
-        + '<br>這個模式<b>不會碰到機構</b>,存成擺位之後才有可能送去實機',
+    label: 'Layout mode',
+    hint: '<b>Left-drag objects:</b> speaker array, screen, HATS, both tables, both mic rigs'
+        + '<br><b>Left-drag empty space:</b> orbit - <b>Wheel:</b> zoom - <b>Right-drag:</b> pan'
+        + '<br>This mode <b>never moves the hardware</b>. Save a position first, then apply it from Live mode.',
   },
 };
 
@@ -262,11 +262,11 @@ let live = null;
 function buildPanel() {
   const panel = $('#panel');
   panel.innerHTML = `
-    <h1>聲學測試室</h1>
-    <div class="sub">房間 ${C.room.width} × ${C.room.depth} × ${C.room.height} m</div>
+    <h1>Acoustic test room</h1>
+    <div class="sub">Room ${C.room.width} x ${C.room.depth} x ${C.room.height} m</div>
     <div class="modesw" id="modesw">
-      <button data-mode="live">即時模式</button>
-      <button data-mode="setup">設定模式</button>
+      <button data-mode="live">Live</button>
+      <button data-mode="setup">Layout</button>
     </div>
     <div id="livestatus"></div>
     <div id="modebar"></div>`;
@@ -345,7 +345,7 @@ function makeControl(it) {
     }
     // 即時模式:拉桿只是在挑目標,3D 一動也不動
     tgt.hidden = false;
-    tgt.innerHTML = `目標 <b>${format(v)}</b> — 放開拉桿後會問你要不要移動`;
+    tgt.innerHTML = `Target <b>${format(v)}</b> - you will be asked before it moves`;
   });
 
   // change(放手)才問 —— input 每動一格就跳框會變成連環轟炸
@@ -369,12 +369,12 @@ function makeViewBox() {
   v.className = 'group';
   // 只有視角按鈕。原本底下那排連結(回首頁 / 擺位清單)拿掉了 ——
   // 左邊那條側邊欄已經有同樣的入口,重複放只是把面板拉長。
-  v.innerHTML = `<h2>視角</h2>
+  v.innerHTML = `<h2>View</h2>
     <div class="views">
-      <button data-view="iso">等角</button>
-      <button data-view="top">俯視</button>
-      <button data-view="front">正視</button>
-      <button data-view="side">側視</button>
+      <button data-view="iso">Iso</button>
+      <button data-view="top">Top</button>
+      <button data-view="front">Front</button>
+      <button data-view="side">Side</button>
     </div>`;
 
   const VIEWS = {
@@ -410,16 +410,16 @@ const DEFAULT_ID = '__default__';
 const shortName = (n) => (n.length > 42 ? n.slice(0, 41) + '…' : n);
 
 function setupOptions(selected) {
-  const opts = ['<option value="">選一個擺位…</option>',
-    '<optgroup label="內建">',
+  const opts = ['<option value="">Choose a position...</option>',
+    '<optgroup label="Built in">',
     `<option value="${DEFAULT_ID}"${selected === DEFAULT_ID ? ' selected' : ''}>`
-    + '原始設計位置(spec.js 預設)</option>',
+    + 'Original design position (spec.js defaults)</option>',
     '</optgroup>'];
   if (setupCache.length) {
-    opts.push('<optgroup label="已存的擺位">');
+    opts.push('<optgroup label="Saved positions">');
     for (const s of setupCache) {
       opts.push(`<option value="${esc(s.id)}"${s.id === selected ? ' selected' : ''}>`
-        + `${esc(shortName(s.name))}${s.source === 'live' ? ' ・實機' : ''}</option>`);
+        + `${esc(shortName(s.name))}${s.source === 'live' ? ' (from hardware)' : ''}</option>`);
     }
     opts.push('</optgroup>');
   }
@@ -429,7 +429,7 @@ function setupOptions(selected) {
 /** spec.js 的預設值長成一個「假擺位」,好讓載入的路徑只有一條 */
 function defaultSetup() {
   return {
-    id: DEFAULT_ID, name: '原始設計位置',
+    id: DEFAULT_ID, name: 'Original design position',
     axes: Object.fromEntries(
       Object.values(controls).map((c) => [c.id, c.range.default ?? c.range.min])),
   };
@@ -439,18 +439,18 @@ function renderModeBar() {
   const bar = $('#modebar');
   if (mode === 'setup') {
     bar.className = 'group modebar';
-    bar.innerHTML = `<h2>擺位</h2>
-      ${editing ? `<div class="editing">正在編輯
+    bar.innerHTML = `<h2>Positions</h2>
+      ${editing ? `<div class="editing">Editing
          <b>${esc(editing.name)}</b></div>` : ''}
       <button class="wide primary" id="mb-save">
-        ${editing ? '更新這個擺位' : '儲存目前擺位…'}</button>
-      ${editing ? '<button class="wide" id="mb-saveas">另存成新的擺位…</button>' : ''}
-      <label class="lbl">載入一組位置到畫面</label>
+        ${editing ? 'Update this position' : 'Save current position...'}</button>
+      ${editing ? '<button class="wide" id="mb-saveas">Save as a new position...</button>' : ''}
+      <label class="lbl">Load a position into the view</label>
       <select id="mb-pick">${setupOptions(editing?.id)}</select>
-      <button class="wide" id="mb-load">載入到畫面</button>
-      <div class="lim">「原始設計位置」是 <code>spec.js</code> 的預設值,也就是這一頁
-        第一次打開的樣子 —— 隨時可以回去看原本長怎樣。<br>
-        這個模式只改畫面。要讓機構真的動,切到即時模式再套用。</div>`;
+      <button class="wide" id="mb-load">Load into view</button>
+      <div class="lim">"Original design position" is the <code>spec.js</code> default -
+        what this page looks like the first time you open it.<br>
+        This mode only changes the view. To move the hardware, switch to Live mode and apply.</div>`;
 
     $('#mb-save').onclick = async () => {
       const s = await saveCurrent(snapshotAxes(), { existing: editing });
@@ -463,21 +463,21 @@ function renderModeBar() {
     };
     $('#mb-load').onclick = () => {
       const id = $('#mb-pick').value;
-      if (!id) { toast('先選一組位置', 'warn'); return; }
+      if (!id) { toast('Choose a position first', 'warn'); return; }
 
       // 原始設計位置走同一條載入路徑,只是那組數字是 spec.js 給的。
       // editing 要清掉 —— 它不是存檔,下次按儲存該是「新增」而不是
       // 「更新」,不然會把某個存好的擺位覆蓋成預設值。
       const s = id === DEFAULT_ID ? defaultSetup()
         : setupCache.find((x) => x.id === id);
-      if (!s) { toast('找不到那組位置', 'warn'); return; }
+      if (!s) { toast('That position no longer exists', 'warn'); return; }
 
       const r = applyToScene(s, controls);
       editing = id === DEFAULT_ID ? null : s;
       renderModeBar();
       if (id === DEFAULT_ID) $('#mb-pick').value = DEFAULT_ID;
-      toast(`已載入「${s.name}」(${r.applied.length} 根軸`
-        + (r.absent.length ? `,${r.absent.length} 根軸沒存` : '') + ')');
+      toast(`Loaded "${s.name}" (${r.applied.length} axes`
+        + (r.absent.length ? `, ${r.absent.length} not stored` : '') + ')');
     };
     return;
   }
@@ -523,47 +523,47 @@ function snapshotAxes() {
 async function askSwitch(next) {
   if (next === 'setup') {
     return confirmBox({
-      title: '要切換到「設定模式」嗎?',
+      title: 'Switch to Layout mode?',
       html: `
         <div class="mdsw setup">
-          <div class="r"><i>✏️</i><span>拉桿與滑鼠拖曳<b>直接改 3D 畫面</b></span></div>
-          <div class="r"><i>🔒</i><span>這個模式<b>完全不會碰到機構</b>,怎麼試都沒關係</span></div>
-          <div class="r"><i>💾</i><span>排好之後可以存成擺位</span></div>
+          <div class="r"><i>✏️</i><span>Sliders and dragging <b>change the 3D view only</b></span></div>
+          <div class="r"><i>🔒</i><span>This mode <b>never touches the hardware</b> - experiment freely</span></div>
+          <div class="r"><i>💾</i><span>Save the arrangement as a position when you are happy</span></div>
         </div>
-        <div class="bxnote">拉桿會接在<b>實機最後回報的位置</b>上,方便照現況微調,
-          不會跳回預設值。</div>`,
-      ok: '切換到設定模式', cancel: '留在即時模式',
+        <div class="bxnote">Sliders start from the <b>last position the hardware reported</b>,
+          so you can adjust from where things actually are.</div>`,
+      ok: 'Switch to Layout', cancel: 'Stay in Live',
     });
   }
 
   // ── 切到即時模式:先探一次 ──
   const p = await live.probe();
   const status = {
-    live: `<div class="mdst ok"><b>實機連線正常</b>
-             <div>讀到 ${p.total} 根軸的位置${
-               p.estimated ? ` ・ 其中 ${p.estimated} 根是推估值` : ''}${
-               p.offline ? ` ・ ${p.offline} / ${p.devices} 台裝置不在線上` : ''}</div></div>`,
-    mock: `<div class="mdst warn"><b>抓不到實機 —— 現在是模擬位置</b>
-             <div>沒有連到天車控制中心,畫面上的數字是算出來的,不是量到的。
-             要接實機請在 <code>.env</code> 設 <code>ACQUA_SETUP_CONTROLLER</code>。</div></div>`,
-    error: `<div class="mdst bad"><b>讀不到位置</b>
+    live: `<div class="mdst ok"><b>Connected to the hardware</b>
+             <div>Read ${p.total} axes${
+               p.estimated ? ` - ${p.estimated} estimated` : ''}${
+               p.offline ? ` - ${p.offline} of ${p.devices} devices offline` : ''}</div></div>`,
+    mock: `<div class="mdst warn"><b>No hardware - showing simulated positions</b>
+             <div>Not connected to the crane controller, so these numbers are computed, not measured.
+             Set <code>ACQUA_SETUP_CONTROLLER</code> in <code>.env</code> to use real hardware.</div></div>`,
+    error: `<div class="mdst bad"><b>Cannot read positions</b>
              <div>${esc(p.error || '')}</div></div>`,
   }[p.state];
 
   return confirmBox({
-    title: '要切換到「即時模式」嗎?',
+    title: 'Switch to Live mode?',
     html: `
       ${status}
       <div class="mdsw live">
-        <div class="r"><i>📡</i><span>3D 改成顯示<b>實機回報的位置</b>,不再是你畫的</span></div>
-        <div class="r"><i>🎚️</i><span>拉桿變成<b>提出移動目標</b>,放手後會再問一次才動</span></div>
-        <div class="r"><i>🚫</i><span>滑鼠<b>拖曳物件會關閉</b>(視角照常可以轉)</span></div>
+        <div class="r"><i>📡</i><span>The 3D view switches to <b>what the hardware reports</b></span></div>
+        <div class="r"><i>🎚️</i><span>Sliders <b>propose a target</b> - you are asked again before it moves</span></div>
+        <div class="r"><i>🚫</i><span>Dragging objects is <b>turned off</b> (you can still orbit)</span></div>
       </div>
-      ${p.busy ? '<div class="bxnote warn">機構<b>現在正在移動</b>。</div>' : ''}
+      ${p.busy ? '<div class="bxnote warn">The hardware is <b>moving right now</b>.</div>' : ''}
       ${p.state === 'error'
-        ? '<div class="bxnote warn">還是可以切過去,但在讀到位置之前畫面不會更新。</div>'
+        ? '<div class="bxnote warn">You can still switch, but nothing updates until a position is read.</div>'
         : ''}`,
-    ok: '切換到即時模式', cancel: '取消',
+    ok: 'Switch to Live', cancel: 'Cancel',
   });
 }
 
@@ -573,7 +573,7 @@ async function setMode(next, { remember = true, ask = false } = {}) {
   // 機構正在動的時候不准切走 —— 切到設定模式會讓拉桿又變成「直接改 3D」,
   // 畫面就跟實際位置脫節了,而機構還在跑。
   if (mode === 'live' && next !== 'live' && live.busy) {
-    toast('機構還在移動,等它走完再切模式', 'warn');
+    toast('The hardware is still moving - wait for it to finish', 'warn');
     return;
   }
   if (ask && !(await askSwitch(next))) {
@@ -629,9 +629,9 @@ if (wantSetup) {
     mode = 'setup';
     applyToScene(s, controls);
     editing = s;
-    toast(`已載入「${s.name}」`);
+    toast(`Loaded "${s.name}"`);
   } else {
-    toast('找不到那個擺位', 'bad');
+    toast('That position no longer exists', 'bad');
   }
 }
 
@@ -644,7 +644,7 @@ await setMode(mode, { remember: false });
 
 if (wantApply) {
   const s = setupCache.find((x) => x.id === wantApply);
-  if (!s) toast('找不到那個擺位', 'bad');
+  if (!s) toast('That position no longer exists', 'bad');
   else live.applySetup(s.axes || {}, s.name);
 }
 

@@ -183,12 +183,12 @@ export const SPEC = {
 
     items: [
       {
-        key: 'tableFront', label: '前方 DUT 升降台',
+        key: 'tableFront', label: 'Front DUT lift',
         lift: { test: 0.90, min: 0.40, max: 2.30 },     // [規格] 測試 0.9,最高 2.3
         travelZ: { min: 0.55, max: 2.00, default: 1.35 },   // [推估]
       },
       {
-        key: 'tableBack', label: '後方 Dixie 升降台',
+        key: 'tableBack', label: 'Rear Dixie lift',
         lift: { test: 1.20, min: 0.40, max: 2.30 },     // [規格] 測試 1.2,最高 2.3
         travelZ: { min: -2.00, max: -0.55, default: -0.95 },  // [推估]
       },
@@ -222,13 +222,13 @@ export const SPEC = {
 
     items: [
       {
-        key: 'micRig1', label: '麥克風吊架 1',
+        key: 'micRig1', label: 'Mic rig 1',
         travelX: { min: -1.10, max: 1.10, default: -0.35 },   // [推估]
         travelZ: { min: -1.30, max: 1.70, default: 0.55 },    // [推估]
         heightDefault: 0.95,      // [規格]
       },
       {
-        key: 'micRig2', label: '麥克風吊架 2',
+        key: 'micRig2', label: 'Mic rig 2',
         travelX: { min: -1.10, max: 1.10, default: 0.40 },    // [推估]
         travelZ: { min: -1.30, max: 1.70, default: -0.35 },   // [推估]
         heightDefault: 1.25,      // [規格]

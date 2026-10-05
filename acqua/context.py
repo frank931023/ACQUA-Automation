@@ -55,6 +55,9 @@ UNSCOPED = frozenset({
     "blocking_window",
     # ACQUA 全域設定(實測:硬體設定是跨專案共用的)
     "hardware_settings", "hardware_active",
+    # labCORE 的麥克風供電 —— 是機器層級的狀態,跟專案無關。
+    # 由工作執行緒閒置時更新,路由只讀這份快取(不排佇列,量測中也要能讀)。
+    "mic_power",
     # 來自 config.json,不是從資料庫算的
     "wizard_scopes",
     # 純衍生 / 傳輸用

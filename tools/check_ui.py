@@ -24,6 +24,7 @@
 """
 from __future__ import annotations
 
+import ast
 import io
 import os
 import re
@@ -379,6 +380,138 @@ check("有上一頁 / 下一頁", 'id="pg-prev"' in pl_html and 'id="pg-next"' i
 check("顯示目前第幾頁", "Page ${page} of ${pages}" in pl_html)
 check("換搜尋或排序會回第一頁", pl_html.count("page = 1;") >= 3)
 check("過濾後頁數縮水會自動修正", "if (page > pages) page = pages;" in pl_html)
+
+
+print("\n=== M. 擺位選擇與 3D 頁語言 ===")
+_pl2 = read("templates/plans.html")
+# 擺位要從「Setup list」存好的那些挑 —— 自己打字打出來的名字對不到任何
+# 真實擺位,將來接上 Raspberry Pi 時送不出去。
+check("擺位是下拉選單不是自由輸入",
+      'id="su-pick"' in _pl2 and 'id="su-name"' not in _pl2)
+check("選單來源是存好的擺位", "/api/room/setups" in _pl2)
+check("有「未設定」的空白選項", '<option value="">(not set)</option>' in _pl2)
+check("計畫存的是 setup_id 不只是名字",
+      "setup_id" in _pl2 and "setup_id" in read("acqua/testplans.py"))
+# 加進序列時沒設擺位要提醒 —— 不硬擋(第一步本來就不需要移動治具),
+# 但沉默地加進去會讓人以為中間會自動移動。
+check("加進序列前會檢查擺位", "function addToSeq" in _pl2)
+check("沒設擺位會跳提醒", 'id="nosetupov"' in _pl2)
+check("提醒可直接去選擺位", 'id="ns-pick"' in _pl2)
+check("提醒可選擇照樣加入", 'id="ns-anyway"' in _pl2)
+
+# 3D 頁與機構相關的介面文字一律英文(註解維持中文)
+_cjk = re.compile(r"[一-鿿]")
+
+
+def visible_cjk(path, web=True):
+    """排除註解之後,還有沒有使用者看得到的中文。"""
+    src = read(path)
+    src = re.sub(r"/\*(?:.|\n)*?\*/",
+                 lambda m: "\n" * m.group(0).count("\n"), src)
+    src = re.sub(r"(?m)^\s*//.*$", "", src)
+    src = re.sub(r"(?m)\s//\s.*$", "", src)
+    src = re.sub(r"\{#(?:.|\n)*?#\}",
+                 lambda m: "\n" * m.group(0).count("\n"), src)
+    src = re.sub(r"<!--(?:.|\n)*?-->",
+                 lambda m: "\n" * m.group(0).count("\n"), src)
+    if not web:          # Python:docstring 也是註解
+        src = re.sub(r'"""(?:.|\n)*?"""',
+                     lambda m: "\n" * m.group(0).count("\n"), src)
+        src = re.sub(r"(?m)#.*$", "", src)
+    return [l.strip() for l in src.split("\n") if _cjk.search(l)]
+
+
+for _f in ["templates/soundproofroom.html"] + \
+        ["soundproofroom/src/%s" % f
+         for f in sorted(os.listdir(os.path.join(ROOT, "soundproofroom", "src")))
+         if f.endswith(".js")]:
+    _left = visible_cjk(_f)
+    check("%s 介面全英文" % os.path.basename(_f), not _left,
+          "%d 行還有中文:%s" % (len(_left), (_left[0][:40] if _left else "")))
+for _f in ("acqua/crane.py", "acqua/roomsetups.py"):
+    _left = visible_cjk(_f, web=False)
+    check("%s 的使用者字串全英文" % os.path.basename(_f), not _left,
+          "%d 行:%s" % (len(_left), (_left[0][:40] if _left else "")))
+
+
+print("\n=== L. 非阻塞與二次確認 ===")
+# 核心承諾:按下執行就可以走人。工作執行緒是單執行緒,量測一跑起來
+# 佇列就塞住 —— 任何「要排進佇列才能回答」的唯讀 API 都會卡到量測結束,
+# 整個網頁看起來像當掉。實測 /api/mic-power 走佇列時卡滿 20 秒。
+_app = read("app.py")
+_idx = read("templates/index.html")
+_plans = read("templates/plans.html")
+_uih = read("templates/_ui.html")
+
+
+_ROUTES = {}            # 路徑 -> 函式節點
+for _n in ast.walk(ast.parse(_app)):
+    if not isinstance(_n, ast.FunctionDef):
+        continue
+    for _d in _n.decorator_list:
+        if (isinstance(_d, ast.Call) and _d.args
+                and isinstance(_d.args[0], ast.Constant)
+                and isinstance(_d.args[0].value, str)):
+            _ROUTES.setdefault(_d.args[0].value, _n)
+
+
+def queues_a_command(node):
+    """這段程式有沒有把命令排進工作佇列?"""
+    for x in ast.walk(node):
+        if isinstance(x, ast.Call) and isinstance(x.func, ast.Name):
+            if x.func.id == "_cmd":
+                return True
+        if isinstance(x, ast.Attribute) and x.attr == "submit":
+            return True
+    return False
+
+
+def get_branch(node):
+    """GET/POST 共用的路由只取 GET 那一段;GET-only 的回整個函式。
+
+    POST 走佇列是對的(寫入要序列化),量測中被擋下也是預期行為 ——
+    真正不能排隊的是 GET。
+    """
+    for x in ast.walk(node):
+        if isinstance(x, ast.If) and "GET" in ast.dump(x.test):
+            return x.body
+    return [node]
+
+
+# 這些在量測進行中必須照常回應 —— 佇列被量測塞住時還要能回答。
+for _p in ("/api/status", "/api/health", "/api/plans", "/api/mic-power",
+           "/api/blocking", "/api/status-codes", "/api/last-run"):
+    _fn = _ROUTES.get(_p)
+    _ok = _fn is not None and not any(queues_a_command(b) for b in get_branch(_fn))
+    check("%s 的 GET 不排進工作佇列" % _p, _ok,
+          "找不到這個路由" if _fn is None else "")
+
+check("量測中不准關閉服務", "A test is running" in _app)
+check("量測中不准改麥克風供電", _app.count("A test is running") >= 2)
+
+# 嚴重且不可逆的動作要二次確認。用兩段式而不是 confirm() ——
+# confirm() 會擋住整個分頁,而這些按鈕常出現在量測正在跑的時候。
+check("有共用的二次確認 helper", "window.armConfirm" in _uih)
+check("主頁兩顆停止都要確認",
+      _idx.count("armConfirm($('#r-stop')") == 1
+      and _idx.count("armConfirm($('#btn-cancel')") == 1)
+check("序列頁兩顆停止都要確認", _plans.count("armConfirm(") >= 2)
+check("刪除計畫要打完整名稱", "delName" in _plans or "完整打一次" in _plans)
+check("清除殘留要確認", "confirm(" in read("templates/_nav.html"))
+
+# 縮小 / 還原:量測照跑,而且要回得去
+check("主頁可縮小到右下角", "#r-hide" in _idx and "#mini" in _idx)
+check("主頁小視窗可展開回大框", "#mini-head" in _idx)
+check("Esc 與點背景等於縮小(註冊在最外層)",
+      _idx.count("$('#runov').addEventListener('click'") == 1
+      and "$('#r-hide').onclick();" in _idx)
+check("跨頁進度視窗存在", os.path.exists(
+    os.path.join(ROOT, "templates", "_runmini.html")))
+check("小視窗點一下回到原本的視窗", "__miniRestore" in read("templates/_runmini.html")
+      and "__miniRestore" in _plans)
+
+check("有非阻塞的實測腳本",
+      os.path.exists(os.path.join(ROOT, "tools", "test_nonblocking.py")))
 
 
 print("\n=== K. 麥克風供電 ===")

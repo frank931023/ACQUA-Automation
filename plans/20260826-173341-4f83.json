@@ -3,7 +3,7 @@
   "created": "2026-08-26T17:33:41",
   "title": "crossdataset-test-3",
   "description": "",
-  "updated": "2026-08-26T17:33:41",
+  "updated": "2026-10-05T17:54:07",
   "items": [
     {
       "row_id": 3579,
@@ -59,8 +59,9 @@
   },
   "manual_excluded": [],
   "setup": {
+    "setup_id": "",
     "name": "",
-    "note": "",
+    "note": "from dropdown",
     "params": {},
     "_note": "尚未自動化:目前只會在序列中間停下來提示人工調整"
   }

@@ -55,28 +55,28 @@
      padding:40px;font:14px/1.8 Consolas,monospace;white-space:pre-wrap;z-index:999"></div>
 <script>
 window.addEventListener('error', (e) => {
-  if (e.target && e.target.tagName === 'SCRIPT') showErr('腳本載入失敗:' + e.target.src);
+  if (e.target && e.target.tagName === 'SCRIPT') showErr('Script failed to load: ' + e.target.src);
 }, true);
 window.addEventListener('unhandledrejection', (e) =>
-  showErr('模組載入失敗:' + (e.reason && e.reason.message ? e.reason.message : e.reason)));
+  showErr('Module failed to load: ' + (e.reason && e.reason.message ? e.reason.message : e.reason)));
 function showErr(msg) {
   var el = document.getElementById('err');
   el.style.display = 'block';
-  el.textContent = '無法載入 three.js
+  el.textContent = 'Could not load three.js
 
 ' + msg +
     '
 
-這頁是「免 build 模式」,需要連得到 unpkg.com。
+This page runs in no-build mode and needs access to unpkg.com.
 ' +
-    '離線環境請改用 Vite 打包:
+    'Offline? Build it with Vite instead: 
 
   cd soundproofroom
   npm install
   npm run build
 
 ' +
-    'build 完重新整理就會自動改用本機檔案。';
+    'after building, reload and it will use the local files.';
 }
 </script>
 <script type="module" src="/soundproofroom/src/main.js"></script>

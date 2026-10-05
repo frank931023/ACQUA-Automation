@@ -182,16 +182,41 @@
 </div>
 
 <!-- setup 位置設定 -->
+<!-- 加進序列時沒設擺位的提醒。
+     不是硬擋 —— 序列的第一步本來就不需要移動治具,所以「照樣加入」
+     是合理選項。但沉默地加進去會讓人以為中間會自己移動。 -->
+<div class="ov" id="nosetupov">
+  <div class="bx">
+    <h3>No position set</h3>
+    <p class="hint" id="ns-plan"></p>
+    <p>This plan has no setup position. The sequence will pause here and wait
+       for someone to move the hardware by hand.</p>
+    <p class="hint">The first step usually needs no position — the hardware is
+       already where you left it.</p>
+    <div class="acts">
+      <button class="primary" id="ns-pick">Choose a position</button>
+      <button id="ns-anyway">Add anyway</button>
+      <button id="ns-cancel">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <div class="ov" id="setupov">
   <div class="bx">
     <h3>Setup position</h3>
     <div class="hint" id="su-plan"></div>
-    <label>Name<input type="text" id="su-name" placeholder="e.g. 0° / 1m / table centre"></label>
+    <!-- 擺位是從「Setup list」存好的那些挑,不是自己打字 ——
+         打字打出來的名字對不到任何真實擺位,送不去實機。 -->
+    <label>Position
+      <select id="su-pick"><option value="">(not set)</option></select></label>
+    <p class="hint" id="su-hint"></p>
     <label>Note<input type="text" id="su-note" placeholder="Optional"></label>
     <div class="acts">
       <button class="primary" id="su-save">Save</button>
       <button id="su-cancel">Cancel</button>
     </div>
+    <p class="hint">Positions are created on the
+      <a href="/setups" target="_blank">Setup list</a> page.</p>
   </div>
 </div>
 
@@ -540,9 +565,7 @@ async function fillMoSelects() {
 $('#list').addEventListener('click', async (e) => {
   const b = e.target.closest('button');
   if (!b) return;
-  if (b.dataset.add) {
-    seq.push(newStep(b.dataset.add)); saveSeq(); render(); return;
-  }
+  if (b.dataset.add) { addToSeq(b.dataset.add); return; }
   if (b.dataset.detail) { openDetail(b.dataset.detail); return; }
   if (b.dataset.setup) { openSetup(b.dataset.setup); return; }
   if (b.dataset.del) { openDelete(b.dataset.del); return; }
@@ -733,22 +756,94 @@ $('#btn-clear').onclick  = () => { seq = []; saveSeq(); render(); };
 
 // ── setup 位置 ────────────────────────────────
 let setupId = null;
-function openSetup(id) {
+/** 加進執行序列。沒設擺位的話先提醒一次。
+
+    不硬擋的理由:序列的第一步不需要移動治具(機構就停在上次的位置),
+    所以「照樣加入」是合理的。但沉默地加進去會讓人以為中間會自動移動,
+    結果跑到那一步才發現只是停著等人。 */
+let pendingAdd = null;
+
+function addToSeq(id) {
+  const p = byId(id);
+  if (p && !(p.setup && (p.setup.setup_id || p.setup.name))) {
+    pendingAdd = id;
+    $('#ns-plan').textContent = p.title;
+    $('#nosetupov').classList.add('on');
+    return;
+  }
+  seq.push(newStep(id)); saveSeq(); render();
+}
+
+$('#ns-anyway').onclick = () => {
+  $('#nosetupov').classList.remove('on');
+  if (pendingAdd) { seq.push(newStep(pendingAdd)); saveSeq(); render(); }
+  pendingAdd = null;
+};
+$('#ns-cancel').onclick = () => {
+  $('#nosetupov').classList.remove('on');
+  pendingAdd = null;
+};
+$('#ns-pick').onclick = () => {
+  const id = pendingAdd;
+  $('#nosetupov').classList.remove('on');
+  pendingAdd = null;
+  if (id) openSetup(id);
+};
+
+// 存好的擺位清單。開這個視窗時抓一次就好 —— 它不常變,
+// 而且抓不到也不該讓視窗開不起來(頂多只剩「(not set)」可選)。
+let roomSetups = [];
+
+async function loadRoomSetups() {
+  try {
+    const d = await (await fetch('/api/room/setups')).json();
+    roomSetups = d.setups || [];
+  } catch (e) { roomSetups = []; }
+}
+
+function describeSetup(s) {
+  return `${s.count || 0} axes` + (s.description ? ' · ' + s.description : '');
+}
+
+async function openSetup(id) {
   const p = byId(id); if (!p) return;
   setupId = id;
   const su = p.setup || {};
   $('#su-plan').textContent = p.title;
-  $('#su-name').value = su.name || '';
   $('#su-note').value = su.note || '';
+
+  await loadRoomSetups();
+  const sel = $('#su-pick');
+  sel.innerHTML = '<option value="">(not set)</option>'
+    + roomSetups.map(s =>
+        `<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('');
+  // 計畫存的是 setup_id;舊資料只有 name,用名字回頭對一次。
+  const match = su.setup_id
+    || (roomSetups.find(s => s.name === su.name) || {}).id || '';
+  sel.value = match;
+  showSetupHint();
   $('#setupov').classList.add('on');
-  $('#su-name').focus();
+  sel.focus();
 }
+
+function showSetupHint() {
+  const s = roomSetups.find(x => x.id === $('#su-pick').value);
+  $('#su-hint').textContent = s ? describeSetup(s)
+    : (roomSetups.length ? 'Nothing selected — the sequence will just pause here.'
+                         : 'No positions saved yet.');
+}
+$('#su-pick').onchange = showSetupHint;
+
 $('#su-cancel').onclick = () => $('#setupov').classList.remove('on');
 $('#su-save').onclick = async () => {
+  const picked = roomSetups.find(s => s.id === $('#su-pick').value);
   await fetch('/acqua/api/plans/' + encodeURIComponent(setupId), {
     method: 'POST', headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({setup: {name: $('#su-name').value.trim(),
-                                  note: $('#su-note').value.trim()}}),
+    body: JSON.stringify({setup: {
+      setup_id: picked ? picked.id : '',
+      name: picked ? picked.name : '',
+      note: $('#su-note').value.trim(),
+    }}),
   });
   $('#setupov').classList.remove('on');
   await loadPlans();
@@ -822,11 +917,15 @@ function beep() {
 
 // ── 執行 ──────────────────────────────────────
 $('#btn-run').onclick = runSeq;
-$('#btn-stop').onclick = $('#r-stop').onclick = async () => {
+// 中止要二次確認 —— 序列可能已經跑了幾個小時,誤觸等於整串作廢。
+// 用兩段式而不是 confirm(),不會把正在跑的畫面卡住。
+async function stopSequence() {
   abort = true;
   await fetch('/acqua/api/cancel', {method: 'POST'});
-  log('Stop requested');
-};
+  log('Stop requested — the sequence ends after the current item');
+}
+armConfirm($('#btn-stop'), stopSequence, {label: 'Stop the sequence?'});
+armConfirm($('#r-stop'), stopSequence, {label: 'Stop the sequence?'});
 $('#r-hide').onclick = () => {
   // 「縮小」只是把大框收起來,序列照跑 —— 右下角那個小視窗接手。
   // 點小視窗就會叫這個函式把大框放回來。

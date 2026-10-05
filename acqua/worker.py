@@ -74,6 +74,8 @@ class AcquaWorker(threading.Thread):
         #: 不主動去碰 COM(量測跑起來時佇列是塞住的)。
         self.last_pump_ok = 0.0
         self.last_pump_error = None
+        #: 麥克風供電快取上次更新的時間(見 _refresh_mic_cache)
+        self._mic_cache_at = 0.0
 
     # ── 給 Flask 執行緒呼叫 ──────────────────────────
     def submit(self, _name: str, **kwargs) -> Command:
@@ -139,6 +141,30 @@ class AcquaWorker(threading.Thread):
     def stop(self):
         self._stop_event.set()
 
+    # ── 麥克風供電的快取 ────────────────────────────
+    #
+    # ⚠️ 為什麼要快取,不讓路由直接去問:
+    #    工作執行緒是單執行緒,所有 COM 命令排同一個佇列。量測一跑起來
+    #    佇列就塞住,任何「要排進佇列才能回答」的 API 都會卡到量測結束。
+    #    實測 /api/mic-power 走佇列時,量測中會卡滿 20 秒才逾時 ——
+    #    那會讓整個網頁看起來像當掉,也就破壞了「按下執行可以走人」。
+    #
+    #    所以改成:閒置時由這條執行緒自己更新快取,路由只讀快取,
+    #    永遠不會被擋住。量測進行中供電不會變(ACQUA 不碰它,而寫入
+    #    在量測中本來就被擋),所以快取不會騙人。
+    _MIC_CACHE_EVERY = 5.0
+
+    def _refresh_mic_cache(self):
+        now = time.monotonic()
+        if now - self._mic_cache_at < self._MIC_CACHE_EVERY:
+            return
+        self._mic_cache_at = now
+        try:
+            self.state.set(mic_power=self.backend.mic_power())
+        except Exception as exc:                            # noqa: BLE001
+            self.state.set(mic_power={"available": False,
+                                      "error": str(exc)[:160]})
+
     # ── 工作執行緒本體 ──────────────────────────────
     def run(self):
         try:
@@ -165,6 +191,7 @@ class AcquaWorker(threading.Thread):
                 except Exception as exc:               # noqa: BLE001
                     self.last_pump_error = str(exc)[:200]
                     self.state.log(f"訊息幫浦錯誤:{exc}", "error")
+                self._refresh_mic_cache()
                 continue
 
             self._running_cmd = cmd.name

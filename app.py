@@ -1162,12 +1162,24 @@ def api_mic_power():
     實測 2026-09-21 確認過。那一塊沒有別人管,只能我們管。
     """
     if request.method == "GET":
-        return _cmd("mic_power", timeout=60)
+        # ⚠️ **不排進工作佇列。** 量測跑起來佇列就塞住,走佇列的話這支會
+        #    卡到量測結束(實測卡滿 20 秒逾時)—— 那會讓整個網頁看起來
+        #    像當掉。改讀工作執行緒閒置時更新的快取,見 worker 的
+        #    _refresh_mic_cache。量測中供電不會變,所以快取不會騙人。
+        snap = state.snapshot()
+        return jsonify(ok=True, result=snap.get("mic_power") or
+                       {"available": False, "pair": None, "routed": []})
+
     body = request.get_json(silent=True) or {}
     pair = str(body.get("pair") or "").strip()
     if pair not in ("1-2", "3-4"):
         return jsonify(ok=False,
                        error="pair must be '1-2' or '3-4'"), 400
+    # 量測中不給改 —— 改了會讓這一批的前後半段用不同的供電狀態,
+    # 而且要排隊等到結束,等於卡住。快速擋下比默默等好。
+    if state.running or (worker and worker.busy()):
+        return jsonify(ok=False, running=True,
+                       error="A test is running - stop it first"), 409
     return _cmd("set_mic_power", timeout=60, pair=pair)
 
 

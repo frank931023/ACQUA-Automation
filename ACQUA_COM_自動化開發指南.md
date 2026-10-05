@@ -973,6 +973,53 @@ int main() {
 
 ---
 
+## 11b. ⭐ 硬體控制:CHM 完全沒提的那組 COM(2026-09~10 實測)
+
+`Acqua3COM.chm` 那 137 個主題裡**沒有任何硬體 API**,所以很容易下錯結論說
+「硬體只能人工操作」。實際上機器上還註冊了另一組**沒有文件**的程式庫:
+
+```
+MfeControlLib.LabCoreControl   -> MfeControl.exe（546 個型別)
+  .Items(0).AudioWiring.Blocks   83 個區塊
+     mic|0|      type=9   = ACQUA「labCORE選項 / 麥克風選項」那個畫面
+     usbaudio|0| type=16  = 「USB Audio Host Settings」那個視窗
+```
+
+另外 `Acqua3` 自己其實也有一條,只是埋在 `IProjectSelected` 底下:
+
+```
+project.MeasurementEngine.HardwareConfig.Settings
+   .ActiveSetting      可讀**可寫** —— 直接拿到/切換硬體設定的名稱
+   .Count / .Names(i) / .SaveDates(i)
+```
+
+### 誰管哪一塊(實測結論)
+
+| | ACQUA 會自動設嗎 |
+|---|---|
+| `Connections` 接線路由 | ✅ 量測開始套用該 MMD 宣告的那組,結束還原 |
+| `MicCardSettings` 供電 / 極化電壓 | ❌ 完全不碰 |
+| `usbaudio` USB 音訊參數 | ❌ 完全不碰 |
+
+「該用哪一組」記在 SQL 的 `MMDSettings`,型別 14 = `Hardware_Configuration_Setting`。
+
+### 測這件事的兩個陷阱
+
+1. **一定要用 `Record` 類測項測。** 用 `Analy.`(分析)類會得到假陰性 ——
+   分析處理的是已錄好的資料,不碰音訊硬體,ACQUA 沒有理由為它配置。
+2. **要看的不只是接線。** 一組設定有三塊,只監控接線會以為「ACQUA 全都管了」。
+
+### 為什麼供電那塊非管不可
+
+實測:把 Ch1&2 的極化電壓關掉再跑 `Record` 測項 —— 整場量測 ACQUA 沒有改回來,
+而那筆結果回報 **`code=1 PASS`**。訊號接到沒供電的通道上不會有任何警告。
+
+載入 `Teams_chamber_v5` 時更明顯:ACQUA 把路由跳到**通道 4**,供電卻留在 Ch1&2。
+
+實作在 `acqua/labcore.py`,`labcore.mismatch()` 可以算出這種不一致。
+
+---
+
 ## 11. ⭐ CHM 之外的三條路(2026-08-10 新增)
 
 CHM 只涵蓋 `Acqua3` 一個 TypeLib。實際做自動化會用到的東西,有一大半不在裡面。

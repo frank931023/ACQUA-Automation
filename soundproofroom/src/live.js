@@ -30,11 +30,11 @@ const POST = (u, body) => jsonFetch(u, {
 
 /** 裝置三態 → 給人看的字(跟天車控制中心的徽章一致) */
 const DEV_TEXT = {
-  online: ['ok', '連接中'],
-  'no-arduino': ['warn', 'Arduino 未接'],
-  offline: ['bad', '離線'],
-  missing: ['bad', '控制中心沒這台'],
-  unknown: ['warn', '未知'],
+  online: ['ok', 'Online'],
+  'no-arduino': ['warn', 'No Arduino'],
+  offline: ['bad', 'Offline'],
+  missing: ['bad', 'Not on controller'],
+  unknown: ['warn', 'Unknown'],
 };
 
 /** 指數趨近的速率(1/秒)。時間常數 ≈ 1/9 s,也就是每 110 ms 追掉約 2/3 的
@@ -138,7 +138,7 @@ export function createLive({ controls, applyToScene, statusHost }) {
     if (!statusHost) return;
     if (snap?.error) {
       statusHost.innerHTML = `<div class="lv bad">
-        <b>讀不到位置</b><div class="sub">${esc(snap.error)}</div></div>`;
+        <b>Cannot read positions</b><div class="sub">${esc(snap.error)}</div></div>`;
       return;
     }
     const parts = [];
@@ -146,10 +146,10 @@ export function createLive({ controls, applyToScene, statusHost }) {
     // 後端種類 —— 「我以為在看實機,其實是模擬的」是這頁最貴的誤會,
     // 所以模擬模式一定要在最上面講出來,而且不能是灰字小字。
     parts.push(snap?.kind === 'mock'
-      ? `<div class="lv warn"><b>模擬位置</b><div class="sub">
-           沒有連到天車控制中心,這些數字是算出來的。要接實機請在
-           <code>.env</code> 設 <code>ACQUA_SETUP_CONTROLLER</code>。</div></div>`
-      : `<div class="lv ok"><b>實機連線</b><div class="sub">位置由天車控制中心回報</div></div>`);
+      ? `<div class="lv warn"><b>Simulated positions</b><div class="sub">
+           Not connected to the crane controller - these numbers are computed. Set
+           <code>ACQUA_SETUP_CONTROLLER</code> in <code>.env</code> to use real hardware.</div></div>`
+      : `<div class="lv ok"><b>Connected</b><div class="sub">Positions reported by the crane controller</div></div>`);
 
     // 裝置狀態
     const devs = Object.entries(snap?.devices || {});
@@ -158,11 +158,11 @@ export function createLive({ controls, applyToScene, statusHost }) {
       parts.push(`<div class="devs">${devs.map(([pi, d]) => {
         const [cls, text] = DEV_TEXT[d.status] || DEV_TEXT.unknown;
         return `<span class="dev ${cls}" title="${esc(pi)} — ${esc(text)}${
-          d.note ? ' ・ ' + esc(d.note) : ''}">${esc(pi.replace(/^pi-/, ''))}</span>`;
+          d.note ? ' - ' + esc(d.note) : ''}">${esc(pi.replace(/^pi-/, ''))}</span>`;
       }).join('')}</div>`);
       if (bad.length) {
-        parts.push(`<div class="lvnote">${bad.length} 台裝置不在線上 ——
-          那些軸移不動。連不上的原因請看天車控制中心那一頁。</div>`);
+        parts.push(`<div class="lvnote">${bad.length} devices offline -
+          those axes cannot move. See the crane controller page for why.</div>`);
       }
     }
 
@@ -172,32 +172,32 @@ export function createLive({ controls, applyToScene, statusHost }) {
       const step = job.steps[job.index] || job.steps[job.steps.length - 1];
       const pct = Math.round((job.index / job.steps.length) * 100);
       parts.push(`<div class="lv job">
-        <b>${job.state === 'aborting' ? '正在收尾' : '移動中'}</b>
+        <b>${job.state === 'aborting' ? 'Stopping' : 'Moving'}</b>
         <div class="sub">${esc(step?.label || '')}
           ${step ? `${fmt.by(step.unit)(step.from)} → ${fmt.by(step.unit)(step.to)}` : ''}</div>
         <div class="pb"><i style="width:${pct}%"></i></div>
         <div class="sub">${job.steps.length > 1
-          ? `第 ${job.index + 1} / ${job.steps.length} 根軸 ・ ` : ''}
-          預估共 ${fmt.secs(job.eta)}</div>
-        <button class="wide danger" id="lv-stop">停止後續動作</button>
-        <div class="sub">停止只會取消還沒送出去的軸。<b>正在走的那一段機構會走完</b> ——
-          韌體沒有中止指令。</div>
+          ? `Axis ${job.index + 1} of ${job.steps.length} - ` : ''}
+          about ${fmt.secs(job.eta)} total</div>
+        <button class="wide danger" id="lv-stop">Stop remaining moves</button>
+        <div class="sub">This only cancels axes not yet sent. <b>The axis currently moving will finish</b> -
+          the firmware has no abort command.</div>
       </div>`);
     } else if (job && job.state === 'error') {
-      parts.push(`<div class="lv bad"><b>移動失敗</b>
+      parts.push(`<div class="lv bad"><b>Move failed</b>
         <div class="sub">${esc(job.error || '')}</div></div>`);
     } else if (job && job.state === 'aborted') {
-      parts.push(`<div class="lv warn"><b>已中止</b>
+      parts.push(`<div class="lv warn"><b>Stopped</b>
         <div class="sub">${job.steps.filter((s) => s.state === 'skipped').length}
-          根軸沒有移動</div></div>`);
+          axes did not move</div></div>`);
     }
 
     // 行程對不對得上 —— 後端與 spec.js 各存一份,不一致要看得見
     if (manifest?.mismatch?.length) {
-      parts.push(`<div class="lv bad"><b>行程設定不一致</b><div class="sub">
+      parts.push(`<div class="lv bad"><b>Travel limits disagree</b><div class="sub">
         ${manifest.mismatch.map(esc).join('<br>')}<br>
-        3D 的 <code>spec.js</code> 與後端 <code>acqua/crane.py</code> 對不上。
-        實際會以後端為準(機構安全)。</div></div>`);
+        The 3D <code>spec.js</code> and the backend <code>acqua/crane.py</code> disagree.
+        The backend wins, for mechanical safety.</div></div>`);
     }
 
     statusHost.innerHTML = parts.join('');
@@ -213,11 +213,11 @@ export function createLive({ controls, applyToScene, statusHost }) {
   async function requestMove(id, target) {
     const c = controls[id];
     const cur = wanted[id];
-    if (cur === undefined) { toast('還沒讀到這根軸的位置', 'bad'); return; }
+    if (cur === undefined) { toast('No position read for this axis yet', 'bad'); return; }
     if (Math.abs(target - cur) < 1e-4) return;
 
     if (snap?.job && ['running', 'aborting'].includes(snap.job.state)) {
-      toast('已經有軸在移動,等它走完', 'warn');
+      toast('An axis is already moving - wait for it to finish', 'warn');
       c.el.value = cur; paint(); return;
     }
 
@@ -229,7 +229,7 @@ export function createLive({ controls, applyToScene, statusHost }) {
     pendingId = id;
     paint();
     const yes = await confirmBox({
-      title: '確定要移動這個裝置嗎?',
+      title: 'Move this device?',
       html: `
         <div class="mv">
           <div class="mvname">${esc(c.label)}</div>
@@ -239,19 +239,19 @@ export function createLive({ controls, applyToScene, statusHost }) {
             <span class="to">${f(target)}</span>
           </div>
           <div class="mvmeta">
-            移動距離 <b>${c.unit === 'deg' ? dist.toFixed(1) + '°'
+            Distance <b>${c.unit === 'deg' ? dist.toFixed(1) + '°'
               : (dist * 1000).toFixed(0) + ' mm'}</b>
-            ${secs !== null ? ` ・ 預估 <b>${fmt.secs(secs)}</b>` : ''}
-            ${ax ? ` ・ 裝置 <b>${esc(ax.pi)}</b>` : ''}
+            ${secs !== null ? ` - about <b>${fmt.secs(secs)}</b>` : ''}
+            ${ax ? ` - device <b>${esc(ax.pi)}</b>` : ''}
           </div>
-          ${ax ? `<div class="mvcmd">送出的指令:<code>${esc(ax.ch)}M,${
+          ${ax ? `<div class="mvcmd">Command sent: <code>${esc(ax.ch)}M,${
             ax.unit === 'deg' ? Math.round(target)
               : Math.round((target - ax.min) * 1000)}</code></div>` : ''}
         </div>
-        <div class="bxnote warn">機構會真的動起來。按下確定之後<b>沒有辦法中途叫停</b> ——
-          韌體沒有中止指令,只能等它走完。先確認行程上沒有人、沒有線材。</div>`,
-      ok: '確定,開始移動',
-      cancel: '不要動',
+        <div class="bxnote warn">The hardware will actually move. Once you confirm there is <b>no way to stop it part way</b> -
+          the firmware has no abort command. Check the path is clear of people and cables first.</div>`,
+      ok: 'Move now',
+      cancel: 'Do not move',
     });
     pendingId = null;
 
@@ -259,7 +259,7 @@ export function createLive({ controls, applyToScene, statusHost }) {
 
     const r = await POST('/api/room/move', { axis: id, target });
     if (!r.ok) {
-      toast(r.error || '移動指令送不出去', 'bad');
+      toast(r.error || 'Could not send the move command', 'bad');
       c.el.value = cur;
     }
     poll();     // 馬上刷一次,讓進度條立刻出現而不是等到下一輪
@@ -267,15 +267,15 @@ export function createLive({ controls, applyToScene, statusHost }) {
 
   async function doStop() {
     const yes = await confirmBox({
-      title: '停止後續動作?',
-      html: `<div class="bxnote warn">只會取消<b>還沒送出去</b>的那幾根軸。
-        <b>正在走的那一段機構會走完</b> —— 韌體沒有中止指令。
-        真的要立刻停下來只能斷電。</div>`,
-      ok: '停止後續動作', danger: true, cancel: '繼續移動',
+      title: 'Stop remaining moves?',
+      html: `<div class="bxnote warn">This only cancels axes <b>not yet sent</b>.
+        <b>The axis currently moving will finish</b> - the firmware has no abort command.
+        Cutting power is the only immediate stop.</div>`,
+      ok: 'Stop remaining', danger: true, cancel: 'Keep moving',
     });
     if (!yes) return;
     const r = await POST('/api/room/stop');
-    toast(r.ok ? '已取消後續軸(正在走的那一段仍會走完)' : '停止失敗',
+    toast(r.ok ? 'Remaining axes cancelled (the current one will finish)' : 'Could not stop',
       r.ok ? 'warn' : 'bad');
     poll();
   }
@@ -287,7 +287,7 @@ export function createLive({ controls, applyToScene, statusHost }) {
       .map(([id, v]) => ({ id, v, c: controls[id], cur: wanted[id] }))
       .filter((r) => r.cur === undefined || Math.abs(r.v - r.cur) > 1e-3);
 
-    if (!rows.length) { toast('每一根軸都已經在位置上了'); return; }
+    if (!rows.length) { toast('Every axis is already in position'); return; }
 
     const total = rows.reduce((acc, r) => {
       const ax = manifest?.byId?.[r.id];
@@ -295,24 +295,24 @@ export function createLive({ controls, applyToScene, statusHost }) {
     }, 0);
 
     const yes = await confirmBox({
-      title: `要把「${label}」套用到實機嗎?`,
+      title: `Apply "${label}" to the hardware?`,
       html: `
-        <div class="bxnote">會<b>依序</b>移動下面 ${rows.length} 根軸,一次一根。
-          預估共 ${fmt.secs(total)}。</div>
+        <div class="bxnote">Moves the ${rows.length} axes below <b>one at a time</b>.
+          About ${fmt.secs(total)} in total.</div>
         <div class="mvlist">${rows.map((r) => `<div>
           <span>${esc(r.c.label)}</span>
           <span>${r.cur === undefined ? '?' : r.c.format(r.cur)} → <b>${r.c.format(r.v)}</b></span>
         </div>`).join('')}</div>
-        <div class="bxnote warn">機構會真的動起來,而且沒辦法中途叫停個別軸。
-          先確認房間裡沒有人。</div>`,
-      ok: `開始移動 ${rows.length} 根軸`, cancel: '不要動',
+        <div class="bxnote warn">The hardware will actually move, and an individual axis cannot be stopped part way.
+          Check nobody is in the room.</div>`,
+      ok: `Move ${rows.length} axes`, cancel: 'Do not move',
     });
     if (!yes) return;
 
     const r = await POST('/api/room/apply',
       { axes: Object.fromEntries(rows.map((x) => [x.id, x.v])), label });
-    if (!r.ok) { toast(r.error || '送不出去', 'bad'); return; }
-    if (!r.job) { toast(r.note || '不需要移動'); return; }
+    if (!r.ok) { toast(r.error || 'Could not send', 'bad'); return; }
+    if (!r.job) { toast(r.note || 'Nothing to move'); return; }
     poll();
   }
 
@@ -381,19 +381,19 @@ export function createLive({ controls, applyToScene, statusHost }) {
       const mismatch = [];
       for (const [id, c] of Object.entries(controls)) {
         const a = byId[id];
-        if (!a) { mismatch.push(`${id}:後端沒有這根軸`); continue; }
+        if (!a) { mismatch.push(`${id}: the backend has no such axis`); continue; }
         const near = (x, y) => Math.abs(x - y) < 1e-6;
         if (!near(a.min, c.range.min) || !near(a.max, c.range.max)) {
           mismatch.push(`${id}:3D ${c.range.min}~${c.range.max} / `
-            + `後端 ${a.min}~${a.max}`);
+            + `backend ${a.min} to ${a.max}`);
         }
       }
       for (const a of m.axes || []) {
-        if (!controls[a.id]) mismatch.push(`${a.id}:3D 沒有這根軸的控制項`);
+        if (!controls[a.id]) mismatch.push(`${a.id}: the 3D view has no control for this axis`);
       }
       manifest = { byId, mismatch, backend: m.backend };
     } catch (e) {
-      manifest = { byId: {}, mismatch: [`讀不到後端軸清單:${e.message || e}`] };
+      manifest = { byId: {}, mismatch: [`Cannot read the backend axis list: ${e.message || e}`] };
     }
   }
 

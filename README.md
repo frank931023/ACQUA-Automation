@@ -115,12 +115,16 @@ acqua/
   testplans.py         計畫的本地儲存(plans/*.json)
   crane.py             ⭐ 天車橋接:3D 邏輯軸 ←→ Pi 韌體指令(mock / http 兩種後端)
   roomsetups.py        擺位的本地儲存(setups/*.json)
+  labcore.py           ⭐ labCORE 麥克風供電:ACQUA 不管這塊,只能我們管
   prefs.py             每個資料庫上次用什麼(prefs.json)
   runlog.py            執行紀錄(runs/current.json)
   constants.py         TypeLib 來的列舉
 templates/
-  _ui.html             ⭐ 共用設計系統(三頁都 include)
+  _ui.html             ⭐ 共用設計系統 + armConfirm() 二次確認 helper
   _runmini.html        右下角進度視窗(跨頁)
+  _leaveguard.html     離站提醒(兩頁共用,頁面只給 window.__isBusy)
+  _nav.html            側邊欄 + 抽屜(含「清除殘留」)
+  _gate.html           開頁前的就緒檢查
   index.html           測項選擇
   plans.html           執行序列
   home.html            入口
@@ -130,6 +134,13 @@ templates/
 tools/
   check_context.py     上下文一致性檢查
   check_ui.py          前端與路由的機械化盤點
+  test_nonblocking.py  ⭐ 量測進行中 UI 還能不能用(會真的跑一次量測)
+  test_resolve.py      跨庫測項對應
+  test_selfheal.py     專案樹變動後的自我校正
+  labcore.py           讀 labCORE 硬體現況(麥克風 / USB / 接線)
+  dump_typelib.py      倒出 COM 型別庫
+  preflight.py         啟動前自檢
+  survey.py            跨資料庫的假設盤點
 ```
 
 ### 為什麼 COM 只在工作執行緒碰
@@ -211,6 +222,67 @@ SQL 不同:`raw_query()` 自己確保呼叫端執行緒有 COM(ADO 也是 COM),
 | 中斷後不能續跑 | `runs/current.json` 有記錄,但續跑邏輯還沒做 |
 | setup 位置是 mock | 序列中間固定停五秒。之後接 Raspberry Pi |
 | 條件式的數值比較未驗證 | `Relation` 2/3/4 的語意是推的,`condeval.py` 有標出來 |
+| 中止擋不住在途的那一筆 | 中止是「不送下一筆」。只剩一筆在跑時按下去會等它跑完 |
+| 供電不符只會記錄不會擋 | `labcore.mismatch()` 算得出來,但還沒接進 `/api/run` 的前置檢查 |
+
+---
+
+## 硬體設定:誰管哪一塊
+
+一組 labCORE 硬體設定包含三塊,**ACQUA 只自動處理第一塊**(2026-09~10 實測):
+
+| | 誰負責 | 說明 |
+|---|---|---|
+| `Connections` 接線路由 | **ACQUA 自己** | 量測開始時載入該 MMD 宣告的那組,結束後還原 |
+| `MicCardSettings` 供電 / 極化電壓 | **我們** | ACQUA 完全不碰 |
+| `usbaudio` USB 音訊參數 | **我們** | ACQUA 完全不碰 |
+
+哪一組設定由 SQL 的 `MMDSettings`(型別 14 = `Hardware_Configuration_Setting`)
+決定,**ACQUA 執行時會自己套用,自動化不需要插手** —— 插手反而會被它還原。
+
+但供電那塊沒人管,而且**設錯不會報錯**:實測把 Ch1&2 的極化電壓關掉再跑,
+ACQUA 照樣回報 `PASS`,資料卻是廢的。更危險的是載入 `Teams_chamber_v5` 這類
+用通道 4 的設定時,ACQUA 會把訊號路由過去,但供電還留在 Ch1&2。
+
+所以序列的每一步都可以指定供電走哪一組通道(預設 Channels 1 & 2),
+`prepare` 會在「載入測項」之後、開跑之前套用。
+
+> 怎麼測出來的:用 `Record` 類測項(不能用 `Analy.` 類 —— 分析不碰音訊硬體,
+> 會得到假陰性),0.4 秒取樣一次接線與供電,看量測前後的變化。
+
+---
+
+## 非阻塞:按下執行就可以走人
+
+量測跑在伺服器的工作執行緒,瀏覽器只是看板。換頁、關頁、縮小都不影響它。
+
+但這個承諾很容易破:**工作執行緒是單執行緒**,所有 COM 命令排同一個佇列。
+量測一跑起來佇列就塞住,任何「要排進佇列才能回答」的唯讀 API 都會卡到量測結束,
+整個網頁看起來就像當掉。
+
+所以路由分兩類:
+
+```
+不排佇列(量測中必須照常回應)   status / health / plans / mic-power 的 GET
+                                blocking / status-codes / last-run / 所有頁面
+要排佇列(量測中本來就該擋下)   run / open-project / list-smds / 寫入類
+```
+
+`tools/test_nonblocking.py` 會在**真的有量測在跑**的狀態下把兩類都打一遍並量時間。
+曾經抓到 `/api/mic-power` 卡滿 20 秒(當時走了佇列),改讀快取後是 0.03 秒。
+
+### 二次確認
+
+嚴重且不可逆的動作用兩段式確認(按一下變紅並改字,幾秒沒有第二下就放下),
+而不是 `confirm()` —— 後者會擋住整個分頁,而這些按鈕常出現在量測正在跑的時候:
+
+| 動作 | 確認方式 |
+|---|---|
+| 中止執行 / 中止序列 | 兩段式(`armConfirm`,在 `_ui.html`) |
+| 停止服務(就緒視窗) | 兩段式 |
+| 刪除計畫 | 要把計畫名稱完整打一次 |
+| 清除殘留紀錄 | `confirm()`,強制清除再問一次 |
+| 離開站台(執行中) | 瀏覽器原生提醒,站內換頁不攔 |
 
 ---
 

@@ -118,37 +118,37 @@ class Axis:
 #: ⚠️ [待確認] pi_id 與哪個總成配對,要照現場接線對一次。
 AXES = {
     # ── 喇叭陣列台車(落地,pi-001)──
-    "speakers.x":    Axis("speakers.x",    "pi-001", "SX", -0.75, 0.75, "喇叭陣列 — 橫移 X"),
-    "speakers.lift": Axis("speakers.lift", "pi-001", "SY",  0.80, 1.80, "喇叭陣列 — 中心高度"),
+    "speakers.x":    Axis("speakers.x",    "pi-001", "SX", -0.75, 0.75, "Speaker array - traverse X"),
+    "speakers.lift": Axis("speakers.lift", "pi-001", "SY",  0.80, 1.80, "Speaker array - centre height"),
 
     # ── 大螢幕(pi-002)──
-    "screen.z":    Axis("screen.z",    "pi-002", "SZ", 1.20, 2.35, "大螢幕 — 前後 Z"),
-    "screen.lift": Axis("screen.lift", "pi-002", "SY", 0.70, 1.90, "大螢幕 — 中心高度"),
+    "screen.z":    Axis("screen.z",    "pi-002", "SZ", 1.20, 2.35, "Large screen - depth Z"),
+    "screen.lift": Axis("screen.lift", "pi-002", "SY", 0.70, 1.90, "Large screen - centre height"),
 
     # ── HATS 平台(雙層軌 + 轉盤 + 頭部傾角,pi-003)──
-    "hats.z":    Axis("hats.z",    "pi-003", "SZ", -1.85, 1.85, "HATS — 縱向 Z(下層軌)"),
-    "hats.x":    Axis("hats.x",    "pi-003", "SX", -0.55, 0.55, "HATS — 橫向 X(上層軌)"),
-    "hats.mrp":  Axis("hats.mrp",  "pi-003", "SY",  0.75, 1.50, "HATS — MRP 高度"),
-    "hats.rot":  Axis("hats.rot",  "pi-003", "R", -180.0, 180.0, "HATS — 轉盤角度",
+    "hats.z":    Axis("hats.z",    "pi-003", "SZ", -1.85, 1.85, "HATS - depth Z (lower rail)"),
+    "hats.x":    Axis("hats.x",    "pi-003", "SX", -0.55, 0.55, "HATS - lateral X (upper rail)"),
+    "hats.mrp":  Axis("hats.mrp",  "pi-003", "SY",  0.75, 1.50, "HATS - MRP height"),
+    "hats.rot":  Axis("hats.rot",  "pi-003", "R", -180.0, 180.0, "HATS - turntable angle",
                       unit="deg", speed=12.0),
-    "hats.head": Axis("hats.head", "pi-003", "T",  -15.0, 35.0, "HATS — 頭部前傾角",
+    "hats.head": Axis("hats.head", "pi-003", "T",  -15.0, 35.0, "HATS - head pitch",
                       unit="deg", speed=6.0),
 
     # ── 前方 DUT 升降台(pi-004)──
-    "tableFront.z":    Axis("tableFront.z",    "pi-004", "SZ", 0.55, 2.00, "前方 DUT 台 — 前後 Z"),
-    "tableFront.lift": Axis("tableFront.lift", "pi-004", "SY", 0.40, 2.30, "前方 DUT 台 — 高度"),
+    "tableFront.z":    Axis("tableFront.z",    "pi-004", "SZ", 0.55, 2.00, "Front DUT table - depth Z"),
+    "tableFront.lift": Axis("tableFront.lift", "pi-004", "SY", 0.40, 2.30, "Front DUT table - height"),
 
     # ── 後方 Dixie 升降台(pi-005)──
-    "tableBack.z":    Axis("tableBack.z",    "pi-005", "SZ", -2.00, -0.55, "後方 Dixie 台 — 前後 Z"),
-    "tableBack.lift": Axis("tableBack.lift", "pi-005", "SY",  0.40,  2.30, "後方 Dixie 台 — 高度"),
+    "tableBack.z":    Axis("tableBack.z",    "pi-005", "SZ", -2.00, -0.55, "Rear Dixie table - depth Z"),
+    "tableBack.lift": Axis("tableBack.lift", "pi-005", "SY",  0.40,  2.30, "Rear Dixie table - height"),
 
     # ── 天花板麥克風吊架 ×2(各一台,pi-006 / pi-007)──
-    "micRig1.x": Axis("micRig1.x", "pi-006", "SX", -1.10, 1.10, "麥克風吊架 1 — 橫向 X"),
-    "micRig1.z": Axis("micRig1.z", "pi-006", "SZ", -1.30, 1.70, "麥克風吊架 1 — 縱向 Z"),
-    "micRig1.h": Axis("micRig1.h", "pi-006", "SY",  0.70, 1.50, "麥克風吊架 1 — 高度 Y"),
-    "micRig2.x": Axis("micRig2.x", "pi-007", "SX", -1.10, 1.10, "麥克風吊架 2 — 橫向 X"),
-    "micRig2.z": Axis("micRig2.z", "pi-007", "SZ", -1.30, 1.70, "麥克風吊架 2 — 縱向 Z"),
-    "micRig2.h": Axis("micRig2.h", "pi-007", "SY",  0.70, 1.50, "麥克風吊架 2 — 高度 Y"),
+    "micRig1.x": Axis("micRig1.x", "pi-006", "SX", -1.10, 1.10, "Mic rig 1 - lateral X"),
+    "micRig1.z": Axis("micRig1.z", "pi-006", "SZ", -1.30, 1.70, "Mic rig 1 - depth Z"),
+    "micRig1.h": Axis("micRig1.h", "pi-006", "SY",  0.70, 1.50, "Mic rig 1 - height Y"),
+    "micRig2.x": Axis("micRig2.x", "pi-007", "SX", -1.10, 1.10, "Mic rig 2 - lateral X"),
+    "micRig2.z": Axis("micRig2.z", "pi-007", "SZ", -1.30, 1.70, "Mic rig 2 - depth Z"),
+    "micRig2.h": Axis("micRig2.h", "pi-007", "SY",  0.70, 1.50, "Mic rig 2 - height Y"),
 }
 
 #: 開機時的「假設位置」。真機第一次查詢成功就會被蓋掉;mock 則一直用這組
@@ -280,7 +280,7 @@ class CraneBridge:
         for axis_id, target in moves:
             ax = AXES.get(axis_id)
             if ax is None:
-                raise KeyError("未知的軸:" + str(axis_id))
+                raise KeyError("Unknown axis: " + str(axis_id))
             t = ax.clamp(float(target))
             with self._lock:
                 start = self._pos.get(axis_id, ax.lo)
@@ -290,11 +290,11 @@ class CraneBridge:
                           "command": ax.cmd_move(t),
                           "seconds": round(ax.travel_seconds(start, t), 1)})
         if not steps:
-            raise ValueError("沒有要移動的軸")
+            raise ValueError("No axes to move")
 
         with self._lock:
             if self._job and self._job["state"] in ("running", "aborting"):
-                raise RuntimeError("已經有移動在進行中")
+                raise RuntimeError("A move is already in progress")
             self._abort.clear()
             self._job = {
                 "id": "%x" % int(time.time() * 1000),
@@ -467,7 +467,7 @@ class MockCrane(CraneBridge):
         time.sleep(axis.travel_seconds(start, target) / max(self.time_scale, 0.01))
 
     def device_status(self) -> dict:
-        return {pi: {"status": "online", "note": "模擬"} for pi in DEVICES}
+        return {pi: {"status": "online", "note": "simulated"} for pi in DEVICES}
 
 
 # ══════════════════════════════════════════════════════════
@@ -521,9 +521,9 @@ class HttpCrane(CraneBridge):
             except ValueError:
                 return exc.code, {}
         except URLError as exc:
-            raise RuntimeError("連不到控制中心:%s" % (exc.reason,)) from exc
+            raise RuntimeError("Cannot reach the controller: %s" % (exc.reason,)) from exc
         except socket.timeout as exc:
-            raise RuntimeError("控制中心逾時") from exc
+            raise RuntimeError("Controller timed out") from exc
 
     def _command(self, pi: str, command: str, timeout: int):
         code, body = self._http(
@@ -540,11 +540,11 @@ class HttpCrane(CraneBridge):
         resp = self._command(axis.pi, axis.cmd_move(target), self.timeout_move)
         lines = resp.get("arduino_response") or []
         if resp.get("arduino_result") == "ERR":
-            raise RuntimeError("韌體不認得 " + axis.cmd_move(target))
+            raise RuntimeError("Firmware rejected " + axis.cmd_move(target))
         # 超出行程時韌體仍以 DONE 收尾,只是中間多一行 —— 不掃就會以為動了。
         for ln in lines:
             if "Exceeded Max travel" in str(ln):
-                raise RuntimeError("超出行程(該軸可能還沒校正)")
+                raise RuntimeError("Out of travel (the axis may not be homed)")
 
     def _query(self, axis: Axis):
         """讀真實位置。讀不到回 None,讓基底類別退回估計值。
@@ -592,7 +592,7 @@ class HttpCrane(CraneBridge):
                 out[pi] = ({"status": info.get("status", "offline"),
                             "name": info.get("name", "")} if info
                            else {"status": "missing",
-                                 "note": "控制中心裡沒有這台裝置"})
+                                 "note": "Not registered on the controller"})
         except Exception as exc:                            # noqa: BLE001
             for pi in DEVICES:
                 out[pi] = {"status": "offline", "note": str(exc)[:120]}

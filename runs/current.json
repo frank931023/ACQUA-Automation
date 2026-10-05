@@ -6,8 +6,8 @@
   "project_group": "(Unsorted Projects)",
   "project": "ZoomRooms_v2020Oct_v1",
   "measurement_object": "Front_of_Room",
-  "started_at": 1791185440.9062085,
-  "updated_at": 1791185549.1160402,
+  "started_at": 1791187686.7140338,
+  "updated_at": 1791187793.119414,
   "planned": [
     {
       "row_id": 5324,
@@ -23,7 +23,7 @@
       "path": "ZoomRooms_v2020Oct_v1 / COS_auto_Tiny / BGN test / Meeting Device / 4.4.1 send quality with ambient noise -  22Oct / Record",
       "passed": true,
       "retries": 0,
-      "ts": 1791185545.873161
+      "ts": 1791187790.2379308
     }
   ]
 }

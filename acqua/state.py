@@ -50,6 +50,9 @@ class SharedState:
         # 硬體連接設定 —— 跑之前要知道現在用的是哪一組
         self.hardware_settings = []    # [{"name","active","saved"}]
         self.hardware_active = None
+        #: labCORE 麥克風供電的快取。由工作執行緒閒置時更新 ——
+        #: 路由只讀這份,不排進佇列,量測進行中也要能讀。
+        self.mic_power = None
         # ACQUA 開了對話框在等人時,把內容與按鈕端到 UI
         self.blocking_window = None    # {"hwnd","cls","title","buttons","message"}
         self.paused = False            # 逐項模式:停在兩筆之間
@@ -101,6 +104,7 @@ class SharedState:
                 "progress": self.progress,
                 "hardware_settings": self.hardware_settings,
                 "hardware_active": self.hardware_active,
+                "mic_power": self.mic_power,
                 "blocking_window": self.blocking_window,
                 "paused": self.paused,
                 "wizard_groups": self.wizard_groups,

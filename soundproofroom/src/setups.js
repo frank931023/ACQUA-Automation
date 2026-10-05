@@ -32,58 +32,58 @@ function send(url, method, body) {
 export async function saveCurrent(axes, { existing = null } = {}) {
   const n = Object.keys(axes).length;
   const v = await formBox({
-    title: existing ? '更新這個擺位' : '儲存目前擺位',
-    note: `會存下 <b>${n}</b> 根軸的位置。`
-      + (existing ? '' : '之後可以從擺位清單叫出來,或直接套用到實機。'),
+    title: existing ? 'Update this position' : 'Save current position',
+    note: `Stores the position of <b>${n}</b> axes.`
+      + (existing ? '' : ' You can load it later, or apply it to the hardware.'),
     fields: [
-      { key: 'name', label: '名稱', required: true, value: existing?.name || '',
-        placeholder: '例如:近場 0.5 m ・ HATS 前傾 17°' },
-      { key: 'description', label: '說明', textarea: true,
+      { key: 'name', label: 'Name', required: true, value: existing?.name || '',
+        placeholder: 'e.g. near field 0.5 m - HATS pitched 17 deg' },
+      { key: 'description', label: 'Description', textarea: true,
         value: existing?.description || '',
-        placeholder: '這個擺位是給哪個測試用的、為什麼這樣擺' },
+        placeholder: 'Which test is this for, and why this arrangement' },
     ],
-    ok: existing ? '更新' : '儲存',
+    ok: existing ? 'Update' : 'Save',
   });
   if (!v) return null;
 
   const d = await send(existing ? `${API}/${encodeURIComponent(existing.id)}` : API,
     'POST', { name: v.name, description: v.description, axes, source: 'setup' });
-  if (!d.ok) { toast(d.error || '存不起來', 'bad'); return null; }
-  toast(`已儲存「${d.setup.name}」`);
+  if (!d.ok) { toast(d.error || 'Could not save', 'bad'); return null; }
+  toast(`Saved "${d.setup.name}"`);
   return d.setup;
 }
 
 /** 把實機當下的位置存成擺位。source 標成 live,清單上會標出來。 */
 export async function saveFromLive(axes) {
   const v = await formBox({
-    title: '把實機目前位置存成擺位',
-    note: '存的是<b>現在讀到的實機位置</b>,不是畫面上拉桿的值。',
+    title: 'Save the hardware position',
+    note: 'Stores <b>what the hardware reports right now</b>, not the slider values.',
     fields: [
-      { key: 'name', label: '名稱', required: true,
-        placeholder: '例如:2026-09-15 出貨驗證擺位' },
-      { key: 'description', label: '說明', textarea: true,
-        placeholder: '為什麼要把這個位置留下來' },
+      { key: 'name', label: 'Name', required: true,
+        placeholder: 'e.g. 2026-09-15 shipping validation' },
+      { key: 'description', label: 'Description', textarea: true,
+        placeholder: 'Why this position is worth keeping' },
     ],
   });
   if (!v) return null;
   const d = await send(API, 'POST',
     { name: v.name, description: v.description, axes, source: 'live' });
-  if (!d.ok) { toast(d.error || '存不起來', 'bad'); return null; }
-  toast(`已儲存「${d.setup.name}」`);
+  if (!d.ok) { toast(d.error || 'Could not save', 'bad'); return null; }
+  toast(`Saved "${d.setup.name}"`);
   return d.setup;
 }
 
 export async function removeSetup(s) {
   const yes = await confirmBox({
-    title: '刪掉這個擺位?',
+    title: 'Delete this position?',
     html: `<div class="bxnote"><b>${esc(s.name)}</b><br>
-      ${esc(s.description || '(沒有說明)')}</div>
-      <div class="bxnote warn">刪掉就沒了,而且不會影響機構目前的位置。</div>`,
-    ok: '刪除', danger: true,
+      ${esc(s.description || '(no description)')}</div>
+      <div class="bxnote warn">This cannot be undone. The hardware does not move.</div>`,
+    ok: 'Delete', danger: true,
   });
   if (!yes) return false;
   const d = await send(`${API}/${encodeURIComponent(s.id)}`, 'DELETE');
-  toast(d.ok ? '已刪除' : '刪不掉', d.ok ? 'ok' : 'bad');
+  toast(d.ok ? 'Deleted' : 'Could not delete', d.ok ? 'ok' : 'bad');
   return !!d.ok;
 }
 

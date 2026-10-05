@@ -151,7 +151,7 @@ EMEResult:
 5. 挑一個 **`Info:` 開頭、SMDType=34** 的測項跑跑看
    (純資訊、不驅動硬體,是最安全的白老鼠)
 
-### 5.3 跑兩支檢查程式
+### 5.3 跑檢查程式
 
 ```powershell
 .\.venv\Scripts\python.exe tools\check_context.py
@@ -161,6 +161,33 @@ EMEResult:
 兩支都應該印「結論:全部通過」。這裡會抓出「按鈕沒接 handler」「fetch 打到
 不存在的路由」「新增狀態欄位忘了決定它屬於哪個專案」這類**頁面照樣載入、
 但按下去才炸**的問題。
+
+### 5.3b 非阻塞實測(會真的跑一次量測)
+
+```powershell
+.\.venv\Scripts\python.exe tools\test_nonblocking.py --guards   # 只驗防呆
+.\.venv\Scripts\python.exe tools\test_nonblocking.py            # 完整(含量測)
+```
+
+完整版需要先在網頁上連線、開專案、選 DUT、載入測項。它會送出一筆量測,
+然後在**量測進行中**狂打唯讀 API 與五個頁面,確認:
+
+- 唯讀 API 全部 3 秒內回應(實際約 0.03 秒)
+- 五個頁面都載得動
+- 再按執行會立刻被擋下(409),不是卡住
+- 中止有效
+
+> 這支是被一個真實破口逼出來的:`/api/mic-power` 原本走工作佇列,
+> 量測中會卡滿 20 秒才逾時 —— 整個網頁看起來像當掉。
+
+### 5.3c 硬體現況
+
+```powershell
+.\.venv\Scripts\python.exe tools\labcore.py
+```
+
+印出麥克風供電、USB Audio Host、目前接線,並檢查「接線用到的通道有沒有供電」。
+最後一行寫「供電與接線相符」才正常。
 
 ### 5.4 換一個資料庫試試
 
@@ -246,3 +273,7 @@ notepad config.json
 | 「Not ready」視窗說 COM 不通,但 dongle 明明插著 | 幾乎都是它正忙。視窗上會直接寫 `busy: open_project` 之類的,等它跑完就好。真的死掉會寫 `thread not alive` |
 | 想收工不想留一個行程佔著 port | 「Not ready」視窗上的 **Stop**(按兩下確認),或 `run stop` |
 | 報告產生很久 | 結果多的時候本來就慢(1400+ 筆要好幾分鐘)。ACQUA 是在背景寫檔,不是卡住 |
+| 所有 COM 呼叫都失敗(`系統呼叫失敗`) | **先數一下有幾個 `Acqua6.exe`**。兩個實例會搶同一個 COM 註冊,全部失效。全關掉(含 `Acqualyzer`、`MfeControl`)再開一個 |
+| 服務起不來但沒有錯誤訊息 | 多半是 port 5000 還被上一個行程佔著,它會拒絕啟動並說明。`run stop` 或砍掉佔用的 PID |
+| 量測結果 PASS 但數據明顯不對 | 查麥克風供電:`tools\labcore.py`。訊號接到沒供電的通道上時,ACQUA 照樣回報 PASS |
+| 量測中網頁變很慢 | 不該發生。跑 `tools\test_nonblocking.py` 找出是哪支 API 排進了工作佇列 |
