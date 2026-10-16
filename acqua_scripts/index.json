@@ -1,0 +1,1265 @@
+[
+  {
+    "database": "51_MS_Teams_Rev05_SP2",
+    "filename": "equest_save_echo_level.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 6,
+    "used_by_total": 276,
+    "projects": [
+      "MS Teams v5 Rev05 SP2 - Handset",
+      "MS Teams v5 Rev05 SP2 - Speakerphone",
+      "MS Teams v5 Rev05 SP2 - Headset"
+    ],
+    "changed": "2022-07-18 12:25:28"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP2",
+    "filename": "save_p863_delay.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 6,
+    "used_by_total": 72,
+    "projects": [
+      "MS Teams v5 Rev05 SP2 - Speakerphone",
+      "MS Teams v5 Rev05 SP2 - Headset",
+      "MS Teams v5 Rev05 SP2 - Handset"
+    ],
+    "changed": "2022-08-08 16:07:12"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP2",
+    "filename": "3quest_add_clean_ref.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 6,
+    "used_by_total": 70,
+    "projects": [
+      "MS Teams v5 Rev05 SP2 - Headset",
+      "MS Teams v5 Rev05 SP2 - Handset",
+      "MS Teams v5 Rev05 SP2 - Speakerphone"
+    ],
+    "changed": "2022-08-08 08:56:16"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP2",
+    "filename": "rename_analyses_files_channels.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 6,
+    "used_by_total": 48,
+    "projects": [
+      "MS Teams v5 Rev05 SP2 - Headset",
+      "MS Teams v5 Rev05 SP2 - Speakerphone",
+      "MS Teams v5 Rev05 SP2 - Handset"
+    ],
+    "changed": "2022-11-17 10:04:39"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP2",
+    "filename": "show_ch_name_in_legend.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 6,
+    "used_by_total": 48,
+    "projects": [
+      "MS Teams v5 Rev05 SP2 - Speakerphone",
+      "MS Teams v5 Rev05 SP2 - Handset",
+      "MS Teams v5 Rev05 SP2 - Headset"
+    ],
+    "changed": "2022-09-27 13:15:16"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP2",
+    "filename": "3quest_store_MOS_variables.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 6,
+    "used_by_total": 46,
+    "projects": [
+      "MS Teams v5 Rev05 SP2 - Handset",
+      "MS Teams v5 Rev05 SP2 - Speakerphone",
+      "MS Teams v5 Rev05 SP2 - Headset"
+    ],
+    "changed": "2022-07-18 12:25:28"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP2",
+    "filename": "Save_DTattn_result.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 6,
+    "used_by_total": 44,
+    "projects": [
+      "MS Teams v5 Rev05 SP2 - Headset",
+      "MS Teams v5 Rev05 SP2 - Handset",
+      "MS Teams v5 Rev05 SP2 - Speakerphone"
+    ],
+    "changed": "2022-07-18 12:41:48"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP2",
+    "filename": "generate_tolerance_scheme.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 6,
+    "used_by_total": 24,
+    "projects": [
+      "MS Teams v5 Rev05 SP2 - Headset",
+      "MS Teams v5 Rev05 SP2 - Speakerphone",
+      "MS Teams v5 Rev05 SP2 - Handset"
+    ],
+    "changed": "2022-10-07 15:48:54"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP2",
+    "filename": "restore_channel_properties_rcv.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 6,
+    "used_by_total": 22,
+    "projects": [
+      "MS Teams v5 Rev05 SP2 - Speakerphone",
+      "MS Teams v5 Rev05 SP2 - Handset",
+      "MS Teams v5 Rev05 SP2 - Headset"
+    ],
+    "changed": "2022-09-28 11:21:04"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP2",
+    "filename": "Save_DTattn_result_sp_e2e_ar_nom.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 2,
+    "used_by_total": 20,
+    "projects": [
+      "MS Teams v5 Rev05 SP2 - Speakerphone"
+    ],
+    "changed": "2022-08-17 18:29:20"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP2",
+    "filename": "restore_channel_properties_snd.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 6,
+    "used_by_total": 18,
+    "projects": [
+      "MS Teams v5 Rev05 SP2 - Handset",
+      "MS Teams v5 Rev05 SP2 - Speakerphone",
+      "MS Teams v5 Rev05 SP2 - Headset"
+    ],
+    "changed": "2022-09-28 11:21:04"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP2",
+    "filename": "3quest_store_MOS_variables_alt.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 2,
+    "used_by_total": 16,
+    "projects": [
+      "MS Teams v5 Rev05 SP2 - Speakerphone"
+    ],
+    "changed": "2022-08-15 14:00:14"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP2",
+    "filename": "Save_DTattn_result_sp_e2e_rr_nom.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 2,
+    "used_by_total": 16,
+    "projects": [
+      "MS Teams v5 Rev05 SP2 - Speakerphone"
+    ],
+    "changed": "2024-01-15 17:12:31"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP2",
+    "filename": "activation_snd.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 6,
+    "used_by_total": 12,
+    "projects": [
+      "MS Teams v5 Rev05 SP2 - Headset",
+      "MS Teams v5 Rev05 SP2 - Handset",
+      "MS Teams v5 Rev05 SP2 - Speakerphone"
+    ],
+    "changed": "2022-08-08 11:37:51"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP2",
+    "filename": "snd_act_combine.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 6,
+    "used_by_total": 12,
+    "projects": [
+      "MS Teams v5 Rev05 SP2 - Headset",
+      "MS Teams v5 Rev05 SP2 - Speakerphone",
+      "MS Teams v5 Rev05 SP2 - Handset"
+    ],
+    "changed": "2022-08-08 11:14:20"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP2",
+    "filename": "distortion_and_noise_rcv.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 2,
+    "used_by_total": 8,
+    "projects": [
+      "MS Teams v5 Rev05 SP2 - Speakerphone"
+    ],
+    "changed": "2022-09-07 11:01:43"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP2",
+    "filename": "save_directivity_levels.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 2,
+    "used_by_total": 8,
+    "projects": [
+      "MS Teams v5 Rev05 SP2 - Speakerphone"
+    ],
+    "changed": "2022-08-31 08:33:44"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP2",
+    "filename": "set_hardware_config_delay_values_for_positional_double_talk.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 2,
+    "used_by_total": 8,
+    "projects": [
+      "MS Teams v5 Rev05 SP2 - Speakerphone"
+    ],
+    "changed": "2022-08-29 14:10:24"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP2",
+    "filename": "3quest_add_clean_ref_conf54.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 2,
+    "used_by_total": 6,
+    "projects": [
+      "MS Teams v5 Rev05 SP2 - Speakerphone"
+    ],
+    "changed": "2024-01-16 16:38:51"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP2",
+    "filename": "bgn_wizard.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 6,
+    "used_by_total": 6,
+    "projects": [
+      "MS Teams v5 Rev05 SP2 - Speakerphone",
+      "MS Teams v5 Rev05 SP2 - Handset",
+      "MS Teams v5 Rev05 SP2 - Headset"
+    ],
+    "changed": "2022-06-02 15:35:01"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP2",
+    "filename": "select_wav_export_folder.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 6,
+    "used_by_total": 6,
+    "projects": [
+      "MS Teams v5 Rev05 SP2 - Speakerphone",
+      "MS Teams v5 Rev05 SP2 - Handset",
+      "MS Teams v5 Rev05 SP2 - Headset"
+    ],
+    "changed": "2022-09-23 17:11:08"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP2",
+    "filename": "set_analysis_ordinate_axis_scaling_db_spl.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 6,
+    "used_by_total": 6,
+    "projects": [
+      "MS Teams v5 Rev05 SP2 - Speakerphone",
+      "MS Teams v5 Rev05 SP2 - Handset",
+      "MS Teams v5 Rev05 SP2 - Headset"
+    ],
+    "changed": "2022-09-28 19:23:17"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP2",
+    "filename": "set_measurement_equipment_delays.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 6,
+    "used_by_total": 6,
+    "projects": [
+      "MS Teams v5 Rev05 SP2 - Headset",
+      "MS Teams v5 Rev05 SP2 - Handset",
+      "MS Teams v5 Rev05 SP2 - Speakerphone"
+    ],
+    "changed": "2022-08-08 10:07:07"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP2",
+    "filename": "3quest_add_clean_ref_alt.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 2,
+    "used_by_total": 4,
+    "projects": [
+      "MS Teams v5 Rev05 SP2 - Speakerphone"
+    ],
+    "changed": "2022-09-07 10:55:49"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP2",
+    "filename": "OpS05R_combine_single_and_double_talk.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 2,
+    "used_by_total": 4,
+    "projects": [
+      "MS Teams v5 Rev05 SP2 - Speakerphone"
+    ],
+    "changed": "2022-09-20 14:44:20"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP2",
+    "filename": "distortion_and_noise_snd.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 2,
+    "used_by_total": 4,
+    "projects": [
+      "MS Teams v5 Rev05 SP2 - Speakerphone"
+    ],
+    "changed": "2022-09-07 11:01:43"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP2",
+    "filename": "dut_meas_wizard.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 4,
+    "used_by_total": 4,
+    "projects": [
+      "MS Teams v5 Rev05 SP2 - Speakerphone",
+      "MS Teams v5 Rev05 SP2 - Headset"
+    ],
+    "changed": "2023-11-21 10:25:28"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP2",
+    "filename": "generate_tolerance_scheme_ultrasound_measurements.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 2,
+    "used_by_total": 4,
+    "projects": [
+      "MS Teams v5 Rev05 SP2 - Speakerphone"
+    ],
+    "changed": "2023-12-06 13:28:58"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP2",
+    "filename": "merge_ref_channel_of_rcv_delay_measurement.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 2,
+    "used_by_total": 4,
+    "projects": [
+      "MS Teams v5 Rev05 SP2 - Speakerphone"
+    ],
+    "changed": "2022-09-07 10:28:08"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP2",
+    "filename": "select_automatic_or_manual_volume_control.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 4,
+    "used_by_total": 4,
+    "projects": [
+      "MS Teams v5 Rev05 SP2 - Headset",
+      "MS Teams v5 Rev05 SP2 - Speakerphone"
+    ],
+    "changed": "2024-01-25 11:40:09"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP2",
+    "filename": "select_nominal_dut_playback_volume.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 4,
+    "used_by_total": 4,
+    "projects": [
+      "MS Teams v5 Rev05 SP2 - Headset",
+      "MS Teams v5 Rev05 SP2 - Speakerphone"
+    ],
+    "changed": "2022-08-04 14:06:46"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP2",
+    "filename": "3quest_store_MOS_variables_conf54.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 2,
+    "used_by_total": 2,
+    "projects": [
+      "MS Teams v5 Rev05 SP2 - Speakerphone"
+    ],
+    "changed": "2024-01-03 15:54:34"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP2",
+    "filename": "add_vol_setting_report.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 2,
+    "used_by_total": 2,
+    "projects": [
+      "MS Teams v5 Rev05 SP2 - Speakerphone"
+    ],
+    "changed": "2023-11-20 14:47:28"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP2",
+    "filename": "define_hardware_options.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 2,
+    "used_by_total": 2,
+    "projects": [
+      "MS Teams v5 Rev05 SP2 - Speakerphone"
+    ],
+    "changed": "2022-08-25 12:31:10"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP2",
+    "filename": "define_playback_options_Conf3_54dB.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 2,
+    "used_by_total": 2,
+    "projects": [
+      "MS Teams v5 Rev05 SP2 - Speakerphone"
+    ],
+    "changed": "2023-12-06 13:35:20"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP2",
+    "filename": "determination_nom_vol_step_after_measurement.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 2,
+    "used_by_total": 2,
+    "projects": [
+      "MS Teams v5 Rev05 SP2 - Speakerphone"
+    ],
+    "changed": "2023-04-25 09:48:01"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP2",
+    "filename": "est_vol_msg.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 2,
+    "used_by_total": 2,
+    "projects": [
+      "MS Teams v5 Rev05 SP2 - Speakerphone"
+    ],
+    "changed": "2023-04-25 09:46:07"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP2",
+    "filename": "init_or_reset_determination_process_for_nom_volume.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 2,
+    "used_by_total": 2,
+    "projects": [
+      "MS Teams v5 Rev05 SP2 - Speakerphone"
+    ],
+    "changed": "2023-04-25 15:50:42"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP2",
+    "filename": "max_vol_msg.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 2,
+    "used_by_total": 2,
+    "projects": [
+      "MS Teams v5 Rev05 SP2 - Speakerphone"
+    ],
+    "changed": "2023-04-24 15:33:50"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP2",
+    "filename": "project_premium_requirements.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 2,
+    "used_by_total": 2,
+    "projects": [
+      "MS Teams v5 Rev05 SP2 - Handset"
+    ],
+    "changed": "2022-08-31 17:22:09"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP2",
+    "filename": "vol_cntrl_ultrasound_meas.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 2,
+    "used_by_total": 2,
+    "projects": [
+      "MS Teams v5 Rev05 SP2 - Speakerphone"
+    ],
+    "changed": "2023-04-26 14:32:40"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP2",
+    "filename": "OnProjectOpen.py",
+    "file_type": "FT_Script",
+    "copies": 6,
+    "used_by_total": 0,
+    "projects": [
+      "MS Teams v5 Rev05 SP2 - Handset",
+      "MS Teams v5 Rev05 SP2 - Speakerphone",
+      "MS Teams v5 Rev05 SP2 - Headset"
+    ],
+    "changed": "2022-10-18 07:57:21"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP2",
+    "filename": "after_canceled_measurement.py",
+    "file_type": "FT_Script",
+    "copies": 6,
+    "used_by_total": 0,
+    "projects": [
+      "MS Teams v5 Rev05 SP2 - Speakerphone",
+      "MS Teams v5 Rev05 SP2 - Handset",
+      "MS Teams v5 Rev05 SP2 - Headset"
+    ],
+    "changed": "2022-12-08 16:10:31"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP2",
+    "filename": "after_each_measurement.py",
+    "file_type": "FT_Script",
+    "copies": 6,
+    "used_by_total": 0,
+    "projects": [
+      "MS Teams v5 Rev05 SP2 - Headset",
+      "MS Teams v5 Rev05 SP2 - Speakerphone",
+      "MS Teams v5 Rev05 SP2 - Handset"
+    ],
+    "changed": "2022-11-03 10:53:22"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP2",
+    "filename": "before_each_measurement.py",
+    "file_type": "FT_Script",
+    "copies": 6,
+    "used_by_total": 0,
+    "projects": [
+      "MS Teams v5 Rev05 SP2 - Handset",
+      "MS Teams v5 Rev05 SP2 - Headset",
+      "MS Teams v5 Rev05 SP2 - Speakerphone"
+    ],
+    "changed": "2022-11-02 15:54:21"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP3",
+    "filename": "equest_save_echo_level.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 6,
+    "used_by_total": 276,
+    "projects": [
+      "MS Teams v5 Rev05 SP3 - Handset",
+      "MS Teams v5 Rev05 SP3 - Headset",
+      "MS Teams v5 Rev05 SP3 - Speakerphone"
+    ],
+    "changed": "2022-07-18 12:25:28"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP3",
+    "filename": "save_p863_delay.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 6,
+    "used_by_total": 72,
+    "projects": [
+      "MS Teams v5 Rev05 SP3 - Speakerphone",
+      "MS Teams v5 Rev05 SP3 - Handset",
+      "MS Teams v5 Rev05 SP3 - Headset"
+    ],
+    "changed": "2022-08-08 16:07:12"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP3",
+    "filename": "3quest_add_clean_ref.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 6,
+    "used_by_total": 70,
+    "projects": [
+      "MS Teams v5 Rev05 SP3 - Handset",
+      "MS Teams v5 Rev05 SP3 - Speakerphone",
+      "MS Teams v5 Rev05 SP3 - Headset"
+    ],
+    "changed": "2022-08-08 08:56:16"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP3",
+    "filename": "rename_analyses_files_channels.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 6,
+    "used_by_total": 48,
+    "projects": [
+      "MS Teams v5 Rev05 SP3 - Speakerphone",
+      "MS Teams v5 Rev05 SP3 - Handset",
+      "MS Teams v5 Rev05 SP3 - Headset"
+    ],
+    "changed": "2022-11-17 10:04:39"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP3",
+    "filename": "show_ch_name_in_legend.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 6,
+    "used_by_total": 48,
+    "projects": [
+      "MS Teams v5 Rev05 SP3 - Speakerphone",
+      "MS Teams v5 Rev05 SP3 - Headset",
+      "MS Teams v5 Rev05 SP3 - Handset"
+    ],
+    "changed": "2022-09-27 13:15:16"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP3",
+    "filename": "3quest_store_MOS_variables.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 6,
+    "used_by_total": 46,
+    "projects": [
+      "MS Teams v5 Rev05 SP3 - Headset",
+      "MS Teams v5 Rev05 SP3 - Speakerphone",
+      "MS Teams v5 Rev05 SP3 - Handset"
+    ],
+    "changed": "2022-07-18 12:25:28"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP3",
+    "filename": "Save_DTattn_result.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 6,
+    "used_by_total": 44,
+    "projects": [
+      "MS Teams v5 Rev05 SP3 - Headset",
+      "MS Teams v5 Rev05 SP3 - Speakerphone",
+      "MS Teams v5 Rev05 SP3 - Handset"
+    ],
+    "changed": "2022-07-18 12:41:48"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP3",
+    "filename": "generate_tolerance_scheme.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 6,
+    "used_by_total": 24,
+    "projects": [
+      "MS Teams v5 Rev05 SP3 - Headset",
+      "MS Teams v5 Rev05 SP3 - Speakerphone",
+      "MS Teams v5 Rev05 SP3 - Handset"
+    ],
+    "changed": "2022-10-07 15:48:54"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP3",
+    "filename": "restore_channel_properties_rcv.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 6,
+    "used_by_total": 22,
+    "projects": [
+      "MS Teams v5 Rev05 SP3 - Handset",
+      "MS Teams v5 Rev05 SP3 - Headset",
+      "MS Teams v5 Rev05 SP3 - Speakerphone"
+    ],
+    "changed": "2022-09-28 11:21:04"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP3",
+    "filename": "Save_DTattn_result_sp_e2e_ar_nom.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 2,
+    "used_by_total": 20,
+    "projects": [
+      "MS Teams v5 Rev05 SP3 - Speakerphone"
+    ],
+    "changed": "2022-08-17 18:29:20"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP3",
+    "filename": "restore_channel_properties_snd.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 6,
+    "used_by_total": 18,
+    "projects": [
+      "MS Teams v5 Rev05 SP3 - Handset",
+      "MS Teams v5 Rev05 SP3 - Headset",
+      "MS Teams v5 Rev05 SP3 - Speakerphone"
+    ],
+    "changed": "2022-09-28 11:21:04"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP3",
+    "filename": "3quest_store_MOS_variables_alt.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 2,
+    "used_by_total": 16,
+    "projects": [
+      "MS Teams v5 Rev05 SP3 - Speakerphone"
+    ],
+    "changed": "2022-08-15 14:00:14"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP3",
+    "filename": "Save_DTattn_result_sp_e2e_rr_nom.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 2,
+    "used_by_total": 16,
+    "projects": [
+      "MS Teams v5 Rev05 SP3 - Speakerphone"
+    ],
+    "changed": "2024-01-15 17:12:31"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP3",
+    "filename": "activation_snd.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 6,
+    "used_by_total": 12,
+    "projects": [
+      "MS Teams v5 Rev05 SP3 - Speakerphone",
+      "MS Teams v5 Rev05 SP3 - Headset",
+      "MS Teams v5 Rev05 SP3 - Handset"
+    ],
+    "changed": "2022-08-30 10:03:07"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP3",
+    "filename": "snd_act_combine.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 6,
+    "used_by_total": 12,
+    "projects": [
+      "MS Teams v5 Rev05 SP3 - Speakerphone",
+      "MS Teams v5 Rev05 SP3 - Headset",
+      "MS Teams v5 Rev05 SP3 - Handset"
+    ],
+    "changed": "2022-08-30 10:01:16"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP3",
+    "filename": "distortion_and_noise_rcv.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 2,
+    "used_by_total": 8,
+    "projects": [
+      "MS Teams v5 Rev05 SP3 - Speakerphone"
+    ],
+    "changed": "2022-09-07 11:01:43"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP3",
+    "filename": "save_directivity_levels.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 2,
+    "used_by_total": 8,
+    "projects": [
+      "MS Teams v5 Rev05 SP3 - Speakerphone"
+    ],
+    "changed": "2022-08-31 08:33:44"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP3",
+    "filename": "set_hardware_config_delay_values_for_positional_double_talk.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 2,
+    "used_by_total": 8,
+    "projects": [
+      "MS Teams v5 Rev05 SP3 - Speakerphone"
+    ],
+    "changed": "2022-08-29 14:10:24"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP3",
+    "filename": "3quest_add_clean_ref_conf54.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 2,
+    "used_by_total": 6,
+    "projects": [
+      "MS Teams v5 Rev05 SP3 - Speakerphone"
+    ],
+    "changed": "2024-01-16 16:38:51"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP3",
+    "filename": "bgn_wizard.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 6,
+    "used_by_total": 6,
+    "projects": [
+      "MS Teams v5 Rev05 SP3 - Handset",
+      "MS Teams v5 Rev05 SP3 - Speakerphone",
+      "MS Teams v5 Rev05 SP3 - Headset"
+    ],
+    "changed": "2022-06-02 15:35:01"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP3",
+    "filename": "select_wav_export_folder.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 6,
+    "used_by_total": 6,
+    "projects": [
+      "MS Teams v5 Rev05 SP3 - Headset",
+      "MS Teams v5 Rev05 SP3 - Handset",
+      "MS Teams v5 Rev05 SP3 - Speakerphone"
+    ],
+    "changed": "2022-09-23 17:11:08"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP3",
+    "filename": "set_analysis_ordinate_axis_scaling_db_spl.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 6,
+    "used_by_total": 6,
+    "projects": [
+      "MS Teams v5 Rev05 SP3 - Headset",
+      "MS Teams v5 Rev05 SP3 - Speakerphone",
+      "MS Teams v5 Rev05 SP3 - Handset"
+    ],
+    "changed": "2022-09-28 19:23:17"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP3",
+    "filename": "set_measurement_equipment_delays.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 6,
+    "used_by_total": 6,
+    "projects": [
+      "MS Teams v5 Rev05 SP3 - Handset",
+      "MS Teams v5 Rev05 SP3 - Speakerphone",
+      "MS Teams v5 Rev05 SP3 - Headset"
+    ],
+    "changed": "2022-08-31 17:00:56"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP3",
+    "filename": "3quest_add_clean_ref_alt.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 2,
+    "used_by_total": 4,
+    "projects": [
+      "MS Teams v5 Rev05 SP3 - Speakerphone"
+    ],
+    "changed": "2022-09-07 10:55:49"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP3",
+    "filename": "OpS05R_combine_single_and_double_talk.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 2,
+    "used_by_total": 4,
+    "projects": [
+      "MS Teams v5 Rev05 SP3 - Speakerphone"
+    ],
+    "changed": "2022-09-20 14:44:20"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP3",
+    "filename": "distortion_and_noise_snd.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 2,
+    "used_by_total": 4,
+    "projects": [
+      "MS Teams v5 Rev05 SP3 - Speakerphone"
+    ],
+    "changed": "2022-09-07 11:01:43"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP3",
+    "filename": "dut_meas_wizard.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 4,
+    "used_by_total": 4,
+    "projects": [
+      "MS Teams v5 Rev05 SP3 - Headset",
+      "MS Teams v5 Rev05 SP3 - Speakerphone"
+    ],
+    "changed": "2023-11-07 15:46:02"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP3",
+    "filename": "generate_tolerance_scheme_ultrasound_measurements.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 2,
+    "used_by_total": 4,
+    "projects": [
+      "MS Teams v5 Rev05 SP3 - Speakerphone"
+    ],
+    "changed": "2023-12-06 13:28:58"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP3",
+    "filename": "merge_ref_channel_of_rcv_delay_measurement.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 2,
+    "used_by_total": 4,
+    "projects": [
+      "MS Teams v5 Rev05 SP3 - Speakerphone"
+    ],
+    "changed": "2022-09-07 10:28:08"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP3",
+    "filename": "select_automatic_or_manual_volume_control.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 4,
+    "used_by_total": 4,
+    "projects": [
+      "MS Teams v5 Rev05 SP3 - Headset",
+      "MS Teams v5 Rev05 SP3 - Speakerphone"
+    ],
+    "changed": "2024-01-25 11:40:09"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP3",
+    "filename": "select_nominal_dut_playback_volume.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 4,
+    "used_by_total": 4,
+    "projects": [
+      "MS Teams v5 Rev05 SP3 - Headset",
+      "MS Teams v5 Rev05 SP3 - Speakerphone"
+    ],
+    "changed": "2022-08-04 14:06:46"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP3",
+    "filename": "3quest_store_MOS_variables_conf54.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 2,
+    "used_by_total": 2,
+    "projects": [
+      "MS Teams v5 Rev05 SP3 - Speakerphone"
+    ],
+    "changed": "2024-01-03 15:54:34"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP3",
+    "filename": "add_vol_setting_report.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 2,
+    "used_by_total": 2,
+    "projects": [
+      "MS Teams v5 Rev05 SP3 - Speakerphone"
+    ],
+    "changed": "2023-11-20 14:47:28"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP3",
+    "filename": "define_hardware_options.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 2,
+    "used_by_total": 2,
+    "projects": [
+      "MS Teams v5 Rev05 SP3 - Speakerphone"
+    ],
+    "changed": "2022-08-25 12:31:10"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP3",
+    "filename": "define_playback_options_Conf3_54dB.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 2,
+    "used_by_total": 2,
+    "projects": [
+      "MS Teams v5 Rev05 SP3 - Speakerphone"
+    ],
+    "changed": "2023-12-06 13:35:20"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP3",
+    "filename": "determination_nom_vol_step_after_measurement.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 2,
+    "used_by_total": 2,
+    "projects": [
+      "MS Teams v5 Rev05 SP3 - Speakerphone"
+    ],
+    "changed": "2023-04-25 09:48:01"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP3",
+    "filename": "est_vol_msg.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 2,
+    "used_by_total": 2,
+    "projects": [
+      "MS Teams v5 Rev05 SP3 - Speakerphone"
+    ],
+    "changed": "2023-04-25 09:46:07"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP3",
+    "filename": "init_or_reset_determination_process_for_nom_volume.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 2,
+    "used_by_total": 2,
+    "projects": [
+      "MS Teams v5 Rev05 SP3 - Speakerphone"
+    ],
+    "changed": "2023-04-25 15:50:42"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP3",
+    "filename": "max_vol_msg.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 2,
+    "used_by_total": 2,
+    "projects": [
+      "MS Teams v5 Rev05 SP3 - Speakerphone"
+    ],
+    "changed": "2023-04-24 15:33:50"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP3",
+    "filename": "project_premium_requirements.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 2,
+    "used_by_total": 2,
+    "projects": [
+      "MS Teams v5 Rev05 SP3 - Handset"
+    ],
+    "changed": "2022-08-31 17:22:09"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP3",
+    "filename": "vol_cntrl_ultrasound_meas.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 2,
+    "used_by_total": 2,
+    "projects": [
+      "MS Teams v5 Rev05 SP3 - Speakerphone"
+    ],
+    "changed": "2023-04-26 14:32:40"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP3",
+    "filename": "OnProjectOpen.py",
+    "file_type": "FT_Script",
+    "copies": 6,
+    "used_by_total": 0,
+    "projects": [
+      "MS Teams v5 Rev05 SP3 - Headset",
+      "MS Teams v5 Rev05 SP3 - Speakerphone",
+      "MS Teams v5 Rev05 SP3 - Handset"
+    ],
+    "changed": "2022-10-18 07:57:21"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP3",
+    "filename": "after_canceled_measurement.py",
+    "file_type": "FT_Script",
+    "copies": 6,
+    "used_by_total": 0,
+    "projects": [
+      "MS Teams v5 Rev05 SP3 - Handset",
+      "MS Teams v5 Rev05 SP3 - Speakerphone",
+      "MS Teams v5 Rev05 SP3 - Headset"
+    ],
+    "changed": "2022-12-08 16:10:31"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP3",
+    "filename": "after_each_measurement.py",
+    "file_type": "FT_Script",
+    "copies": 6,
+    "used_by_total": 0,
+    "projects": [
+      "MS Teams v5 Rev05 SP3 - Headset",
+      "MS Teams v5 Rev05 SP3 - Speakerphone",
+      "MS Teams v5 Rev05 SP3 - Handset"
+    ],
+    "changed": "2022-11-03 10:53:22"
+  },
+  {
+    "database": "51_MS_Teams_Rev05_SP3",
+    "filename": "before_each_measurement.py",
+    "file_type": "FT_Script",
+    "copies": 6,
+    "used_by_total": 0,
+    "projects": [
+      "MS Teams v5 Rev05 SP3 - Headset",
+      "MS Teams v5 Rev05 SP3 - Handset",
+      "MS Teams v5 Rev05 SP3 - Speakerphone"
+    ],
+    "changed": "2022-11-02 15:54:21"
+  },
+  {
+    "database": "61_Demo_SMDs_Rev07",
+    "filename": "cal_corr_level.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 1,
+    "used_by_total": 5,
+    "projects": [
+      "ACQUA Demo SMDs Rev.07"
+    ],
+    "changed": "2017-09-28 11:20:51"
+  },
+  {
+    "database": "61_Demo_SMDs_Rev07",
+    "filename": "dut_meas_wizard.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 1,
+    "used_by_total": 1,
+    "projects": [
+      "ACQUA Demo SMDs Rev.07"
+    ],
+    "changed": "2026-08-06 16:54:00"
+  },
+  {
+    "database": "61_Demo_SMDs_Rev07",
+    "filename": "reset_lc_clock.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 1,
+    "used_by_total": 1,
+    "projects": [
+      "ACQUA Demo SMDs Rev.07"
+    ],
+    "changed": "2024-07-10 14:58:32"
+  },
+  {
+    "database": "61_Demo_SMDs_Rev07",
+    "filename": "set_lc_clock.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 1,
+    "used_by_total": 1,
+    "projects": [
+      "ACQUA Demo SMDs Rev.07"
+    ],
+    "changed": "2024-07-10 14:58:41"
+  },
+  {
+    "database": "61_Demo_SMDs_Rev07",
+    "filename": "setup_bluetooth_connection.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 1,
+    "used_by_total": 1,
+    "projects": [
+      "ACQUA Demo SMDs Rev.07"
+    ],
+    "changed": "2024-07-17 16:19:58"
+  },
+  {
+    "database": "61_Demo_SMDs_Rev07",
+    "filename": "setup_bt_volume_ctrl.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 1,
+    "used_by_total": 1,
+    "projects": [
+      "ACQUA Demo SMDs Rev.07"
+    ],
+    "changed": "2024-07-17 16:17:16"
+  },
+  {
+    "database": "ACQUA_auto_v2026Aug",
+    "filename": "3quest_store_mos_variables.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 1,
+    "used_by_total": 162,
+    "projects": [
+      "ZoomRooms_v2020Oct_v1"
+    ],
+    "changed": "2020-07-17 11:48:48"
+  },
+  {
+    "database": "ACQUA_auto_v2026Aug",
+    "filename": "3quest_add_clean_ref_3noise.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 1,
+    "used_by_total": 139,
+    "projects": [
+      "ZoomRooms_v2020Oct_v1"
+    ],
+    "changed": "2019-10-16 16:18:17"
+  },
+  {
+    "database": "ACQUA_auto_v2026Aug",
+    "filename": "3quest_store_mos_variables_alt.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 1,
+    "used_by_total": 24,
+    "projects": [
+      "ZoomRooms_v2020Oct_v1"
+    ],
+    "changed": "2019-10-16 16:22:12"
+  },
+  {
+    "database": "ACQUA_auto_v2026Aug",
+    "filename": "3quest_add_clean_ref_alt2.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 1,
+    "used_by_total": 12,
+    "projects": [
+      "ZoomRooms_v2020Oct_v1"
+    ],
+    "changed": "2024-10-24 15:46:49"
+  },
+  {
+    "database": "ACQUA_auto_v2026Aug",
+    "filename": "save_dtattn_result.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 1,
+    "used_by_total": 12,
+    "projects": [
+      "ZoomRooms_v2020Oct_v1"
+    ],
+    "changed": "2019-10-21 15:28:20"
+  },
+  {
+    "database": "ACQUA_auto_v2026Aug",
+    "filename": "save_dtattn_result_sp_e2e_rr_nom.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 1,
+    "used_by_total": 12,
+    "projects": [
+      "ZoomRooms_v2020Oct_v1"
+    ],
+    "changed": "2024-01-15 17:12:31"
+  },
+  {
+    "database": "ACQUA_auto_v2026Aug",
+    "filename": "activation_snd.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 1,
+    "used_by_total": 6,
+    "projects": [
+      "ZoomRooms_v2020Oct_v1"
+    ],
+    "changed": "2022-08-30 10:03:07"
+  },
+  {
+    "database": "ACQUA_auto_v2026Aug",
+    "filename": "snd_act_combine.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 1,
+    "used_by_total": 6,
+    "projects": [
+      "ZoomRooms_v2020Oct_v1"
+    ],
+    "changed": "2022-08-30 10:01:16"
+  },
+  {
+    "database": "ACQUA_auto_v2026Aug",
+    "filename": "3quest_add_clean_ref.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 1,
+    "used_by_total": 0,
+    "projects": [
+      "ZoomRooms_v2020Oct_v1"
+    ],
+    "changed": "2017-02-06 11:36:06"
+  },
+  {
+    "database": "ACQUA_auto_v2026Aug",
+    "filename": "3quest_add_clean_ref_alt.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 1,
+    "used_by_total": 0,
+    "projects": [
+      "ZoomRooms_v2020Oct_v1"
+    ],
+    "changed": "2019-10-28 13:26:53"
+  },
+  {
+    "database": "ACQUA_auto_v2026Aug",
+    "filename": "3quest_store_mos_variables_3noise.py",
+    "file_type": "FT_SMDUsedFile",
+    "copies": 1,
+    "used_by_total": 0,
+    "projects": [
+      "ZoomRooms_v2020Oct_v1"
+    ],
+    "changed": "2020-07-17 11:50:50"
+  }
+]
