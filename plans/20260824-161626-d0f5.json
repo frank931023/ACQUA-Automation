@@ -3,7 +3,7 @@
   "created": "2026-08-24T16:16:26",
   "title": "0824-finaltest-2",
   "description": "",
-  "updated": "2026-08-24T16:16:26",
+  "updated": "2026-10-06T00:51:59",
   "items": [
     {
       "row_id": 3584,
@@ -48,7 +48,8 @@
   },
   "manual_excluded": [],
   "setup": {
-    "name": "",
+    "setup_id": "20260915-150740-36e7",
+    "name": "monday",
     "note": "",
     "params": {},
     "_note": "尚未自動化:目前只會在序列中間停下來提示人工調整"
