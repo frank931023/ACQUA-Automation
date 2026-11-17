@@ -167,6 +167,17 @@
   .rn-recent button { font-size:11px; padding:3px 9px; max-width:100%;
                       overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 
+  /* 擺位未套用的警告框 —— 刻意做得比統計數字搶眼,
+     因為它代表的是「數據可能是錯的」,不是單純的 FAIL。 */
+  .warnbox { margin-top:10px; padding:10px 12px; border-radius:9px;
+             border:1px solid #b7791f55; background:#b7791f12;
+             color:var(--warn); font-size:12px; line-height:1.5; }
+  .warnbox b { display:block; margin-bottom:3px; font-size:13px; }
+  .warnbox button { margin-top:7px; font-size:11px; padding:3px 10px; }
+  .sw-row { padding:6px 10px; margin-bottom:5px; font-size:12px;
+            border:1px solid #b7791f55; border-radius:8px; background:#b7791f10; }
+  .sw-row small { color:var(--muted); }
+
   /* ── 執行紀錄:PASS / FAIL 兩大類,各自按狀態碼分組 ── */
   .rc-sum { display:flex; gap:10px; margin:10px 0 6px; }
   .rc-sum div { flex:1; text-align:center; border-radius:9px; padding:9px 6px;
@@ -397,6 +408,12 @@
       <div class="p"><b id="r-pass">0</b>PASS</div>
       <div class="f"><b id="r-fail">0</b>FAIL</div>
       <div><b id="r-left">0</b>Left</div>
+    </div>
+
+    <!-- 擺位未套用 —— 執行畫面就要看得到,不用等到跑完(計畫書防線 ⑤) -->
+    <div id="r-setupwarn" class="warnbox" style="display:none">
+      <b>⚠️ <span id="r-sw-n">0</span> items did not get their required setup</b>
+      <div id="r-sw-last"></div>
     </div>
 
     <div id="r-fail-msg"></div>
@@ -663,6 +680,14 @@
       <div class="stat ok"><b id="s-pass">0</b>Pass</div>
       <div class="stat fail"><b id="s-fail">0</b>Fail</div>
     </div>
+    <!-- 擺位未套用 —— 跑完只看這一區也要看得出哪幾筆有疑慮(計畫書防線 ⑤)。
+         平常整塊隱藏,有疑慮才出現。 -->
+    <div id="s-setupwarn" class="warnbox" style="display:none">
+      <b>⚠️ <span id="s-sw-n">0</span> items did not get their required setup</b>
+      <div>These were measured at whatever position the rig was already in —
+           the data may be wrong.</div>
+      <button id="btn-sw-which">Show which ones</button>
+    </div>
     <div class="row" style="margin-top:8px">
       <button id="btn-records" style="flex:1">History &amp; status breakdown</button>
     </div>
@@ -835,13 +860,22 @@ function render(s) {
   $('#s-pass').textContent  = s.summary.passed;
   $('#s-fail').textContent  = s.summary.failed;
 
+  // 擺位未套用(計畫書防線 ⑤)。用 setup_not_applied 的長度而不是
+  // summary.setup_warn —— 前者連「還沒產生結果的那幾筆」也算進去。
+  const sw = (s.setup_not_applied || []).length;
+  $('#s-setupwarn').style.display = sw ? 'block' : 'none';
+  $('#s-sw-n').textContent = sw;
+
   renderBlocking(s.blocking_window);
 
   // 分頁標題顯示進度;跑完叫一聲
   if (s.running && s.current) NOTIFY.progress(s.current.index, s.current.total);
   if (_wasRunning && !s.running) {
     const sm = s.summary || {};
-    NOTIFY.done('Run finished', `${sm.passed || 0} pass / ${sm.failed || 0} fail`);
+    // 通知裡就要帶上擺位疑慮 —— 無人值守的人回來先看到的是這則通知
+    NOTIFY.done('Run finished',
+      `${sm.passed || 0} pass / ${sm.failed || 0} fail`
+      + (sw ? ` — ⚠️ ${sw} without the required setup` : ''));
     NOTIFY.progress(0, 0);
   }
   _wasRunning = !!s.running;
@@ -1497,7 +1531,21 @@ function renderRecords() {
       + '</div>';
   };
 
-  const html = block('PASS', pass, 'p') + block('FAIL', fail, 'f');
+  // 擺位未套用的清單排在最前面(計畫書防線 ⑤)。
+  // 它跟 PASS / FAIL 是**兩件不同的事** —— 一筆可以 PASS 又同時可疑,
+  // 所以不能併進狀態碼分組,要獨立一區。
+  const warn = S.setup_not_applied || [];
+  const warnBlock = warn.length
+    ? `<div class="rc-grp"><h4>⚠️ Setup not applied (${warn.length})</h4>`
+      + `<div class="warnbox" style="margin:0 0 8px">Measured at whatever
+           position the rig was already in — the data may be wrong.</div>`
+      + warn.map(w => `<div class="sw-row">#${w.row_id} ${esc(w.title || '')}
+           <br><small>wanted &ldquo;${esc(w.wanted || '')}&rdquo; — ${esc(w.reason || '')}</small>
+         </div>`).join('')
+      + '</div>'
+    : '';
+
+  const html = warnBlock + block('PASS', pass, 'p') + block('FAIL', fail, 'f');
   $('#rc-body').innerHTML = html || '<div class="empty">No results yet</div>';
 }
 
@@ -1517,6 +1565,7 @@ async function openRecords() {
 // 不會想到去點數字的人用的。兩個入口就夠,不需要第三個。
 $('#btn-records').onclick = openRecords;
 $('#stats').onclick       = openRecords;
+$('#btn-sw-which').onclick = openRecords;   // 明細就在紀錄最上面那一區
 $('#btn-rec-close').onclick = () => $('#recov').classList.remove('on');
 $('#btn-rec-csv').onclick   = () => { location.href = '/acqua/api/results.csv'; };
 
@@ -1928,6 +1977,15 @@ function renderRunOverlay(s) {
   $('#r-pass').textContent = s.summary.passed;
   $('#r-fail').textContent = s.summary.failed;
   $('#r-left').textContent = Math.max(0, total - done);
+
+  const warn = s.setup_not_applied || [];
+  $('#r-setupwarn').style.display = warn.length ? 'block' : 'none';
+  $('#r-sw-n').textContent = warn.length;
+  if (warn.length) {
+    const w = warn[warn.length - 1];
+    $('#r-sw-last').textContent =
+      `latest: #${w.row_id} wanted "${w.wanted || ''}" — ${w.reason || ''}`;
+  }
   $('#r-eta').textContent = `${fmtDur(el)} elapsed${eta}`;
 
   $('#r-log').textContent =

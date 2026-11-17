@@ -133,6 +133,20 @@ from HSL import (run_universal_questionnaire_gui, save_var, get_var_value,
 
 ---
 
+## 👉 延伸:讓 ACQUA 自己知道「這個測項要哪個擺位」
+
+這個資料夾裡還有一份 **[SETUP_AUTOMATION_PLAN.md](SETUP_AUTOMATION_PLAN.md)** ——
+第二次大工程的規劃與執行紀錄。
+
+核心發現是:**ACQUA 本來就有「每個測項帶著自己的硬體需求」的機制**
+(`TurningDevices`、`HHPSettingName`、以及 1858 個測項已經在用的 Tags),
+而且**掛鉤已經在用 socket 控制外部硬體**(`BGNConfigurator` → `BGNRemote.py`)。
+
+那份文件有完整的證據、實測數據(41 次切換 vs 分組後 11 次)、
+依序的開發步驟,以及還沒解決的疑慮。做的時候一邊填結果。
+
+---
+
 ## 對我們自動化的兩個機會
 
 **1. `before_each_measurement.py` 可以補上我們缺的檢查**

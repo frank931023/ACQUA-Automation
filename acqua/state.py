@@ -53,6 +53,10 @@ class SharedState:
         #: labCORE 麥克風供電的快取。由工作執行緒閒置時更新 ——
         #: 路由只讀這份,不排進佇列,量測進行中也要能讀。
         self.mic_power = None
+        #: 這一批裡「指定了擺位但沒套用成功」的測項。
+        #: 無人值守時沒人看得到執行中的警告,所以要讓它活到跑完的摘要
+        #: (見 acqua_scripts/SETUP_AUTOMATION_PLAN.md 防線 ⑤)。
+        self.setup_not_applied = []
         # ACQUA 開了對話框在等人時,把內容與按鈕端到 UI
         self.blocking_window = None    # {"hwnd","cls","title","buttons","message"}
         self.paused = False            # 逐項模式:停在兩筆之間
@@ -105,6 +109,7 @@ class SharedState:
                 "hardware_settings": self.hardware_settings,
                 "hardware_active": self.hardware_active,
                 "mic_power": self.mic_power,
+                "setup_not_applied": self.setup_not_applied,
                 "blocking_window": self.blocking_window,
                 "paused": self.paused,
                 "wizard_groups": self.wizard_groups,
@@ -115,6 +120,9 @@ class SharedState:
                     "total": len(self.results),
                     "passed": passed,
                     "failed": len(self.results) - passed,
+                    # 跑完只看摘要也要看得出有疑慮的筆數(計畫書防線 ⑤)
+                    "setup_warn": sum(1 for r in self.results
+                                      if r.get("setup_warn")),
                 },
                 "seq": self._seq,
             }
@@ -133,15 +141,25 @@ class SharedState:
         `code` 是數值狀態碼:ACQUA 的 0-8,或我們自己標的負數
         (見 acqua/constants.py 的 EMEResult)。只存名稱是不夠的 ——
         UI 要能按狀態碼分組統計,名稱字串沒辦法穩定對應。
+
+        `setup_warn` 把「這一筆沒套用到指定擺位」焊進結果裡(計畫書防線 ⑤)。
+        在這裡標是因為擺位是**送出前**判斷的 —— 結果記下來的時候,
+        該筆的未套用紀錄一定已經存在。標進結果而不是讓畫面去 join,
+        是為了讓它跟著 CSV、跟著 runs/current.json 一起活下來。
         """
         with self._lock:
-            self.results.append({
+            warn = next((w["wanted"] for w in (self.setup_not_applied or [])
+                         if w.get("row_id") == row_id), "")
+            rec = {
                 "title": title, "row_id": row_id, "status": status,
                 "code": (int(code) if code is not None else None),
                 "path": path or "",
+                "setup_warn": warn,
                 "passed": bool(passed), "retries": retries, "ts": time.time(),
-            })
+            }
+            self.results.append(rec)
         self.emit("result", title=title, passed=bool(passed), status=status)
+        return rec          # 呼叫端拿它去寫 runlog,不用再查一次擺位
 
     def clear_results(self):
         with self._lock:

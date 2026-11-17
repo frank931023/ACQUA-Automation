@@ -1,85 +1,45 @@
 {
   "state": "finished",
   "mode": "selected",
-  "comment": "1006 test 2",
-  "database": "51_MS_Teams_Rev05_SP2",
-  "project_group": "MS Teams v5 Rev05 SP2 - Speakerphone",
-  "project": "MS Teams v5 Rev05 SP2 - Speakerphone",
-  "measurement_object": "New Measurement Object",
-  "started_at": 1791219528.7013776,
-  "updated_at": 1791219655.3013191,
+  "comment": "setup roundtrip stage2",
+  "database": "AUTOMATION_TEST_0806",
+  "project_group": "test1",
+  "project": "test1",
+  "measurement_object": "MO1",
+  "started_at": 1794765362.497952,
+  "updated_at": 1794765422.5121439,
   "planned": [
     {
-      "row_id": 3584,
-      "title": "Info: labCORE settings"
+      "row_id": 11,
+      "title": "Info HEAD acoustics Rotating Reflector (HRR I)"
     },
     {
-      "row_id": 3585,
-      "title": "Info: Workplace settings"
-    },
-    {
-      "row_id": 3586,
-      "title": "Info: Input calibration"
-    },
-    {
-      "row_id": 3587,
-      "title": "Info: Mouth equalization"
-    },
-    {
-      "row_id": 3588,
-      "title": "Info: SMD Collections"
+      "row_id": 13,
+      "title": "New Python Script SMD"
     }
   ],
   "done": [
     {
-      "row_id": 3584,
-      "title": "Info: labCORE settings",
+      "row_id": 11,
+      "title": "Info HEAD acoustics Rotating Reflector (HRR I)",
       "status": "Done",
       "code": 1,
-      "path": "MS Teams v5 Rev05 SP2 - Speakerphone / V5_Personal Space and Shared Space Devices - Desk Phone, Speakerphone / Information and preparation",
+      "path": "test1",
+      "setup_warn": "",
       "passed": true,
       "retries": 0,
-      "ts": 1791219622.7852197
+      "ts": 1794765416.8211923
     },
     {
-      "row_id": 3585,
-      "title": "Info: Workplace settings",
+      "row_id": 13,
+      "title": "New Python Script SMD",
       "status": "Done",
       "code": 1,
-      "path": "MS Teams v5 Rev05 SP2 - Speakerphone / V5_Personal Space and Shared Space Devices - Desk Phone, Speakerphone / Information and preparation",
+      "path": "test1",
+      "setup_warn": "",
       "passed": true,
       "retries": 0,
-      "ts": 1791219630.1530643
-    },
-    {
-      "row_id": 3586,
-      "title": "Info: Input calibration",
-      "status": "Done",
-      "code": 1,
-      "path": "MS Teams v5 Rev05 SP2 - Speakerphone / V5_Personal Space and Shared Space Devices - Desk Phone, Speakerphone / Information and preparation",
-      "passed": true,
-      "retries": 0,
-      "ts": 1791219637.8340383
-    },
-    {
-      "row_id": 3587,
-      "title": "Info: Mouth equalization",
-      "status": "Done",
-      "code": 1,
-      "path": "MS Teams v5 Rev05 SP2 - Speakerphone / V5_Personal Space and Shared Space Devices - Desk Phone, Speakerphone / Information and preparation",
-      "passed": true,
-      "retries": 0,
-      "ts": 1791219646.4133906
-    },
-    {
-      "row_id": 3588,
-      "title": "Info: SMD Collections",
-      "status": "Done",
-      "code": 1,
-      "path": "MS Teams v5 Rev05 SP2 - Speakerphone / V5_Personal Space and Shared Space Devices - Desk Phone, Speakerphone / Information and preparation",
-      "passed": true,
-      "retries": 0,
-      "ts": 1791219653.6992512
+      "ts": 1794765421.0547464
     }
   ]
 }

@@ -58,6 +58,9 @@ UNSCOPED = frozenset({
     # labCORE 的麥克風供電 —— 是機器層級的狀態,跟專案無關。
     # 由工作執行緒閒置時更新,路由只讀這份快取(不排佇列,量測中也要能讀)。
     "mic_power",
+    # 這一批有哪幾筆沒套用到指定擺位 —— 屬於「這一輪執行」,
+    # 跟專案無關(換專案時 run 本來就結束了)。
+    "setup_not_applied",
     # 來自 config.json,不是從資料庫算的
     "wizard_scopes",
     # 純衍生 / 傳輸用

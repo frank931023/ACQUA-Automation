@@ -93,6 +93,15 @@
   .setupph .h { font-size:12px; font-weight:600; color:var(--brand);
                 margin-bottom:5px; }
 
+  /* 擺位未套用的警告 —— 做得比 PASS/FAIL 搶眼,因為它的意思是
+     「數據可能是錯的」,比單純一筆 FAIL 嚴重。 */
+  .warnbox { margin-top:12px; padding:11px 13px; border-radius:9px;
+             border:1px solid #b7791f55; background:#b7791f12;
+             color:var(--warn); font-size:12px; line-height:1.5; }
+  .warnbox b { display:block; margin-bottom:3px; font-size:13px; }
+  .warnbox .sw-row { margin-top:5px; padding-top:5px;
+                     border-top:1px solid #b7791f33; }
+
   /* 跑完的摘要 */
   .done { margin-top:12px; padding:12px 14px; border-radius:9px;
           border:1px solid var(--ok); background:#1a7f370d; }
@@ -276,6 +285,14 @@
       <div id="sp-name">—</div>
       <div class="pbar" style="margin:8px 0 4px"><i id="sp-bar" style="width:0%"></i></div>
       <div id="sp-left" style="font-size:11px;color:var(--faint)"></div>
+    </div>
+    <!-- 擺位未套用 —— 計畫書防線 ⑤。這一頁是無人值守的主要入口,
+         所以警告一定要在這裡看得到,不能只留在日誌裡。 -->
+    <div id="r-setupwarn" class="warnbox" style="display:none">
+      <b>⚠️ <span id="r-sw-n">0</span> items did not get their required setup</b>
+      <div>Measured at whatever position the rig was already in —
+           the data may be wrong.</div>
+      <div id="r-sw-list"></div>
     </div>
     <div class="done" id="r-done" style="display:none">
       <div class="h" id="dn-h">Sequence complete</div>
@@ -871,7 +888,21 @@ function paintRun() {
   }
   $('#r-pass').textContent = sm.passed || 0;
   $('#r-fail').textContent = sm.failed || 0;
+  // 只在序列還在跑的時候跟著 state 走 —— 跑完之後這塊歸 showDone(),
+  // 它放的是整個序列的加總,不能被最後一步的數字蓋掉
+  if (running) paintSetupWarn(S.setup_not_applied || []);
   paintBlocking(S.blocking_window);
+}
+
+/** 擺位未套用的清單(計畫書防線 ⑤)。沒有疑慮就整塊隱藏。 */
+function paintSetupWarn(warn) {
+  $('#r-setupwarn').style.display = warn.length ? '' : 'none';
+  if (!warn.length) return;
+  $('#r-sw-n').textContent = warn.length;
+  // 只列最後 5 筆 —— 整份清單在跑完的摘要與 CSV 裡,這裡是提醒不是報表
+  $('#r-sw-list').innerHTML = warn.slice(-5).map(w =>
+    `<div class="sw-row">#${w.row_id} ${esc(w.title)}<br>wanted
+       &ldquo;${esc(w.wanted)}&rdquo; — ${esc(w.reason)}</div>`).join('');
 }
 
 let lastBlk = null;
@@ -1057,6 +1088,9 @@ async function runSeq() {
         title: p.title, mo: (prep.state && prep.state.measurement_object) || '',
         planned: row_ids.length,
         pass: sm.passed || 0, fail: sm.failed || 0, total: sm.total || 0,
+        // 擺位疑慮跟 pass/fail 一樣是「當前這一批」的,下一步會清掉 ——
+        // 不當下記起來,整個序列跑完就只剩最後一步的數字(計畫書防線 ⑤)
+        setupWarn: (S.setup_not_applied || []).slice(),
         comment,
       });
       log(`[${i + 1}/${seq.length}] "${p.title}" done — `
@@ -1123,11 +1157,17 @@ function showDone(secs) {
   }), {pass: 0, fail: 0, total: 0});
 
   $('#dn-h').textContent = abort ? 'Sequence stopped' : 'Sequence complete';
+  // 擺位疑慮要跟 pass/fail 並列在同一行 —— 跑完只看這一行的人最多。
+  // 整個序列的總數,所以是把每一步當下記下來的加總。
+  const swAll = stepResults.flatMap(r => r.setupWarn || []);
+  const sw = swAll.length;
   $('#dn-sum').innerHTML =
     `${stepResults.length} / ${seq.length} plans · `
     + `${Math.floor(secs / 60)}m ${secs % 60}s · `
     + `<b style="color:var(--ok)">${tot.pass} pass</b> / `
-    + `<b style="color:var(--fail)">${tot.fail} fail</b>`;
+    + `<b style="color:var(--fail)">${tot.fail} fail</b>`
+    + (sw ? ` · <b style="color:var(--warn)">⚠️ ${sw} without the`
+            + ` required setup</b>` : '');
 
   // 每一個計畫各自的成績 —— 序列的重點就是「這幾批分別如何」
   $('#dn-steps').innerHTML = stepResults.length
@@ -1137,9 +1177,15 @@ function showDone(secs) {
           <span class="t"><b>${esc(r.title)}</b>
             <small>${esc(r.mo || '')}${r.planned !== r.total
               ? ` · ${r.total}/${r.planned} reported` : ''}</small></span>
-          <span class="s"><b class="p">${r.pass}</b> / <b class="f">${r.fail}</b></span>
+          <span class="s"><b class="p">${r.pass}</b> / <b class="f">${r.fail}</b>${
+            (r.setupWarn || []).length
+              ? ` <b style="color:var(--warn)">⚠️${r.setupWarn.length}</b>` : ''
+          }</span>
         </div>`).join('')
     : '<div class="hint">No plan finished.</div>';
+
+  // 執行中那塊警告框換成「整個序列」的清單 —— 它現在是跑完的摘要了
+  paintSetupWarn(swAll);
   $('#dn-files').innerHTML = madeDocs.length
     ? '<div style="margin-top:8px;font-size:11px;color:var(--muted)">'
       + `${madeDocs.length} Word file(s):</div>`

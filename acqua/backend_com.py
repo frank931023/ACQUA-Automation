@@ -317,12 +317,13 @@ class ComBackend(AcquaBackend):
         """
         rid, title = smd["row_id"], smd["title"]
         path = smd.get("path", "")
-        self.state.add_result(title, rid, status_name, passed,
-                              code=code, path=path)
+        rec = self.state.add_result(title, rid, status_name, passed,
+                                    code=code, path=path)
         rl = self.state.runlog
         if rl:
             try:
-                rl.record(rid, title, status_name, passed, code=code, path=path)
+                rl.record(rid, title, status_name, passed, code=code, path=path,
+                          setup_warn=rec.get("setup_warn", ""))
             except Exception:                               # noqa: BLE001
                 pass
 
@@ -346,13 +347,14 @@ class ComBackend(AcquaBackend):
         desc = EMEResult.describe(status)
 
         rid = getattr(self, "_current_row_id", None) or self._batch_index
-        self.state.add_result(title, rid, desc, passed,
-                              code=status, path=self._path_of(rid))
+        rec = self.state.add_result(title, rid, desc, passed,
+                                    code=status, path=self._path_of(rid))
         rl = self.state.runlog
         if rl:
             try:
                 rl.record(rid, title, desc, passed,
-                          code=status, path=self._path_of(rid))
+                          code=status, path=self._path_of(rid),
+                          setup_warn=rec.get("setup_warn", ""))
             except Exception:                               # noqa: BLE001
                 pass
         self.state.log(f"    → {'PASS' if passed else 'FAIL'}({desc})",
@@ -1304,6 +1306,10 @@ class ComBackend(AcquaBackend):
 
                 self._current_row_id = smd["row_id"]
 
+                # ── 擺位:需要的話先把機構移到位 ──
+                # 鉤子由 app.py 掛上(見 backend_base.before_item)。
+                self.run_before_item(smd)
+
                 # ⚠️ 單筆出錯**不能**拖垮整批。
                 #    實測(2026-08-21):第 11 筆送出時 ACQUA 丟 "Acqua is busy.",
                 #    例外一路往上炸,剩下的測項全部沒跑(送 12 只跑了 10)。
@@ -1354,8 +1360,11 @@ class ComBackend(AcquaBackend):
             self._per_item = False
             if rl:
                 rl.finish(canceled=stopped)
+            warn = self.log_setup_warnings()
             snap = self.state.snapshot()["summary"]
-            self.state.log(f"=== 結束:{snap['passed']} PASS / {snap['failed']} FAIL ===")
+            self.state.log(
+                f"=== 結束:{snap['passed']} PASS / {snap['failed']} FAIL"
+                + (f" ・ ⚠️ {warn} 筆擺位未套用" if warn else "") + " ===")
 
     def run_measurements(self, variables=None):
         """⭐ 唯一的執行入口:整批跑,由 ACQUA 依 ConditionalExecution 決定範圍。
@@ -1448,10 +1457,12 @@ class ComBackend(AcquaBackend):
             if rl:
                 rl.finish(canceled=bool(self._batch_canceled
                                         or self.state.cancel_requested))
+            warn = self.log_setup_warnings()
             snap = self.state.snapshot()["summary"]
             self.state.log(
                 f"=== 結束:{snap['passed']} PASS / {snap['failed']} FAIL"
-                f"(ACQUA 回報總數 {self._batch_total})===")
+                + (f" ・ ⚠️ {warn} 筆擺位未套用" if warn else "")
+                + f"(ACQUA 回報總數 {self._batch_total})===")
 
 
     def _start_watcher(self):

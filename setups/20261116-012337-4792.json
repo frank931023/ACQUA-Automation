@@ -1,0 +1,30 @@
+{
+  "id": "20261116-012337-4792",
+  "created": "2026-11-16T01:23:37.012",
+  "name": "location2",
+  "description": "AUTOMATION_TEST_0806 驗證用 —— 對應 SMD #12",
+  "updated": "2026-11-16T01:23:37.012",
+  "axes": {
+    "speakers.x": 0.0,
+    "speakers.lift": 1.3,
+    "screen.z": 2.1,
+    "screen.lift": 1.25,
+    "hats.z": 1.5,
+    "hats.x": 0.55,
+    "hats.mrp": 1.2,
+    "hats.rot": 0.0,
+    "hats.head": 0.0,
+    "tableFront.z": 1.2,
+    "tableFront.lift": 0.9,
+    "tableBack.z": -0.95,
+    "tableBack.lift": 1.2,
+    "micRig1.z": 0.55,
+    "micRig1.x": -0.35,
+    "micRig1.h": 0.95,
+    "micRig2.z": 0.72,
+    "micRig2.x": 0.4,
+    "micRig2.h": 1.25
+  },
+  "count": 19,
+  "source": "setup"
+}

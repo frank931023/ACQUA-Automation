@@ -26,6 +26,18 @@
       "group": "Headset Tests",
       "project": "ANC Performance",
       "used": "2026-08-30T17:37:28"
+    },
+    "mock|mock": {
+      "group": "Standards",
+      "project": "Speakerphone Certification",
+      "used": "2026-10-30T09:18:38",
+      "mo": "DUT_001"
+    },
+    "AUTOMATION_ACQU\\ACQUADBSERVER|AUTOMATION_TEST_0806": {
+      "group": "test1",
+      "project": "test1",
+      "used": "2026-11-16T01:55:53",
+      "mo": "MO1"
     }
   },
   "report_dir": "C:\\Users\\autom\\OneDrive\\Desktop"

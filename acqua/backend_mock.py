@@ -208,6 +208,9 @@ class MockBackend(AcquaBackend):
             self.state.set(current={"title": smd["title"], "index": i + 1, "total": total})
             self.state.log(f"[{i + 1}/{total}] 量測中:{smd['title']}")
 
+            # 擺位鉤子在模擬模式也要跑 —— 不然整條擺位流程只能上真機才驗得到
+            self.run_before_item(smd)
+
             # 模擬量測期間的進度回報
             duration = self._rng.uniform(*_MOCK_SECONDS_PER_SMD)
             steps = 8
@@ -220,9 +223,11 @@ class MockBackend(AcquaBackend):
             passed = self._rng.random() > _MOCK_FAIL_RATE
             status = "MEAS_DONE_OK" if passed else "MEAS_DONE_NOT_OK"
 
-            self.state.add_result(smd["title"], smd["row_id"], status, passed, attempt)
+            rec = self.state.add_result(smd["title"], smd["row_id"], status,
+                                        passed, attempt)
             if rl:
-                rl.record(smd["row_id"], smd["title"], status, passed, attempt)
+                rl.record(smd["row_id"], smd["title"], status, passed, attempt,
+                          setup_warn=rec.get("setup_warn", ""))
             self.state.log(f"    → {'PASS' if passed else 'FAIL'}",
                            "info" if passed else "error")
 
@@ -231,8 +236,11 @@ class MockBackend(AcquaBackend):
         self.state.set(running=False, current=None, progress=None)
         if rl:
             rl.finish(canceled=self.state.cancel_requested)
+        warn = self.log_setup_warnings()
         snap = self.state.snapshot()["summary"]
-        self.state.log(f"=== 結束:{snap['passed']} PASS / {snap['failed']} FAIL ===")
+        self.state.log(
+            f"=== 結束:{snap['passed']} PASS / {snap['failed']} FAIL"
+            + (f" ・ ⚠️ {warn} 筆擺位未套用" if warn else "") + " ===")
 
     def create_report(self, output_path, selection_type, result_index=0,
                       settle_timeout=600):

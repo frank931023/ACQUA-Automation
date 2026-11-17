@@ -115,6 +115,7 @@ acqua/
   testplans.py         計畫的本地儲存(plans/*.json)
   crane.py             ⭐ 天車橋接:3D 邏輯軸 ←→ Pi 韌體指令(mock / http 兩種後端)
   roomsetups.py        擺位的本地儲存(setups/*.json)
+  setuptags.py         ⭐ 測項的 Setup 標籤:讀取、照擺位分組、找不到時的規則
   labcore.py           ⭐ labCORE 麥克風供電:ACQUA 不管這塊,只能我們管
   prefs.py             每個資料庫上次用什麼(prefs.json)
   runlog.py            執行紀錄(runs/current.json)
@@ -135,6 +136,9 @@ tools/
   check_context.py     上下文一致性檢查
   check_ui.py          前端與路由的機械化盤點
   test_nonblocking.py  ⭐ 量測進行中 UI 還能不能用(會真的跑一次量測)
+  test_setupflow.py    ⭐ 擺位流程的端對端(模擬後端,不需 ACQUA)
+  test_hook_bridge.py  ⭐ ACQUA 掛鉤的外部半邊(把 Tags 換成假的跑真掛鉤)
+  setup_inventory.py   盤點哪些測項有 / 該有 Setup 標籤(只讀)
   test_resolve.py      跨庫測項對應
   test_selfheal.py     專案樹變動後的自我校正
   labcore.py           讀 labCORE 硬體現況(麥克風 / USB / 接線)
@@ -172,6 +176,35 @@ SQL 不同:`raw_query()` 自己確保呼叫端執行緒有 COM(ADO 也是 COM),
 重疊,同時動撞到了也看不出是誰撞的。
 
 細節見 `acqua/crane.py` 的檔頭與 `soundproofroom/README.md`。
+
+### 擺位對不上時,不擋,但警告要活到最後
+
+測項可以在 ACQUA 裡用 `Setup` 標籤指定要在哪個擺位量(「编辑标签」那個
+欄位)。開跑前會讀這批的標籤,照擺位重排順序以少移動幾次 ——
+但**不拆散 MMD 群組**,裡面常常是「錄音 → 分析」,拆開分析會找不到結果。
+而且重排只在**真的比較少切換**的時候才採用:約 6% 的群組本身混了兩個
+擺位,硬排反而會多切幾次。
+
+名稱找不到對應的擺位時,規則是**不移動機構、記一筆、繼續測**。
+這是刻意的 —— 打錯一個字不該讓一整晚的批次停擺。但代價是那幾筆會在
+當下的位置量到,數據可能是錯的,所以警告必須活到最後:
+
+| 在哪裡看得到 | 形式 |
+|---|---|
+| 執行畫面 / 右下角小視窗 | 橘色警告框,帶最近一筆是哪個 |
+| 跑完的統計區 | 「⚠️ N items did not get their required setup」+ 看明細 |
+| 執行紀錄 | 獨立一區,**不併進 PASS / FAIL** —— 一筆可以同時 PASS 又可疑 |
+| 每一筆結果 | `results[].setup_warn`,也進 `runs/current.json` |
+| CSV 匯出 | `setup_not_applied` 欄位 |
+| Word 報告 | 報告是 ACQUA 產的、改不了,所以另存時在隔壁寫一份
+            `<報告名>.擺位警告.txt` |
+| 瀏覽器通知 | 「3 pass / 0 fail — ⚠️ 2 without the required setup」 |
+
+理由很直接:無人值守時沒有人看得到執行當下那一行。
+**一個沒人看到的警告等於沒有警告。**
+
+規則與實作進度見 `acqua_scripts/SETUP_AUTOMATION_PLAN.md`,
+程式在 `acqua/setuptags.py` 與 `app.py` 的 `_ensure_setup_before_item()`。
 
 ---
 
@@ -293,6 +326,8 @@ ACQUA 照樣回報 `PASS`,資料卻是廢的。更危險的是載入 `Teams_cham
 ```bash
 .venv\Scripts\python.exe tools\check_context.py    # 上下文一致性
 .venv\Scripts\python.exe tools\check_ui.py         # 前端與路由
+.venv\Scripts\python.exe tools\test_setupflow.py   # 擺位流程(模擬後端)
+.venv\Scripts\python.exe tools\test_hook_bridge.py # ACQUA 掛鉤(要先起服務)
 ```
 
 會抓什麼:
@@ -301,6 +336,7 @@ ACQUA 照樣回報 `PASS`,資料卻是廢的。更危險的是載入 `Teams_cham
 - JS 取用的 id 是否存在、按鈕是否有人接、fetch 的路由是否存在
 - worker 命令兩個 backend 是否都實作
 - 切換專案的防線是否還在
+- 擺位找不到對應時的警告有沒有活到最後(結果、摘要、CSV、報告)
 
 > 這些檢查是被真實 bug 逼出來的。舉例:區間替換不小心刪掉 `renderBlocking()`,
 > 頁面照樣載入,直到有人按下去才炸。括號平衡、語法檢查都查不出這種洞。

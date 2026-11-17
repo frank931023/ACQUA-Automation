@@ -59,7 +59,7 @@ class RunLog:
         })
 
     def record(self, row_id, title, status_name, passed, retries=0,
-               code=None, path=""):
+               code=None, path="", setup_warn=""):
         """每完成一筆就寫一次 —— 這樣任何時間點斷掉都知道跑到哪。"""
         d = self.load() or {}
         if not d:
@@ -69,6 +69,7 @@ class RunLog:
             "status": status_name,
             "code": (int(code) if code is not None else None),
             "path": path or "",
+            "setup_warn": setup_warn or "",     # 擺位未套用(計畫書防線 ⑤)
             "passed": bool(passed),
             "retries": retries, "ts": time.time(),
         })

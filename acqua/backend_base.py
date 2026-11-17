@@ -134,6 +134,51 @@ class AcquaBackend(ABC):
         """目前選用的硬體設定名稱。"""
         return None
 
+    def log_setup_warnings(self) -> int:
+        """跑完把「沒套用到指定擺位」的清單再印一次,回傳筆數。
+
+        ⚠️ 計畫書防線 ⑤:無人值守時沒人看得到執行當下的那一行警告。
+           判斷標準是「跑完回來只看最後的摘要,要能看出哪幾筆有疑慮」,
+           所以結束前一定要再印一次,而且要印到是哪幾筆。
+        """
+        rows = self.state.snapshot().get("setup_not_applied") or []
+        if not rows:
+            return 0
+        self.state.log(
+            "⚠️ 有 %d 筆沒套用到指定擺位 —— 這些結果可能是在錯誤的位置量到的"
+            % len(rows), "warn")
+        for w in rows[:20]:
+            self.state.log("    #%s %s ← 要「%s」(%s)" % (
+                w.get("row_id"), w.get("title", ""),
+                w.get("wanted", ""), w.get("reason", "")), "warn")
+        if len(rows) > 20:
+            self.state.log("    …另外還有 %d 筆,詳見結果表" % (len(rows) - 20),
+                           "warn")
+        return len(rows)
+
+    #: 每一筆測項送出**之前**呼叫,簽章 before_item(smd) -> None。
+    #: app.py 在這裡掛上「需要的話先把機構移到該測項的擺位」。
+    #:
+    #: 為什麼用注入而不是讓 backend 自己做:機構橋接(crane)活在
+    #: Flask 那一端,backend 只該管 ACQUA。而且這樣 mock 後端什麼都不用改。
+    #:
+    #: ⚠️ 這個鉤子**不可以丟例外**。丟了會拖垮整批 ——
+    #:    擺位有問題的處理方式是記一筆繼續跑(計畫書 5.0.4)。
+    before_item = None
+
+    def run_before_item(self, smd) -> None:
+        """安全地呼叫 before_item。兩個後端都走這支,保險只寫一份。
+
+        鉤子本來就該自己處理失敗並記錄,這裡包 try 是最後一道保險 ——
+        擺位有問題的代價是一筆數據可疑,拖垮整批的代價是幾小時白跑。
+        """
+        if self.before_item is None:
+            return
+        try:
+            self.before_item(smd)
+        except Exception as exc:                            # noqa: BLE001
+            self.state.log(f"    擺位處理出錯(繼續執行):{exc}", "warn")
+
     # ── 麥克風供電 ──────────────────────────────────
     # ACQUA 自己會切接線,但**不碰**供電。接線跳到沒供電的通道上時,
     # 量測照樣回報 PASS,數據卻是錯的 —— 所以這一塊要我們自己管。

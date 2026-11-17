@@ -566,6 +566,91 @@ check("收工不呼叫 CoUninitialize",
       and "CoUninitialize()" not in read("acqua/sqlcat.py"))
 
 
+print("\n=== K. 擺位:讀標籤、分組、找不到時的防線 ⑤ ===")
+_st = read("acqua/setuptags.py")
+_state = read("acqua/state.py")
+_runlog = read("acqua/runlog.py")
+_base = read("acqua/backend_base.py")
+_com = read("acqua/backend_com.py")
+_mock = read("acqua/backend_mock.py")
+_idx = read("templates/index.html")
+_pl = read("templates/plans.html")
+
+# ── 讀取規則(計畫書 5.0.4) ──
+check("只看 Setup 這一個標籤", 'SETUP_TAG = "Setup"' in _st)
+# 語意標籤描述測試條件,不是物理擺位 —— 實測同一個 Room 底下有 6~7 種
+# 不同的轉盤角度。拿它們推論擺位一定會錯,而且是靜默地錯。
+check("不拿 Room / DUTType 推論擺位",
+      all(k not in _st for k in ('"Room"', '"DUTType"', '"TurningDevices"')))
+check("id 清單分批查", "range(0, len(ids), 500)" in _st)
+
+# ── 分組 ──
+# 群組裡常常是「錄音 -> 分析」,分析要讀錄音的結果。拆開跑會找不到東西。
+check("分組不拆散 MMD 群組", "def group_by_setup" in _st
+      and "sorted(order, key=setup_of)" in _st)
+# 群組本身混了兩個擺位時(實測約 6%),重排可能比原順序多切幾次。
+check("重排只在真的更少時才採用", "def reorder_if_better" in _st
+      and 'after["switches"] < before["switches"]' in _st)
+check("執行器走的是有保險的那支", "reorder_if_better" in app_py)
+
+# ── 鉤子 ──
+check("鉤子不會拖垮整批", "def run_before_item" in _base
+      and "run_before_item" in _com and "run_before_item" in _mock)
+check("找不到擺位是記一筆繼續跑",
+      "_note_not_applied" in app_py and "找不到這個擺位" in app_py)
+check("已經在位置上不白跑一次移動", "POSITION_TOLERANCE" in app_py)
+check("移動有逾時上限", "move_timeout_sec" in app_py)
+# 作業跑完不會被清掉,只是 state 變成 "done"。拿 job 有沒有值當「還在動」
+# 的話,等待迴圈永遠等不到結束 —— 每一筆白等滿逾時,再誤報「移動逾時」,
+# 而機構其實 51 秒就到位了(2026-11-16 真機實測踩到)。
+# 判斷「還在動」只有一個正確寫法:crane 自己的 busy()。
+check("等移動用 busy() 不看 job 有沒有值",
+      "while bridge.busy():" in app_py
+      and 'while time.time() < deadline:' not in app_py)
+check("/api/room/current 的 moving 也用 busy()",
+      "moving=bridge.busy()" in app_py)
+check("移動出錯與被中止分開記",
+      '"移動失敗' in app_py and '"移動被中止"' in app_py)
+
+# ── ACQUA 主導的那條路(掛鉤) ──
+# 有人直接在 ACQUA 按執行、繞過我們的網頁時,擺位一樣要被處理 ——
+# 否則那些量測會在當下的位置進行,而且沒有任何紀錄。
+_hook = read("acqua_scripts/HOOK_setup_bridge.py")
+check("有給 ACQUA 的擺位掛鉤", "def ensure_setup" in _hook)
+check("掛鉤走標準庫不靠 requests",
+      "import urllib.request" in _hook and "\nimport requests" not in _hook)
+#   只看程式碼行 —— 檔頭說明裡本來就會出現「絕對不 raise」這句話
+check("掛鉤絕不丟例外",
+      _hook.count("except Exception") >= 4
+      and not [l for l in _hook.splitlines() if l.strip().startswith("raise")])
+check("掛鉤等移動看 moving 不看 job",
+      'now.get("moving")' in _hook and '"job"' not in _hook)
+check("掛鉤回報的端點存在",
+      "/api/room/not-applied" in _hook and "/api/room/not-applied" in app_py)
+check("apply 收得了擺位名稱",
+      'body.get("setup_name")' in app_py and '"setup_name": wanted' in _hook)
+check("回報端點不排 COM 佇列",
+      "_note_not_applied(row_id" in app_py)
+
+# ── 防線 ⑤:警告要活到最後 ──
+# 無人值守時沒人看得到執行當下那一行 —— 一個沒人看到的 toast 等於沒警告。
+check("結果本身帶擺位標記", '"setup_warn": warn' in _state)
+check("runs/current.json 也帶", "setup_warn" in _runlog)
+check("摘要有疑慮筆數", '"setup_warn": sum(' in _state)
+check("跑完會再列一次清單", "def log_setup_warnings" in _base)
+check("兩個後端的結束訊息都帶",
+      "筆擺位未套用" in _com and "筆擺位未套用" in _mock)
+check("CSV 匯出帶這一欄", '"setup_not_applied"' in app_py)
+check("報告旁邊附警告清單", "_write_setup_warning_note" in app_py)
+check("執行畫面看得到", 'id="r-setupwarn"' in _idx and 'id="r-setupwarn"' in _pl)
+check("跑完的統計區看得到", 'id="s-setupwarn"' in _idx)
+check("紀錄明細獨立一區", "Setup not applied" in _idx)
+check("跑完的通知也帶", "without the required setup" in _idx)
+# 序列裡每一步都會清掉 summary 與 setup_not_applied,不當下記起來,
+# 整個序列跑完就只剩最後一步的數字。
+check("序列會累加每一步的疑慮", "setupWarn" in _pl and "swAll" in _pl)
+check("跑完不被最後一步蓋掉", "if (running) paintSetupWarn" in _pl)
+
 print("\n" + ("結論:全部通過" if not fails
               else "結論:%d 項未通過 —— %s" % (len(fails), "、".join(fails))))
 sys.exit(1 if fails else 0)
