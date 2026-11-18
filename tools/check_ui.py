@@ -270,11 +270,12 @@ check("計畫細節看得到完整測項", 'id="detov"' in pl_html
 
 print()
 print("=== J. 序列的執行流程 ===")
-check("兩步之間會跑 Moving to new setup", "function movingToSetup" in pl_html)
-check("那段目前是 mock,並在程式裡註明",
-      "目前是 mock" in pl_html and "Raspberry Pi" in pl_html)
-check("移動階段可以被中止", "if (abort) { clearInterval(timer)" in pl_html)
-check("縮小視窗涵蓋整個序列(含移動階段)",
+# 兩步之間原本有一段「Moving to new setup」,是寫死的 5 秒假動作,從來沒
+# 移動過任何東西。擺位改由每個測項的 Setup 標籤決定後拿掉了(2026-11-17),
+# 真的移動在每一筆送出前的 before_item 鉤子裡。
+check("兩步之間沒有假的移動階段",
+      "function movingToSetup" not in pl_html and 'id="r-setup"' not in pl_html)
+check("縮小視窗涵蓋整個序列",
       "window.__miniInfo" in pl_html
       and "window.__miniInfo === 'function'" in read("templates/_runmini.html"))
 check("跑完列出產生的 Word", "madeDocs.push" in pl_html and "dn-files" in pl_html)
@@ -382,22 +383,36 @@ check("換搜尋或排序會回第一頁", pl_html.count("page = 1;") >= 3)
 check("過濾後頁數縮水會自動修正", "if (page > pages) page = pages;" in pl_html)
 
 
-print("\n=== M. 擺位選擇與 3D 頁語言 ===")
+print("\n=== M. 開跑前的擺位標籤檢查與 3D 頁語言 ===")
 _pl2 = read("templates/plans.html")
-# 擺位要從「Setup list」存好的那些挑 —— 自己打字打出來的名字對不到任何
-# 真實擺位,將來接上 Raspberry Pi 時送不出去。
-check("擺位是下拉選單不是自由輸入",
-      'id="su-pick"' in _pl2 and 'id="su-name"' not in _pl2)
-check("選單來源是存好的擺位", "/api/room/setups" in _pl2)
-check("有「未設定」的空白選項", '<option value="">(not set)</option>' in _pl2)
-check("計畫存的是 setup_id 不只是名字",
-      "setup_id" in _pl2 and "setup_id" in read("acqua/testplans.py"))
-# 加進序列時沒設擺位要提醒 —— 不硬擋(第一步本來就不需要移動治具),
-# 但沉默地加進去會讓人以為中間會自動移動。
-check("加進序列前會檢查擺位", "function addToSeq" in _pl2)
-check("沒設擺位會跳提醒", 'id="nosetupov"' in _pl2)
-check("提醒可直接去選擺位", 'id="ns-pick"' in _pl2)
-check("提醒可選擇照樣加入", 'id="ns-anyway"' in _pl2)
+_ui = read("templates/_ui.html")
+_idx2 = read("templates/index.html")
+# 計畫不再帶擺位(2026-11-17)—— 原本「每個計畫配一個 setup」的下拉選單
+# 與「沒設擺位」的提醒都拿掉了。同樣的保護換成:開跑前檢查 Setup 標籤,
+# 漏標與打錯在按下執行之前講出來。
+check("計畫不再配擺位",
+      'id="su-pick"' not in _pl2 and 'id="nosetupov"' not in _pl2
+      and "data-setup=" not in _pl2)
+check("加入序列不再攔", "function addToSeq" in _pl2
+      and "pendingAdd" not in _pl2)
+check("兩頁共用同一個檢查畫法",
+      "window.setupCheckHtml" in _ui
+      and "setupCheckHtml(" in _idx2 and "setupCheckHtml(" in _pl2)
+# 只警告不擋:打錯一個字不該讓一整晚的批次跑不起來
+check("檢查只警告不擋", "Warnings only" in _ui)
+check("打錯的名稱附上最接近的", "did you mean" in _ui
+      and "def suggest" in read("acqua/setuptags.py"))
+check("單批頁開跑前會查", 'id="rn-setup"' in _idx2
+      and "loadSetupCheck()" in _idx2)
+# post() 共用全域的 busyAbort,檢查要是拖太久,它的逾時會把同時送出的
+# /api/run 一起取消。這支是可有可無的背景請求,不能跟主流程綁在一起。
+check("單批頁的檢查不共用 busyAbort",
+      "AbortSignal.timeout" in _idx2.split("async function loadSetupCheck")[1][:900])
+check("序列每一步看得到檢查結果", "setupBrief(st.id)" in _pl2)
+check("同一個計畫只查一次", "function ensureSetupCheck" in _pl2
+      and "setupChecks[planId] = post(" in _pl2)
+check("計畫細節顯示完整檢查", "ensureSetupCheck(id)" in _pl2
+      and "detailId === id" in _pl2)
 
 # 3D 頁與機構相關的介面文字一律英文(註解維持中文)
 _cjk = re.compile(r"[一-鿿]")
@@ -568,6 +583,7 @@ check("收工不呼叫 CoUninitialize",
 
 print("\n=== K. 擺位:讀標籤、分組、找不到時的防線 ⑤ ===")
 _st = read("acqua/setuptags.py")
+_sc = read("acqua/setupcoord.py")
 _state = read("acqua/state.py")
 _runlog = read("acqua/runlog.py")
 _base = read("acqua/backend_base.py")
@@ -582,35 +598,50 @@ check("只看 Setup 這一個標籤", 'SETUP_TAG = "Setup"' in _st)
 # 不同的轉盤角度。拿它們推論擺位一定會錯,而且是靜默地錯。
 check("不拿 Room / DUTType 推論擺位",
       all(k not in _st for k in ('"Room"', '"DUTType"', '"TurningDevices"')))
-check("id 清單分批查", "range(0, len(ids), 500)" in _st)
+# ── 資料夾繼承(2026-11-17) ──
+# ACQUA 介面不能對資料夾加標籤,所以「沒標就往上找」改成看同一個資料夾
+# 裡其他測項的標籤。不用「沿用上一筆」:順序一變結果就安靜地跟著變。
+check("繼承看同資料夾不看順序", "def resolve(tree)" in _st
+      and "direct" in _st)
+check("資料夾裡擺位不只一種時不猜", "AMBIGUOUS" in _st
+      and "len(seen) > 1" in _st)
+check("繼承要讀整棵樹", "def load_tree" in _st)
+# 行為(判斷不出來會記、讀不到不擋、找不到名稱照常量、已在位置不白跑、
+# 出錯與中止分開記)由 tools/test_setupflow.py 實際跑過,這裡只看接線。
+check("擺位協調在自己的模組裡,app.py 不重寫一份",
+      "class SetupCoordinator" in _sc and "setup_coord.prepare(" in app_py
+      and "def _ensure_setup_before_item" not in app_py)
+# ctx 的格式只該由 context.py 決定 —— 以前 app.py 有好幾處各自手寫 split
+check("ctx 只在 context.py 拆", 'split("|")' not in app_py
+      and "def parse_ctx" in read("acqua/context.py"))
+check("檢查可以針對任一計畫(不必先開那個專案)",
+      "def api_setup_check" in app_py and 'body.get("plan_id")' in app_py)
 
 # ── 分組 ──
 # 群組裡常常是「錄音 -> 分析」,分析要讀錄音的結果。拆開跑會找不到東西。
 check("分組不拆散 MMD 群組", "def group_by_setup" in _st
-      and "sorted(order, key=setup_of)" in _st)
+      and "sorted(order, key=group_setup)" in _st)
 # 群組本身混了兩個擺位時(實測約 6%),重排可能比原順序多切幾次。
 check("重排只在真的更少時才採用", "def reorder_if_better" in _st
       and 'after["switches"] < before["switches"]' in _st)
-check("執行器走的是有保險的那支", "reorder_if_better" in app_py)
+check("執行器走的是有保險的那支", "reorder_if_better" in _sc)
 
 # ── 鉤子 ──
 check("鉤子不會拖垮整批", "def run_before_item" in _base
       and "run_before_item" in _com and "run_before_item" in _mock)
-check("找不到擺位是記一筆繼續跑",
-      "_note_not_applied" in app_py and "找不到這個擺位" in app_py)
-check("已經在位置上不白跑一次移動", "POSITION_TOLERANCE" in app_py)
-check("移動有逾時上限", "move_timeout_sec" in app_py)
+check("每一筆送出前都會經過擺位協調",
+      "worker.backend.before_item = setup_coord.before_item" in app_py)
+check("移動逾時讀得到設定", "move_timeout_sec" in app_py)
 # 作業跑完不會被清掉,只是 state 變成 "done"。拿 job 有沒有值當「還在動」
 # 的話,等待迴圈永遠等不到結束 —— 每一筆白等滿逾時,再誤報「移動逾時」,
 # 而機構其實 51 秒就到位了(2026-11-16 真機實測踩到)。
 # 判斷「還在動」只有一個正確寫法:crane 自己的 busy()。
 check("等移動用 busy() 不看 job 有沒有值",
-      "while bridge.busy():" in app_py
-      and 'while time.time() < deadline:' not in app_py)
+      "while self.bridge.busy():" in _sc)
 check("/api/room/current 的 moving 也用 busy()",
       "moving=bridge.busy()" in app_py)
-check("移動出錯與被中止分開記",
-      '"移動失敗' in app_py and '"移動被中止"' in app_py)
+check("「現在在哪個擺位」只算一份",
+      "def match_position" in _sc and "match_position(" in app_py)
 
 # ── ACQUA 主導的那條路(掛鉤) ──
 # 有人直接在 ACQUA 按執行、繞過我們的網頁時,擺位一樣要被處理 ——
@@ -630,7 +661,7 @@ check("掛鉤回報的端點存在",
 check("apply 收得了擺位名稱",
       'body.get("setup_name")' in app_py and '"setup_name": wanted' in _hook)
 check("回報端點不排 COM 佇列",
-      "_note_not_applied(row_id" in app_py)
+      "setup_coord.note_not_applied(" in app_py)
 
 # ── 防線 ⑤:警告要活到最後 ──
 # 無人值守時沒人看得到執行當下那一行 —— 一個沒人看到的 toast 等於沒警告。

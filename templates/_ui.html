@@ -128,6 +128,16 @@
 
   /* 兩段式確認:按一下只是把按鈕「舉起來」,再按一次才真的執行 */
   button.arming { background:var(--fail); border-color:var(--fail); color:#fff; }
+
+  /* 開跑前的擺位標籤檢查(setupCheckHtml)—— 只警告,所以用中性的框,
+     問題那幾行才上色。整塊做成紅色會讓人以為不能跑。 */
+  .sucheck { margin-top:10px; padding:9px 11px; border-radius:9px;
+             border:1px solid var(--line); font-size:12px; line-height:1.55; }
+  .sucheck .sc-h { font-weight:600; margin-bottom:3px; }
+  .sucheck .ok { color:var(--ok); }
+  .sucheck .warn { color:var(--warn); }
+  .sucheck .bad { color:var(--fail); }
+  .sucheck .sc-foot { margin-top:4px; font-size:11px; color:var(--muted); }
 </style>
 
 <script>
@@ -175,5 +185,45 @@ window.armConfirm = function (btn, onConfirm, opts) {
   new MutationObserver(() => { if (btn.disabled && armed) reset(); })
     .observe(btn, {attributes: true, attributeFilter: ['disabled']});
   return reset;
+};
+
+/* 開跑前的擺位標籤檢查,把 /acqua/api/setup-check 的結果畫成一塊。
+   單批(index)與序列(plans)共用。
+
+   **只警告,不擋** —— 擺位是加分項,打錯一個字不該讓一整晚的批次跑不起來。
+   但要在按下執行之前講出來,不然只會在早上的摘要裡才發現。
+
+   r 是 null(還沒查完 / 查失敗)時回空字串,呼叫端不用另外判斷。 */
+window.setupCheckHtml = function (r) {
+  if (!r || !r.ok) return '';
+  const e = s => String(s == null ? '' : s).replace(/[&<>"]/g, c =>
+    ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
+  const has = r.own + r.inherited;
+  if (!has && !r.unknown.length && !r.ambiguous.length) {
+    return '<div class="sucheck"><div class="sc-h">Setup</div>'
+      + 'No Setup tags in this batch — the rig stays where it is.</div>';
+  }
+  const lines = [];
+  if (has) {
+    lines.push(`<div class="ok">✓ ${has} item(s) have a setup`
+      + ` (${r.own} own, ${r.inherited} from their folder)`
+      + ` · ${r.switches} switch(es) · ${e((r.used || []).join(', ') || '—')}</div>`);
+  }
+  if (r.untagged) {
+    lines.push(`<div class="warn">⚠ ${r.untagged} item(s) without a setup`
+      + ` — measured wherever the rig already is</div>`);
+  }
+  (r.unknown || []).forEach(u => lines.push(
+    `<div class="bad">✗ "${e(u.name)}" is not a saved setup (${u.rows.length} item(s))`
+    + (u.suggestion ? ` — did you mean "${e(u.suggestion)}"?` : '') + '</div>'));
+  if ((r.ambiguous || []).length) {
+    const folders = [...new Set(r.ambiguous.map(a => a.folder))];
+    lines.push(`<div class="bad">✗ ${r.ambiguous.length} item(s) can't be decided:`
+      + ` their folder has more than one setup (${e(folders.join(', '))})`
+      + ` — tag those items in ACQUA</div>`);
+  }
+  return '<div class="sucheck"><div class="sc-h">Setup</div>' + lines.join('')
+    + '<div class="sc-foot">Warnings only — the run is not blocked.'
+    + ' Problem items run at the current position and are flagged in the summary.</div></div>';
 };
 </script>

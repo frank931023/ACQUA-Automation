@@ -72,10 +72,6 @@ class Prefs:
         return (self.load().get("by_database") or {}).get(
             self._key(server, database)) or {}
 
-    def forget(self, server, database):
-        d = self.load()
-        (d.get("by_database") or {}).pop(self._key(server, database), None)
-        self._save(d)
 
     # ── 報告存放位置 ────────────────────────────────
     def report_dir(self) -> str:

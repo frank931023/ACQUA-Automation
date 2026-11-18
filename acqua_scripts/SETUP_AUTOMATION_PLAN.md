@@ -1,7 +1,7 @@
 # 讓 ACQUA 自己知道「這個測項要哪個擺位」
 
 > **第二次大工程** ・ 規劃與執行紀錄
-> 開始日期 2026-10-16 ・ 狀態:**規劃完成,待第 0 階段驗證**
+> 開始日期 2026-10-16 ・ 狀態(2026-11-18):**網頁驅動的路線完成並真機驗過;ACQUA 直接跑的掛鉤外部半邊驗完,ACQUA 那半邊待使用者在 ACQUA 裡貼上實測**
 
 ---
 
@@ -386,15 +386,32 @@ Word 報告  同樣要帶這個標記(不然交出去的報告看不出問題)
 > 所以改成另存時在報告隔壁寫一份 `<報告名>.擺位警告.txt`,
 > 讓警告跟著檔案一起交出去。
 
-#### 5.0.4 讀取規則(已定案 2026-10-16)
+#### 5.0.4 讀取規則(定案 2026-10-16,2026-11-17 加上資料夾繼承)
 
 **只看 `Setup` 標籤的名稱,其他一律不碰。**
 
 ```
-1. 有 Setup 標籤,名稱找得到對應擺位   → 移動過去
-2. 有 Setup 標籤,名稱找不到           → 不移動,記一筆,繼續跑
-3. 沒有 Setup 標籤                     → 沿用當下擺位
+1. 測項自己有 Setup                     → 用自己的
+2. 沒有 → 看同一個資料夾的其他測項:
+      只出現一種擺位                    → 用它
+      出現兩種以上                      → 不猜,記一筆
+      一個都沒有                        → 再往上一層資料夾,同樣規則
+3. 一路到專案根部都沒有                 → 沿用當下擺位
+
+名稱找不到對應的擺位                    → 不移動,記一筆,繼續跑
 ```
+
+**為什麼繼承是看「同資料夾的其他測項」:** ACQUA 介面**不能對資料夾加
+標籤**(使用者 2026-11-17 實測)。資料庫也證實:SP2 標了 1858 個測項,
+577 個資料夾一個都沒標。所以讓資料夾裡標了的那幾筆代表這個資料夾 ——
+實際效果是**每個資料夾標一筆就夠**。那 6% 擺位混雜的資料夾,規則 2
+不會亂猜,會要你個別標。
+
+**為什麼不是「沿用上一筆」(照順序往前找):** 順序一變結果就安靜地跟著變,
+有人在 ACQUA 裡拖動測項,擺位就換了。用資料夾判斷只跟「在哪個資料夾」有關。
+
+實作:`acqua/setuptags.py` 的 `resolve()`(一次讀整棵專案樹)。
+測試:`tools/test_setupflow.py` 第 6 節,每條規則一個案例。
 
 - ACQUA 既有的 `Room` / `DUTType` / `Position` / `TurningDevices` /
   `HHPSettingName` **全部原封不動**,不讀取、不推論、不影響擺位判斷
@@ -581,8 +598,9 @@ BGN 的指令是毫秒級,移動機構是**分鐘級**。ACQUA 可能有逾時�
   </UserDefinedProperties></Properties>
   ```
 
-  `setuptags.read_setup_tags()` 直接回 `{11: 'location1', 12: 'location2',
+  當時的 `setuptags.read_setup_tags()` 直接回 `{11: 'location1', 12: 'location2',
   13: 'location1'}` —— 不是看原始 SQL,是走我們正式的讀取程式。
+  (加上資料夾繼承之後換成 `setuptags.load_tree()` + `resolve()`。)
 
   順帶確認:標籤之前是空的 `<Properties/>`,加一個標籤就長出
   `<UserDefinedProperties>` 這層。空庫也不用特別處理。
@@ -606,6 +624,40 @@ FindFirstSMD('')       -> -1      ← 空字串不等於「全部」(舊紀錄�
 
 附帶再次確認:`idTreeItem == SMDRowID`(#11、#13 都對上)。
 
+#### 0.4c ⭐ 掛鉤在 ACQUA 裡拿得到什麼(2026-11-17,讀型別庫)
+
+HEAD 安裝目錄有 `ACQUALyzerScripting.tlb` —— **腳本介面**的型別庫,
+掛鉤裡用的 `Smd` / `Tags` 就定義在這裡(跟 COM 的 Acqua3 型別庫是兩回事):
+
+```
+ISmd   Title / Path / SMDType / Filename / Namespace / LoopNumber ...
+       ResultComment(可寫)  Cancel / CancelMsg / CancelSilently(可寫)
+       → 沒有 row id
+ITags  Count / Names / Values / ValueFromIndex / IndexOfName
+       → 只有這一筆自己的標籤,沒有任何往上找的功能
+```
+
+對掛鉤這條路(ACQUA 直接跑)的影響:
+
+| 問題 | 結論 |
+|---|---|
+| 掛鉤能自己做資料夾繼承嗎 | 不能 —— `Tags` 只看得到自己。要問服務 |
+| 掛鉤能告訴服務「我是哪一筆」嗎 | 不行:(路徑 + 標題)約一成撞名 |
+| 能告訴服務「我在哪個資料夾」嗎 | **可以**:裝有測項的資料夾路徑,兩個主力庫都 0 重複 |
+| ⚠️ 但 | SP2 有**同名的專案**(proj 1 與 4 都叫 `... - Handset`),光靠路徑分不出是哪一個 |
+
+所以掛鉤端的繼承要等 `Smd.Path` 的實際格式(診斷掛鉤
+`HOOK_diagnose_smd.py`)—— 看它帶不帶得出資料庫或專案的身分
+(`Filename` / `Namespace` 也印出來比對)。在那之前掛鉤維持原樣:
+自己沒標就沿用當下。網頁跑的那條路**已經有繼承**,因為它知道 row id。
+
+兩個額外收穫,之後要驗:
+- **`ResultComment` 可寫** —— 掛鉤可以把「擺位未套用」寫進 ACQUA 自己的
+  量測結果。如果 ACQUA 的 Word 報告帶得出這個欄位,「報告改不了只好
+  放 .txt」的限制就解決了
+- **`Cancel` / `CancelSilently` 可寫** —— 不必 `raise` 就能乾淨地取消一筆
+  (0.3 的答案可能就在這裡)
+
 #### 0.5 腳本編輯流程
 - ☐ 用 ACQUA 的編輯器改一支腳本並存檔
 - ☐ 確認:DB 的 `BinData` / `FileSize` / `CRCValue` / `ChangeDate` 有更新
@@ -618,6 +670,10 @@ FindFirstSMD('')       -> -1      ← 空字串不等於「全部」(舊紀錄�
 
 - ☑ 工具 `tools/setup_inventory.py` —— 唯讀,不需要服務在跑
 - ☑ 支援三種模式:`--project` 整個專案 ・ `--plan` 單一計畫 ・ `--json`
+- ☑ 2026-11-18 改寫:判斷規則改用執行時同一份 `setuptags.resolve()`(含資料夾
+  繼承),不再自己寫一份;加 `--project-id` —— 同一個庫裡可能有同名專案
+  (SP2 的 proj 1 與 4 都叫 `MS Teams v5 Rev05 SP2 - Handset`),用標題找到
+  不只一個時列出 id 要人指定,不會把兩棵樹混在一起
 - ☑ `--suggest` 輸出轉折點清單(= 之後要標籤的候選)
 - ☑ 名稱對不上時給模糊比對建議(防線 ②)
 - ☑ 列出同一 MMD 內標了多個擺位的群組
@@ -639,10 +695,10 @@ MS Teams SP2 - Speakerphone        2302 個測項,已標 0,建議轉折點 41 �
 **工具怎麼用:**
 
 ```bash
-.venv\Scripts\python.exe tools\setup_inventory.py --project ZoomRooms_v2020Oct_v1
-.venv\Scripts\python.exe tools\setup_inventory.py --project ... --suggest
+.venv\Scripts\python.exe tools\setup_inventory.py --project "專案標題" [--db 資料庫]
+.venv\Scripts\python.exe tools\setup_inventory.py --project "專案標題" --suggest
+.venv\Scripts\python.exe tools\setup_inventory.py --project-id 6 --db 資料庫
 .venv\Scripts\python.exe tools\setup_inventory.py --plan <計畫 id>
-.venv\Scripts\python.exe tools\setup_inventory.py --db 51_MS_Teams_Rev05_SP2       --project "MS Teams v5 Rev05 SP2 - Speakerphone" --suggest
 ```
 
 **設計上的一個取捨:** 建議轉折點用的是既有語意標籤(`Room` / `DUTType` /
@@ -658,10 +714,37 @@ MS Teams SP2 - Speakerphone        2302 個測項,已標 0,建議轉折點 41 �
 
 - ☐ 先定義擺位命名規則(見第 8 節),確定之後才開始標
 - ☐ 在實驗專案照第 1 階段的清單加 `Setup` 標籤
-- ☐ **驗證工具(防線 ①②)**:收集這批的所有 `Setup` 標籤 →
-      比對 `/api/room/setups` → 列出找不到的,附模糊比對建議
-- ☐ 把驗證接進開跑前的畫面 —— **警告但不擋**(見第 8 節的決定),
-      給「修正後重試」和「仍要執行」兩個選項
+- ☑ **驗證(防線 ①②)** —— `/acqua/api/setup-check`,**完成 2026-11-17**
+
+  收集這批的標籤(含資料夾繼承)→ 比對存好的擺位 → 回報:
+  幾筆自己標 / 幾筆繼承 / 幾筆沒有、**找不到的名稱附最接近的建議**、
+  判斷不出來的(資料夾混雜)、會切換幾次。
+
+  兩種問法:`{row_ids, ctx}`(剛勾的那幾筆)或 `{plan_id}`(存好的計畫)。
+  依 ctx 判斷而不是目前開著的專案 —— 序列裡的計畫可能在別的資料庫,
+  開跑前就要能查。純 SQL,不排 COM 佇列,量測中也能回應。
+
+- ☑ **接進開跑前的畫面** —— **警告但不擋**,**完成 2026-11-17**
+
+  ```
+  單批頁   「為這一批命名」視窗裡多一塊檢查結果,看完再按 Run
+  序列頁   每一步的說明行直接顯示(setup: location1 · 2 problem(s)),
+          按 Details 看完整清單 —— 按 Run 之前就看得到,不用多一個視窗
+  ```
+
+  畫法放在共用的 `_ui.html`(`setupCheckHtml()`),兩頁一份。
+
+- ☑ **網頁不再幫每個計畫配擺位** —— **完成 2026-11-17**
+
+  拿掉的:計畫的 setup 下拉選單、「沒設擺位」提醒、步驟之間那 5 秒的
+  「Moving to new setup」、`testplans.py` 的 `setup` 欄位(舊檔讀到就丟掉,
+  下次存檔自然消失)。plans.html 少了 169 行。
+
+  理由:① 那段移動是**寫死的假動作**,從來沒移動過任何東西;
+  ② 跟標籤是兩個來源,會打架(計畫說 A、標籤說 B,機構先移 A 再移 B);
+  ③ 標籤從 ACQUA 直接跑也讀得到,計畫上的設定只有網頁看得到。
+
+  擺位清單(`/setups`)與 3D 頁保留 —— 標籤的名稱要對得上那裡存的擺位。
 - ☑ **結果標記(防線 ⑤)** —— **完成 2026-10-30**
 
   標記焊在結果那一筆上(`results[].setup_warn`),不是讓畫面去 join。
@@ -714,7 +797,9 @@ MS Teams SP2 - Speakerphone        2302 個測項,已標 0,建議轉折點 41 �
 - ☐ **同步檢查工具(防線 ④)**:列出整個資料庫的 `Setup` 標籤
       vs 實際擺位,兩邊對不上的都列出來
 - ☐ 網頁:擺位改名前先查有幾個測項指著它,警告
-- ☐ 執行器:開跑前顯示「這批會切換 N 次擺位,預估移動 M 分鐘」(只顯示)
+- ◐ 執行器:開跑前顯示「這批會切換 N 次擺位,預估移動 M 分鐘」(只顯示)
+      —— 切換次數已經顯示在開跑前檢查裡;**預估分鐘還沒做**
+      (要等真機的移動速度,mock 的數字沒有參考價值)
 - 結果:________________________________________________
 
 ---
@@ -748,7 +833,8 @@ MS Teams SP2 - Speakerphone        2302 個測項,已標 0,建議轉折點 41 �
 - ☑ 逐項迴圈:下一筆擺位不同 → 移動 → 等 → 再送 —— **完成 2026-10-30**
 
   `backend_base.before_item` 鉤子,由 `app.py` 掛上
-  `_ensure_setup_before_item()`。兩個後端都走
+  `SetupCoordinator.before_item()`(`acqua/setupcoord.py`;2026-11-18 從
+  `app.py` 的 `_ensure_setup_before_item()` 抽出來)。兩個後端都走
   `run_before_item()`,保險只寫一份。模擬後端也會跑這個鉤子 ——
   不然整條擺位流程只能上真機才驗得到。
 
@@ -759,7 +845,7 @@ MS Teams SP2 - Speakerphone        2302 個測項,已標 0,建議轉折點 41 �
   移動逾時(`setup_controller.move_timeout_sec`,預設 900 秒)/
   移動完成但位置對不上。
 
-- ☐ 機構 mock,所以實際行為是「跳出來叫人手動移、等按確認」
+- ~~機構 mock,所以實際行為是「跳出來叫人手動移、等按確認」~~ —— 不做了(2026-11-17):模擬機構本身就會照標稱速度「移動」,整條流程不用人介入就能驗;原本步驟之間那段假的「Moving to new setup」也一起拿掉
 - ☑ ⭐ **用真的 `Setup` 標籤跑完一輪** —— **完成 2026-11-16**
 
   `AUTOMATION_TEST_0806` / test1,#11 與 #13 都標 `location1`:
@@ -778,10 +864,18 @@ MS Teams SP2 - Speakerphone        2302 個測項,已標 0,建議轉折點 41 �
   順帶驗到 winwatch 自動關掉 SMDType 34 的 Info 說明視窗 ——
   不然這一筆會卡住等人按確定。
 
-- 結果:第 3 階段的執行器部分完成。測試:23 項端對端
-      (`tools/test_setupflow.py`)+ 15 項掛鉤回路
-      (`tools/test_hook_bridge.py`)+ 33 項靜態檢查
-      (`tools/check_ui.py` 第 K 節),加上上面這一輪真標籤實測。
+- 結果:第 3 階段的執行器部分完成,加上上面這一輪真標籤實測。
+  測試(2026-11-18 現況):
+      `tools/test_setupflow.py`   41 項,**跑的是真的** setuptags + setupcoord +
+                                  RoomSetups + 模擬後端,只有機構與測項樹是假的
+                                  (之前是另寫一份同規則的鉤子來測 —— 規則改了
+                                  測試也不會發現,已換掉)
+      `tools/test_hook_bridge.py` 15 項,用服務上任意兩個位置不同的擺位
+      `tools/check_ui.py` 第 K 節  接線與結構檢查
+
+  改寫 test_setupflow 時順帶抓到一個真 bug:`RoomSetups._new_id()` 的尾碼是
+  毫秒數,同一毫秒存兩個擺位會拿到同一個 id,第二個靜靜蓋掉第一個。
+  已改成隨機尾碼並確認檔名沒被用過。
 
 #### ⚠️ 這一輪抓到的 bug(2026-11-16)
 
@@ -798,7 +892,7 @@ while time.time() < deadline:
 ```
 
 影響兩個地方:
-- `_ensure_setup_before_item()` —— 每一筆誤報未套用,整批多花 900 秒/筆
+- `_ensure_setup_before_item()`(現在是 `SetupCoordinator._move_to()`)—— 每一筆誤報未套用,整批多花 900 秒/筆
 - `/api/room/current` 的 `moving` —— 第一次移動之後**永遠**回報移動中
 
 `crane` 本來就有一支寫對的 `busy()`(`state in ("running","aborting")`),
@@ -1010,14 +1104,24 @@ MS Teams SP2/SP3 的資料庫。要先確認不影響認證效力。
 
 ### 日常:什麼都不用做
 
-標籤設好之後,一般使用者的流程完全不變:
+標籤設好之後,三種跑法都會自動移機構:
 
 ```
-開啟網頁 → 選專案 → 勾測項 → 按執行
-                              ↓
-            系統自己分組、自己在批次之間移動機構
-            畫面顯示「正在移動到 RR-SHAR-1.5m(第 3 / 11 次)」
+網頁單批   選專案 → 勾測項 → 執行(命名視窗裡先看到標籤檢查)
+網頁序列   排好計畫 → 執行(每一步的說明行先看到標籤檢查)
+ACQUA 直接 照平常按執行(專案掛上 HOOK_setup_bridge.py,服務要開著)
+                 ↓
+   每一筆送出前:需要的擺位跟現在不同 -> 移過去、等到位 -> 才量
+   名稱找不到 / 判斷不出來 / 移動失敗 -> 不移動、照常量、記進跑完的摘要
 ```
+
+**每個資料夾標一筆就夠** —— 沒標的測項會看同一個資料夾裡其他測項的
+`Setup`(只有一種就跟著用,兩種以上就不猜、記一筆,都沒有再往上一層)。
+ACQUA 不能直接對資料夾加標籤,這是替代做法。
+
+> ⚠️ ACQUA 直接跑的那條路目前**還沒有資料夾繼承** —— 掛鉤只看得到自己那筆
+> 的標籤,要等 `Smd.Path` 的格式確認(`HOOK_diagnose_smd.py`)。在那之前,
+> 從 ACQUA 直接跑的測項要各自標。
 
 ### 新增一個擺位
 
@@ -1039,7 +1143,7 @@ MS Teams SP2/SP3 的資料庫。要先確認不影響認證效力。
 ACQUA → 專案樹右鍵該測項 → 编辑标签... → 改 Setup 的值
 ```
 
-改完記得在網頁上按一次驗證,確認名稱還對得上。
+改完可以在網頁上看一次標籤檢查,或跑 `tools/setup_inventory.py --project ...`,確認名稱還對得上。
 
 #### ⚠️ 不是在「SMD 瀏覽工具」那個面板
 
@@ -1161,8 +1265,11 @@ import requests, socket, webbrowser, tkinter     # 都可用
 
 | 位置 | 內容 |
 |---|---|
-| `acqua_scripts/README.md` | 19 支腳本範例與導覽 |
-| `acqua_scripts/hook_1_before_each_measurement.py` | 要改的就是這支 |
+| `acqua_scripts/README.md` | 腳本範例與導覽 |
+| `acqua_scripts/HOOK_setup_bridge.py` | 要貼進 ACQUA `before_each_measurement.py` 的擺位掛鉤 |
+| `acqua_scripts/HOOK_diagnose_smd.py` | 診斷掛鉤:看 `Smd.Path` 等欄位實際長什麼樣 |
+| `acqua_scripts/hook_1_before_each_measurement.py` | SP2 原本的掛鉤(參考;擺位那段要接在它前面) |
+| `acqua/setuptags.py` ・ `acqua/setupcoord.py` | 標籤規則 ・ 標籤 -> 機構動作 |
 | `acqua_scripts/index.json` | 全部 107 支腳本的目錄 |
 | `README.md`(專案根) | 硬體設定誰管哪一塊、非阻塞設計 |
 | `ACQUA_COM_自動化開發指南.md` 第 11b 章 | 硬體控制的 COM 路徑 |
@@ -1180,4 +1287,8 @@ import requests, socket, webbrowser, tkinter     # 都可用
 | 2026-10-16 | **決定**:(1) ACQUA 既有標籤全部保留不動,擺位只從 `Setup` 名稱抓;(2) 找不到對應擺位時**不移動、跳通知、繼續測**。配套新增防線 ⑤ —— 警告必須寫進結果紀錄、跑完摘要與 Word 報告,因為無人值守時沒人看得到執行中的通知 |
 | 2026-10-16 | **第 1 階段完成**。`tools/setup_inventory.py` 可用,三種模式(專案 / 計畫 / JSON)都驗過。ZoomRooms 建議 42 個轉折點、MS Teams Speakerphone 41 個。目前兩個專案都還沒有任何 `Setup` 標籤 |
 | 2026-10-16 | **第 3 階段部分完成**:`/api/room/current` 可用並實測通過。另外查 ACQUA 語系檔發現標籤功能比預期好用 —— 有批次編輯、標籤組、**搜尋取代**(大幅降低改名風險)。測試期命名先用 `monday` 不糾結 |
+| 2026-10-30 | 防線 ⑤ 完成(結果標記、跑完摘要、Word 報告旁的警告清單)、執行器分組與逐項移動、端對端測試 |
+| 2026-11-16 | 用真的 `Setup` 標籤跑完一輪;抓到「等移動看 job 有沒有值」的 bug,改用 `busy()`。掛鉤 `HOOK_setup_bridge.py` 寫好,外部半邊 15 項全過 |
+| 2026-11-17 | **資料夾繼承**(ACQUA 不能對資料夾加標籤,改看同資料夾其他測項);開跑前標籤檢查 `/acqua/api/setup-check`;拿掉網頁上每個計畫配擺位 |
+| 2026-11-18 | 整理:擺位協調從 `app.py` 抽成 `acqua/setupcoord.py`;test_setupflow 改測真的程式碼(抓到擺位 id 撞號 bug);setup_inventory 改用共用規則並支援同名專案;測試與工具不再綁特定擺位名稱或資料庫 |
 | | |

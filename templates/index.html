@@ -504,6 +504,8 @@
     </label>
     <div class="meta" id="rn-info"></div>
     <div class="rn-recent" id="rn-recent"></div>
+    <!-- 擺位標籤檢查,打開這個視窗時才去查(setupCheckHtml 在 _ui.html) -->
+    <div id="rn-setup"></div>
     <div class="acts2">
       <button class="primary" id="btn-name-go">Run</button>
       <button id="btn-name-cancel">Cancel</button>
@@ -1429,6 +1431,26 @@ function openNameOv() {
   $('#nameov').classList.add('on');
   $('#run-name').focus();
   $('#run-name').select();
+  loadSetupCheck();
+}
+
+/** 開跑前的擺位標籤檢查。查不到就留白 —— 這是提醒,不是開跑的前提。
+
+    刻意不用 post():它共用一個全域的 busyAbort,這支要是拖太久,
+    它的逾時會把同時送出的 /api/run 一起取消掉。 */
+async function loadSetupCheck() {
+  const box = $('#rn-setup');
+  box.innerHTML = '<div class="sucheck hint">Checking Setup tags…</div>';
+  let r = null;
+  try {
+    const res = await fetch('/acqua/api/setup-check', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({row_ids: [...selected], ctx: S.ctx}),
+      signal: AbortSignal.timeout(20000),
+    });
+    r = await res.json();
+  } catch (e) { /* 查不到就算了 */ }
+  box.innerHTML = setupCheckHtml(r);
 }
 
 $('#rn-recent').onclick = (e) => {

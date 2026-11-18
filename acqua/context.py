@@ -84,6 +84,24 @@ def context_key(server, database, project_id) -> str:
                                 "" if project_id is None else int(project_id))
 
 
+def parse_ctx(ctx):
+    """context_key() 的反向:(server, database, idProject)。拆不出來的部分是 None。
+
+    以前 app.py 有好幾處各自手寫 split("|"),寫法還不一樣。
+    格式只該由這個檔決定,拆的那一半也放在這裡。
+    """
+    parts = str(ctx or "").split("|")
+    if len(parts) != 3:
+        return None, None, None
+    return (parts[0] or None, parts[1] or None,
+            int(parts[2]) if parts[2].isdigit() else None)
+
+
+def project_id_of(ctx):
+    """ctx 裡的 idProject。拿不到回 None。"""
+    return parse_ctx(ctx)[2]
+
+
 def clear_values(fields) -> dict:
     """把一組欄位變成「作廢後該有的值」,可直接餵給 state.set()。"""
     return {f: (_EMPTY[f]() if f in _EMPTY else None) for f in fields}

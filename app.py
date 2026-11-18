@@ -25,13 +25,14 @@ from acqua import crane
 from acqua.labcore import PAIR_LABELS as MIC_PAIR_LABELS
 from acqua import env as env_settings
 from acqua.crane import axes_manifest as crane_axes_manifest, make_crane
+from acqua.context import parse_ctx, project_id_of
 from acqua.prefs import Prefs
 from acqua.roomsetups import RoomSetups, clean_axes
 from acqua.runlog import RunLog
 from acqua.sqlcat import raw_query
-from acqua import setuptags
+from acqua.setupcoord import SetupCoordinator, match_position
 from acqua.state import SharedState
-from acqua.testplans import TestPlans, new_setup, source_of
+from acqua.testplans import TestPlans, source_of
 from acqua.worker import make_worker
 
 # 主控台預設是 cp950,印到非 CJK 符號會丟 UnicodeEncodeError 把程式打掛。
@@ -264,134 +265,9 @@ def api_room_live():
     return jsonify(ok=True, **bridge.snapshot())
 
 
-#: 這一批每個 row_id 需要的擺位。/api/run 算好放這裡,
-#: 執行中由 before_item 鉤子查用。
-#:
-#: 「哪幾筆沒套用到」不放在這裡 —— 它要給前端看、要進 CSV、要焊進每一筆
-#: 結果,所以唯一的那份放在 state.setup_not_applied。兩邊各存一份的話,
-#: 清除時漏掉一邊就會把上一輪的警告蓋到這一輪的結果上。
-_setup_plan = {"by_row": {}}
-
-#: 判斷「已經在這個擺位上」的容差。
-#: 線性軸 1 公分、旋轉軸 1 度 —— 機構回報的位置本來就有誤差,
-#: 要求完全相等的話永遠不會命中,每一筆都會重跑一次移動。
-POSITION_TOLERANCE = {"m": 0.01, "deg": 1.0}
-
-
-def _current_setup_name():
-    """機構現在停在哪個擺位。判不出來回 None。"""
-    if bridge is None:
-        return None
-    snap = bridge.snapshot()
-    now = {k: v["value"] for k, v in (snap.get("axes") or {}).items()}
-    for s in room_setups.list():
-        ok = True
-        for axis_id, target in (s.get("axes") or {}).items():
-            ax = crane.AXES.get(axis_id)
-            if ax is None or axis_id not in now:
-                continue
-            if abs(float(now[axis_id]) - float(target)) > \
-                    POSITION_TOLERANCE.get(ax.unit, 0.01):
-                ok = False
-                break
-        if ok:
-            return s.get("name")
-    return None
-
-
-def _note_not_applied(row_id, title, wanted, reason):
-    """記下「這一筆沒套用到指定擺位」。
-
-    ⚠️ 這是「找不到擺位就繼續跑」那個決定的必要配套(計畫書防線 ⑤)。
-       無人值守時沒人看得到執行中的訊息 —— 警告必須活到跑完的摘要,
-       否則就變成靜默產生可能錯誤的數據。
-    """
-    rows = list(state.snapshot().get("setup_not_applied") or [])
-    rows.append({"row_id": row_id, "title": title,
-                 "wanted": wanted, "reason": reason})
-    state.set(setup_not_applied=rows)
-    state.log(f"    ⚠️ 擺位未套用:「{wanted}」—— {reason}(照常執行)", "warn")
-
-
-def _mmd_of_rows(snapshot, row_ids) -> dict:
-    """每個測項屬於哪個 MMD 群組。回 {row_id: 群組鍵}。
-
-    分組時用它確保**不拆散群組** —— 裡面常常是「錄音 -> 分析」。
-    用已經載入的測項樹算,不另外查資料庫:`path` 就是樹狀路徑,
-    同一個群組的測項路徑相同。
-    """
-    by_id = {s["row_id"]: s for s in (snapshot.get("smds") or [])}
-    out = {}
-    for r in row_ids:
-        s = by_id.get(int(r))
-        # 路徑的最後一段就是最近的群組。查不到就自成一組,不會被亂併。
-        out[int(r)] = (s or {}).get("path") or ("__loose__%d" % int(r))
-    return out
-
-
-def _ensure_setup_before_item(smd):
-    """每一筆測項送出前呼叫 —— 需要的話把機構移到它的擺位。
-
-    **絕對不丟例外。** 擺位有問題就記一筆繼續跑(計畫書 5.0.4 規則 2)。
-    """
-    wanted = _setup_plan["by_row"].get(int(smd.get("row_id", 0)))
-    if not wanted:
-        return                                  # 沒標 -> 沿用當下
-
-    title = smd.get("title", "")
-    if bridge is None:
-        _note_not_applied(smd["row_id"], title, wanted, "沒有機構橋接")
-        return
-
-    names = {s.get("name") for s in room_setups.list()}
-    if wanted not in names:
-        _note_not_applied(smd["row_id"], title, wanted, "找不到這個擺位")
-        return
-
-    if _current_setup_name() == wanted:
-        return                                  # 已經在位置上,不白跑
-
-    target = next(s for s in room_setups.list() if s.get("name") == wanted)
-    state.log(f"    移動到擺位「{wanted}」…")
-    try:
-        moves = [(k, v) for k, v in (target.get("axes") or {}).items()
-                 if k in crane.AXES]
-        bridge.submit(moves, label="setup: %s" % wanted)
-    except Exception as exc:                                # noqa: BLE001
-        _note_not_applied(smd["row_id"], title, wanted, str(exc)[:80])
-        return
-
-    # 等它走完。機構沒有中止指令,所以這裡只能等 —— 但不能無限等。
-    #
-    # ⚠️ 判斷「還在動」一定要用 bridge.busy(),不能看 snapshot()["job"]
-    #    是不是 None。作業跑完**不會被清掉**,它留在那裡當紀錄,只是
-    #    state 變成 "done" —— 看 job 有沒有值的話永遠等不到結束,
-    #    每一筆都會白等滿逾時再誤報「移動逾時」。
-    #    2026-11-16 真機實測踩到:移動其實 51 秒就到位了,卻照樣被標成
-    #    未套用,而且每一筆多花 900 秒。
-    deadline = time.time() + float(
-        (config.get("setup_controller") or {}).get("move_timeout_sec", 900))
-    while bridge.busy():
-        if time.time() > deadline:
-            _note_not_applied(smd["row_id"], title, wanted, "移動逾時")
-            return
-        time.sleep(1.0)
-
-    # 走完了,但不一定是走好的 —— 出錯跟被中止要分開記,
-    # 不然看到的永遠是「位置對不上」,查不到真正的原因。
-    job = bridge.snapshot().get("job") or {}
-    if job.get("state") == "error":
-        _note_not_applied(smd["row_id"], title, wanted,
-                          "移動失敗:%s" % str(job.get("error") or "")[:60])
-        return
-    if job.get("state") == "aborted":
-        _note_not_applied(smd["row_id"], title, wanted, "移動被中止")
-        return
-
-    if _current_setup_name() != wanted:
-        _note_not_applied(smd["row_id"], title, wanted, "移動完成但位置對不上")
-    else:
-        state.log(f"    已就位:「{wanted}」")
+#: 擺位協調:Setup 標籤 -> 機構動作,見 acqua/setupcoord.py。
+#: 機構橋接與逾時要等 main() 讀完設定才知道,在那裡接上。
+setup_coord = SetupCoordinator(state, room_setups, raw_query)
 
 
 @app.route("/api/room/current")
@@ -416,27 +292,11 @@ def api_room_current():
         return _no_bridge()
 
     snap = bridge.snapshot()
-    now = {k: v["value"] for k, v in (snap.get("axes") or {}).items()}
-    estimated = any(v.get("estimated") for v in (snap.get("axes") or {}).values())
+    axes = snap.get("axes") or {}
+    matched, scored = match_position(
+        {k: v["value"] for k, v in axes.items()}, room_setups.list())
+    estimated = any(v.get("estimated") for v in axes.values())
 
-    matched, scored = None, []
-    for s in room_setups.list():
-        axes = s.get("axes") or {}
-        worst, ok = 0.0, True
-        for axis_id, target in axes.items():
-            ax = crane.AXES.get(axis_id)
-            if ax is None or axis_id not in now:
-                continue                    # 這台沒有這根軸,不列入比對
-            diff = abs(float(now[axis_id]) - float(target))
-            worst = max(worst, diff)
-            if diff > POSITION_TOLERANCE.get(ax.unit, 0.01):
-                ok = False
-        scored.append({"id": s.get("id"), "name": s.get("name"),
-                       "worst_diff": round(worst, 4), "match": ok})
-        if ok and matched is None:
-            matched = s
-
-    scored.sort(key=lambda x: x["worst_diff"])
     return jsonify(
         ok=True,
         setup=(matched or {}).get("name") or None,
@@ -460,7 +320,7 @@ def api_room_not_applied():
     擺位有兩條驅動路線:
 
         我們主導   /api/run 逐筆送出,送之前自己把機構移好
-                   -> 沒套用到就由 _ensure_setup_before_item() 記下來
+                   -> 沒套用到就由 SetupCoordinator.before_item() 記下來
         ACQUA 主導 使用者直接在 ACQUA 按執行,繞過我們的網頁
                    -> 掛鉤 before_each_measurement.py 讀 Tags.Value("Setup"),
                       打這支叫我們移動;移不動的時候**也要留下紀錄**
@@ -481,9 +341,10 @@ def api_room_not_applied():
     # 給了就用,沒給標 -1,這樣結果比對時至少看得出「有這麼一筆」。
     raw = body.get("row_id")
     row_id = int(raw) if str(raw or "").lstrip("-").isdigit() else -1
-    _note_not_applied(row_id, str(body.get("smd") or body.get("title") or ""),
-                      wanted, str(body.get("reason") or "未說明")[:120])
-    return jsonify(ok=True, count=len(state.snapshot()["setup_not_applied"]))
+    count = setup_coord.note_not_applied(
+        row_id, str(body.get("smd") or body.get("title") or ""),
+        wanted, str(body.get("reason") or "未說明")[:120])
+    return jsonify(ok=True, count=count)
 
 
 @app.route("/api/room/move", methods=["POST"])
@@ -522,11 +383,10 @@ def api_room_apply():
     # setup_name 是給 ACQUA 掛鉤用的 —— SMD 的 Setup 標籤存的是**名稱**,
     # 掛鉤那端沒有 id,硬要它自己查一次表只是多一個會壞的地方。
     if body.get("setup_name") and not body.get("setup_id"):
-        want = str(body["setup_name"]).strip()
-        hit = next((s for s in room_setups.list()
-                    if (s.get("name") or "").strip() == want), None)
+        hit = room_setups.find(body["setup_name"])
         if hit is None:
-            return jsonify(ok=False, error="找不到擺位「%s」" % want), 404
+            return jsonify(ok=False, error="找不到擺位「%s」"
+                           % str(body["setup_name"]).strip()), 404
         body = dict(body, setup_id=hit.get("id"))
 
     if body.get("setup_id"):
@@ -911,36 +771,11 @@ def api_run():
     comment = str(body.get("comment") or "").strip()[:250]
 
     state.set(run_mode="selected", blocking_window=None)
-    # ── 擺位:讀每筆的 Setup 標籤,需要的話重排順序 ──
-    #    重排是為了少移動:照擺位分組之後,一批跑完才換一次位置。
-    #    但**不拆散 MMD 群組** —— 裡面常常是「錄音 -> 分析」,拆開會壞。
+    # 擺位:讀標籤(含資料夾繼承),需要的話為了少移動而重排(不拆群組)
     snap_now = state.snapshot()
-    try:
-        by_row = setuptags.read_setup_tags(
-            snap_now.get("server"), snap_now.get("database"), row_ids, raw_query)
-    except Exception as exc:                                # noqa: BLE001
-        state.log("讀擺位標籤失敗(照原順序執行):%s" % str(exc)[:80], "warn")
-        by_row = {}
-
-    _setup_plan["by_row"] = by_row
-    state.set(setup_not_applied=[])     # 上一輪的警告不能跟到這一輪
-
-    if by_row:
-        names = {s.get("name") for s in room_setups.list()}
-        if bool(body.get("group_by_setup", True)):
-            # 只在真的比較少切換時才重排 —— 混合群組會讓重排反效果
-            row_ids, plan, was = setuptags.reorder_if_better(
-                row_ids, by_row, _mmd_of_rows(snap_now, row_ids), names)
-            if plan["switches"] < was:
-                state.log("擺位:重排順序,切換次數 %d -> %d" % (was, plan["switches"]))
-        else:
-            plan = setuptags.plan_for(row_ids, by_row, names)
-        state.log("擺位:%d 筆有指定 ・ 會切換 %d 次 ・ 用到 %s"
-                  % (len(by_row), plan["switches"],
-                     "、".join(plan["used"]) or "(無)"))
-        for name, rows in (plan["unknown"] or {}).items():
-            state.log("⚠️ 擺位「%s」找不到對應(%d 筆會照常執行,"
-                      "不移動機構)" % (name, len(rows)), "warn")
+    row_ids = setup_coord.prepare(snap_now.get("ctx"), row_ids,
+                                  snap_now.get("smds"),
+                                  regroup=bool(body.get("group_by_setup", True)))
 
     cmd = worker.submit("run_smds", row_ids=row_ids, comment=comment)
 
@@ -953,6 +788,42 @@ def api_run():
         return jsonify(ok=False, error=str(exc)), 400
 
     return jsonify(ok=True, queued=len(row_ids))
+
+
+@acqua_bp.route("/api/setup-check", methods=["POST"])
+def api_setup_check():
+    """[*] 開跑前的擺位標籤檢查(計畫書防線 ①②)。**只報告,不擋。**
+
+    取代原本「這個計畫沒設 setup」的提醒。擺位改由 ACQUA 裡的 Setup 標籤
+    決定之後,會出錯的地方變成「忘了標」和「名稱打錯」—— 這支把兩種都在
+    按下執行之前講出來,打錯的還附上最接近的名稱。
+
+    為什麼不擋:擺位是加分項。打錯一個字不該讓一整晚的批次跑不起來,
+    那幾筆會照常量、記一筆警告(防線 ⑤)。要不要先回去修,讓人決定。
+
+    走 SQL 不排 COM 佇列 —— 前一批還在跑的時候也要能檢查下一批。
+
+    兩種問法:
+        {row_ids, ctx}   單批頁:剛勾的那幾筆,在哪個專案勾的
+        {plan_id}        序列頁:一個存好的計畫 —— 它可能屬於別的資料庫,
+                         所以用計畫自己記的 ctx,不用目前開著的專案
+    """
+    body = request.get_json(silent=True) or {}
+    if body.get("plan_id"):
+        plan = plans.load(body["plan_id"])
+        if plan is None:
+            return jsonify(ok=False, error="Plan not found"), 404
+        row_ids = [int(x["row_id"]) for x in (plan.get("items") or [])]
+        ctx = (plan.get("source") or {}).get("ctx")
+    else:
+        row_ids = [int(r) for r in (body.get("row_ids") or [])
+                   if str(r).lstrip("-").isdigit()]
+        ctx = body.get("ctx") or state.snapshot().get("ctx")
+    if not parse_ctx(ctx)[2]:
+        # 舊計畫沒記 ctx —— 判斷不了是哪個專案,不要拿目前的專案硬猜
+        return jsonify(ok=False, error="This plan has no project context "
+                       "(legacy format)"), 400
+    return jsonify(ok=True, **setup_coord.check(ctx, row_ids))
 
 
 @acqua_bp.route("/api/health")
@@ -1204,7 +1075,6 @@ def api_plans():
     s = state.snapshot()
     # source = 「這批測項是在哪裡挑的」。跨庫執行時要靠它知道切去哪,
     # 也要靠 ctx 判斷能不能直接用 row_id(見 acqua/context.py)。
-    setup = body.get("setup")
     d = plans.save(
         plan_id=body.get("id"),
         title=body.get("title", ""),
@@ -1212,7 +1082,6 @@ def api_plans():
         items=items,
         variables=body.get("variables") or {},
         source=source_of(s),
-        setup=(new_setup(**setup) if isinstance(setup, dict) else None),
         manual_excluded=body.get("manual_excluded") or [],
     )
     state.log(f"已儲存測試計畫「{d['title']}」({d['count']} 項)")
@@ -1233,7 +1102,6 @@ def api_plan_one(plan_id):
         # 只改「描述性」欄位 —— 測項與 source 不在這裡動,
         # 那些要重新挑一次才有意義(換了專案的 row_id 不能沿用)。
         body = request.get_json(silent=True) or {}
-        setup = body.get("setup")
         d = plans.save(
             plan_id=plan_id,
             title=body.get("title", d.get("title", "")),
@@ -1241,7 +1109,6 @@ def api_plan_one(plan_id):
             items=d.get("items") or [],
             variables=d.get("variables") or {},
             source=d.get("source") or {},
-            setup=(new_setup(**setup) if isinstance(setup, dict) else d.get("setup")),
         )
         return jsonify(ok=True, plan=d, plans=plans.list())
 
@@ -1259,9 +1126,7 @@ def api_mos():
     if not (s.get("server") and s.get("database")):
         return jsonify(ok=True, mos=[], note="Not connected")
 
-    # ctx = server|database|idProject
-    parts = str(s.get("ctx") or "").split("|")
-    pid = int(parts[2]) if len(parts) == 3 and parts[2].isdigit() else None
+    pid = project_id_of(s.get("ctx"))
     if pid is None and not s.get("open_project"):
         return jsonify(ok=True, mos=[], note="No project open")
 
@@ -1300,11 +1165,7 @@ def api_plan_mos(plan_id):
     if not (server and database):
         return jsonify(ok=True, mos=[], note="This plan has no source database (legacy format)")
 
-    # ctx = server|database|idProject
-    pid = None
-    parts = str(src.get("ctx") or "").split("|")
-    if len(parts) == 3 and parts[2].isdigit():
-        pid = int(parts[2])
+    pid = project_id_of(src.get("ctx"))
 
     from acqua.sqlcat import SqlCatalog
     cat = SqlCatalog(state)
@@ -1741,9 +1602,13 @@ def main():
     # 擺位鉤子:每一筆測項送出前,需要的話先把機構移到位。
     # 掛在這裡而不是讓 backend 自己做 —— 機構橋接活在 Flask 這一端,
     # backend 只該管 ACQUA。等 ready 之後 worker.backend 才存在。
+    setup_coord.bridge = bridge
+    setup_coord.move_timeout = float(
+        (config.get("setup_controller") or {}).get("move_timeout_sec", 900))
+
     def _attach_setup_hook():
         if worker.ready.wait(timeout=320) and worker.backend is not None:
-            worker.backend.before_item = _ensure_setup_before_item
+            worker.backend.before_item = setup_coord.before_item
 
     threading.Thread(target=_attach_setup_hook, daemon=True).start()
 

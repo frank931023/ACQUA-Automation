@@ -1,7 +1,7 @@
 # ACQUA COM Interface (ACOPT18) — 資料夾解析與自動化開發指南
 
 > 目標:用 Python(或 C++)透過 ACOPT18 COM 介面自動化 HEAD acoustics ACQUA 量測
-> 初版:2026-08-05 ・ 最後更新:2026-08-10
+> 初版:2026-08-05 ・ API 內容最後更新:2026-08-10 ・ 現況校正:2026-11-18(見下方「現況」)
 > 資料來源:本資料夾內容 + `Acqua3COM.chm` 解開後的 API 參考 + **TypeLib 實測** + 資料庫實查
 
 ---
@@ -11,8 +11,26 @@
 | 文件 | 內容 | 什麼時候看 |
 |---|---|---|
 | **本文件** | COM 介面的**觀念與 API 參考** | 想理解 ACQUA COM 怎麼運作 |
-| `ACQUA Automation/README.md` | **實作專案**的架構、環境、待辦 | 要動程式碼、看目前進度 |
-| `61_Demo_SMDs_Rev07_測項清單.md` | 資料庫裡 **132 個測項**的完整清單 | 要挑測項、查授權模組 |
+| `README.md`(同資料夾) | **實作專案**的架構、設計決定、已知限制 | 要動程式碼、看目前進度 |
+| `SETUP.md` | 移植到另一台電腦 | 新機器 |
+| `acqua_scripts/SETUP_AUTOMATION_PLAN.md` | 擺位自動化(Setup 標籤 -> 機構)的計畫與進度 | 擺位相關 |
+| `61_Demo_SMDs_Rev07_測項清單.md` | 示範資料庫 `61_Demo_SMDs_Rev07` 的測項清單(2026-08 快照) | 查某個示範測項、授權模組;**程式不依賴它** |
+
+### ⭐ 現況(2026-11-18)—— 跟下文衝突時以這裡為準
+
+下文是 2026-08 寫的 API 參考,有幾項當時的判斷後來被實測推翻:
+
+| 下文的說法 | 實測結果 |
+|---|---|
+| ACOPT18 授權「未確認 / 阻塞中」 | ✅ 已生效,整套 COM 驅動在真機上天天在用 |
+| `AcquaDBMask.GetSMDsRecursive()` / `SingleValue` 解決列舉與讀數值 | ❌ `AcquaDBMask.Connect()` 一律回 False。測項列舉、數值、極限值全部改走 **ADO 直連 SQL**(`acqua/sqlcat.py`);已驗證 `idTreeItem == SMDRowID` |
+| `UserReaction` / `Continue` 的 ByRef 以 return 回傳「待驗證」 | ❌ pywin32 下**送不回 ACQUA**(回 `REDO_THIS` 也沒有重跑)。中止 / 重試改由我們逐項送 `StartSingleMeasurement` 的迴圈處理 |
+| `RunScript()` 是「第三條路」 | 方法存在,但**未驗證、專案沒有使用** |
+| `AddMeasurementObject()` 可建 DUT | ❌ 一律回 −1 且不寫資料。DUT 要在 ACQUA 裡建 |
+| 掛鉤腳本能拿到測項 id | ❌ 腳本型別庫 `ACQUALyzerScripting.tlb` 的 `ISmd` 只有 Title / Path / SMDType / Filename / Namespace 等,**沒有 row id**;`ITags` 只看得到這一筆自己的標籤 |
+| COM 能讀寫測項標籤 | ❌ Acqua3 型別庫沒有 SMD 物件。標籤只能在 ACQUA 介面編輯,我們從 SQL 的 `TreeItems.AdvancedDescription` **唯讀** |
+
+實作採用的做法、為什麼、還剩什麼限制,都在 `README.md`。
 
 **2026-08-10 更新摘要** —— 初版有幾處推論已被實測推翻,已在文中修正:
 
@@ -125,18 +143,18 @@ AcquaDBMask.Application
 ACOPT18 ACQUA COM Interface\
 ├── Acqua3COM.chm                                   50 KB  ⭐ API 參考(已解開,見 §4)
 │
-├── ACQUA_COM_自動化開發指南.md                              ← 本文件
-├── 61_Demo_SMDs_Rev07_測項清單.md                          ⭐ 132 個測項的完整清單
-│
 ├── SMD\                                                   ⭐ 後來收到的官方腳本型 SMD
 │   ├── DUT & Measurement Wizard.aqs             146 B     SMD 定義(XML,指向下面的 .py)
 │   └── dut_meas_wizard.py                      12.6 KB    ACQUA 內建 Python 腳本(見 §11.4)
 │
-├── ACQUA Automation\                                      ⭐ 自動化實作專案(見其 README.md)
-│   ├── app.py / config.json / requirements.txt
-│   ├── acqua\  (constants, state, worker, backend_base, backend_com, backend_mock)
-│   ├── templates\index.html
-│   ├── tools\dump_typelib.py                             唯讀走訪 TypeLib
+├── ACQUA Automation\                                      ⭐ 自動化實作專案(結構見其 README.md)
+│   ├── ACQUA_COM_自動化開發指南.md                         ← 本文件
+│   ├── 61_Demo_SMDs_Rev07_測項清單.md                      示範資料庫的測項清單(快照)
+│   ├── README.md / SETUP.md
+│   ├── app.py / config.json / .env / requirements.txt
+│   ├── acqua\  (COM 後端、SQL 目錄、擺位、狀態…)
+│   ├── templates\ ・ soundproofroom\ ・ acqua_scripts\
+│   ├── tools\  (檢查、測試、盤點、dump_typelib…)
 │   └── .venv\                                            32-bit Python 3.9 + Flask + pywin32
 │
 └── Example Applications\
@@ -297,7 +315,6 @@ IAcquaBaseObject (RowID, QueryProperty, UpdateProperty)
 > ```python
 > PASSING = {MEAS_DONE, MEAS_DONE_OK, IGNORE, MEAS_DONE_NOT_OK_NOT_REQUIRED}
 > ```
-> 另提供 `is_strict_pass()` 供只認 `emeresultMeasDoneOk` 的嚴格情境使用。
 
 ### ESingleValueCheckState — 單一數值的極限檢查結果
 
@@ -577,10 +594,10 @@ End Select
 | ACQUA 6 已安裝 | ✅ 已確認 | `Acqua6.exe` v6.2.210.33798 |
 | COM 已註冊 | ✅ 已確認 | ProgID `Acqua3.AcquaApplication` → LocalServer32 |
 | SQL Server | ✅ 已確認 | 執行個體 `ACQUADBSERVER`,FILESTREAM 已啟用 |
-| **ACQUA 資料庫** | ✅ 已建立 | `61_Demo_SMDs_Rev07`(**132 個 SMD**)、`AUTOMATION_TEST_0806`(空) |
+| **ACQUA 資料庫** | ✅ 已建立 | 多個(示範庫、測試庫、各認證專案庫)。程式不綁任何一個,用 `ctx` 區分 |
 | **Python** | ✅ **原廠已內建** | HEAD 附的 32-bit Python 3.9.13,pywin32 已裝好 |
 | 專案 venv | ✅ 已建立 | `ACQUA Automation\.venv`(+ Flask 3.1.3 + pywin32 312) |
-| **ACOPT18 授權** | 🔴 **未確認** | **沒有它 `Dispatch()` 會直接失敗 —— 唯一的硬性阻塞** |
+| **ACOPT18 授權** | ✅ 已生效(2026-08 之後確認) | 沒有它 `Dispatch()` 會直接失敗 |
 | 量測硬體 | ❓ 未確認 | 已裝 HEAD device drivers |
 
 **不用自己裝 Python。** 直接用原廠內建的建 venv(專案已經建好了):
@@ -950,12 +967,12 @@ int main() {
 - [x] 已確認 **SMD 列舉解法**(`GetSMDsRecursive()`)
 - [x] 已確認 **數值讀取解法**(`SingleValue.Value / .Unit / .Status`)
 - [x] 已確認 **變數驅動解法**(`MeasurementEngine.UsedVariables`)
-- [x] ACQUA 資料庫已建立,`61_Demo_SMDs_Rev07` 含 132 個測項
+- [x] ACQUA 資料庫已建立(示範庫 `61_Demo_SMDs_Rev07` 含 132 個測項)
 - [x] 自動化程式已完成並通過**模擬模式**驗證(兩種執行模式)
 
 ### 🔴 阻塞中
 
-- [ ] **ACOPT18 授權已購買且生效** —— 沒有的話 `Dispatch()` 直接失敗,整套都不用談
+- [x] ~~ACOPT18 授權已購買且生效~~ —— 已生效
 - [ ] 各測項所需的 **ACOPT 模組授權**(6819 / 6820 / 6844 / 6857 / 6869…共 17 個模組)
 
 ### ⬜ 待實機驗證(前提:授權確認)

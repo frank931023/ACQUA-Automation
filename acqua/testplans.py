@@ -37,20 +37,6 @@ from datetime import datetime
 _SAFE = re.compile(r"[^A-Za-z0-9_.-]")
 
 
-def new_setup(name="", note="", params=None, setup_id="") -> dict:
-    """一個「setup 位置」—— 指向 setups/ 裡存好的某個擺位。
-
-    `setup_id` 才是權威,`name` 只是存下來方便顯示(擺位改名之後
-    不用回頭改每個計畫)。舊的計畫檔只有 name,所以兩個都留著。
-
-    ⚠️ 目前只會在執行序列中間停下來等人工調整。接上 Raspberry Pi 之後
-       會用這個 id 去 /api/room/apply 把機構移到位,計畫檔的結構不用改。
-    """
-    return {"setup_id": setup_id or "", "name": name or "", "note": note or "",
-            "params": dict(params or {}),
-            "_note": "尚未自動化:目前只會在序列中間停下來提示人工調整"}
-
-
 def source_of(snap) -> dict:
     """從目前狀態記下「這批測項是在哪裡挑的」。
 
@@ -118,8 +104,6 @@ class TestPlans:
         for k, v in meta.items():
             if v is not None:
                 data[k] = v
-        # setup 沒給就保留原本的(編輯標題時不該把位置設定洗掉)
-        data.setdefault("setup", new_setup())
         self._write(data)
         return data
 
@@ -142,7 +126,10 @@ class TestPlans:
                 "measurement_object": d.get("measurement_object"),
                 "ctx": d.get("ctx"),
             }
-        d.setdefault("setup", new_setup())
+        # 計畫不再帶擺位(2026-11-17):擺位改由每個測項在 ACQUA 裡的
+        # Setup 標籤決定,見 acqua/setuptags.py。舊檔的 setup 欄位在這裡
+        # 丟掉 —— 下次存檔就自然消失,後面的程式不用再認它。
+        d.pop("setup", None)
         d["items"] = [dict(x) if isinstance(x, dict) else {"row_id": x}
                       for x in (d.get("items") or [])]
         return d
@@ -173,7 +160,6 @@ class TestPlans:
             out.append({
                 "id": d.get("id", name[:-5]),
                 "source": src,
-                "setup": d.get("setup") or {},
                 "title": d.get("title", ""),
                 "description": d.get("description", ""),
                 "created": d.get("created", ""),

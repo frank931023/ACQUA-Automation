@@ -6,8 +6,8 @@
   "project_group": "test1",
   "project": "test1",
   "measurement_object": "MO1",
-  "started_at": 1794765362.497952,
-  "updated_at": 1794765422.5121439,
+  "started_at": 1794902146.1103442,
+  "updated_at": 1794902207.4738898,
   "planned": [
     {
       "row_id": 11,
@@ -28,7 +28,7 @@
       "setup_warn": "",
       "passed": true,
       "retries": 0,
-      "ts": 1794765416.8211923
+      "ts": 1794902201.518074
     },
     {
       "row_id": 13,
@@ -39,7 +39,7 @@
       "setup_warn": "",
       "passed": true,
       "retries": 0,
-      "ts": 1794765421.0547464
+      "ts": 1794902206.0255651
     }
   ]
 }

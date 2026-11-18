@@ -1,7 +1,11 @@
 # ACQUA 測試自動化
 
 用 COM 驅動 HEAD acoustics ACQUA,把「挑測項 → 跑 → 出報告」變成網頁上的操作,
-並且可以把多批測試接成一條序列連續跑,中間留給治具移動。
+並且可以把多批測試接成一條序列連續跑。機構擺位由 ACQUA 裡每個測項的 `Setup`
+標籤決定,跑到哪一筆就移到哪 —— 目標是**過夜、無人值守**的批次。
+
+適用任何 ACQUA 資料庫與專案:專案由 `ctx` 決定,擺位由名稱決定,
+程式碼裡沒有綁定任何資料庫、專案或測項編號。
 
 ```
 瀏覽器  ──HTTP──▶  Flask  ──佇列──▶  工作執行緒(STA)  ──COM──▶  ACQUA
@@ -35,22 +39,27 @@ cd "ACQUA Automation"
 
 ---
 
-## 兩種用法
+## 三種用法
 
 **① 單次執行**(`/acqua/`)
 連線 → 開專案 → 選 DUT → 載入測項 → 勾 → 命名 → 執行。
 
 **② 執行序列**(`/acqua/plans`)
-把勾好的一批存成「計畫」,再把多個計畫排成序列。每一步之間會停下來調整
-治具位置。**計畫可以來自不同資料庫**——執行時會自動切過去。
+把勾好的一批存成「計畫」,再把多個計畫排成序列連續跑。**計畫可以來自不同
+資料庫**——執行時會自動切過去。每一步的說明行會先講出這一步的擺位標籤狀況:
 
 ```
-① ZoomRooms / Front_of_Room ・ 226 項
-   ↓ setup:0°／1m   ・ 切換到 51_MS_Teams_Rev05_SP2
-② MS Teams Speakerphone / DUT_A ・ 40 項
+① 專案 A / 某資料夾 ・ 226 項
+   ↓ setup: near-field · 2 problem(s) ・ switch to 另一個資料庫
+② 專案 B / DUT_A ・ 40 項
 ```
 
 每一步可以各自指定 run 名稱、DUT、Word 檔名與位置。
+
+**③ 直接在 ACQUA 裡跑**
+照平常在 ACQUA 按執行。專案的 `before_each_measurement.py` 貼上
+`acqua_scripts/HOOK_setup_bridge.py` 之後,每一筆量測前掛鉤會讀 `Setup` 標籤、
+請本服務移動機構、等到位再放行。服務要開著,但網頁可以不開。
 
 ---
 
@@ -115,7 +124,8 @@ acqua/
   testplans.py         計畫的本地儲存(plans/*.json)
   crane.py             ⭐ 天車橋接:3D 邏輯軸 ←→ Pi 韌體指令(mock / http 兩種後端)
   roomsetups.py        擺位的本地儲存(setups/*.json)
-  setuptags.py         ⭐ 測項的 Setup 標籤:讀取、照擺位分組、找不到時的規則
+  setuptags.py         ⭐ Setup 標籤:讀取、資料夾繼承、開跑前檢查、照擺位分組(純資料)
+  setupcoord.py        ⭐ 擺位協調:標籤 -> 機構動作、等到位、沒套用到的記下來
   labcore.py           ⭐ labCORE 麥克風供電:ACQUA 不管這塊,只能我們管
   prefs.py             每個資料庫上次用什麼(prefs.json)
   runlog.py            執行紀錄(runs/current.json)
@@ -136,15 +146,21 @@ tools/
   check_context.py     上下文一致性檢查
   check_ui.py          前端與路由的機械化盤點
   test_nonblocking.py  ⭐ 量測進行中 UI 還能不能用(會真的跑一次量測)
-  test_setupflow.py    ⭐ 擺位流程的端對端(模擬後端,不需 ACQUA)
+  test_setupflow.py    ⭐ 擺位流程的端對端:真的協調器 + 模擬後端,只把機構換成假的
   test_hook_bridge.py  ⭐ ACQUA 掛鉤的外部半邊(把 Tags 換成假的跑真掛鉤)
-  setup_inventory.py   盤點哪些測項有 / 該有 Setup 標籤(只讀)
+  setup_inventory.py   任一專案 / 計畫的 Setup 標籤盤點與轉折點建議(只讀)
+  export_acqua_scripts.py  把資料庫裡的 ACQUA Python 腳本解出來(只讀)
   test_resolve.py      跨庫測項對應
   test_selfheal.py     專案樹變動後的自我校正
   labcore.py           讀 labCORE 硬體現況(麥克風 / USB / 接線)
   dump_typelib.py      倒出 COM 型別庫
   preflight.py         啟動前自檢
   survey.py            跨資料庫的假設盤點
+acqua_scripts/
+  HOOK_setup_bridge.py ⭐ 貼進 ACQUA 的掛鉤:讀 Setup 標籤 -> 請服務移動 -> 等到位
+  HOOK_diagnose_smd.py 只印不做事的診斷掛鉤(看 ACQUA 腳本環境裡拿得到什麼)
+  SETUP_AUTOMATION_PLAN.md  擺位自動化的計畫書與進度
+  其他 *.py            從資料庫匯出、加了說明的 ACQUA 腳本範例(見該資料夾 README)
 ```
 
 ### 為什麼 COM 只在工作執行緒碰
@@ -179,11 +195,20 @@ SQL 不同:`raw_query()` 自己確保呼叫端執行緒有 COM(ADO 也是 COM),
 
 ### 擺位對不上時,不擋,但警告要活到最後
 
-測項可以在 ACQUA 裡用 `Setup` 標籤指定要在哪個擺位量(「编辑标签」那個
-欄位)。開跑前會讀這批的標籤,照擺位重排順序以少移動幾次 ——
-但**不拆散 MMD 群組**,裡面常常是「錄音 → 分析」,拆開分析會找不到結果。
-而且重排只在**真的比較少切換**的時候才採用:約 6% 的群組本身混了兩個
-擺位,硬排反而會多切幾次。
+擺位**只由 ACQUA 裡每個測項的 `Setup` 標籤決定**(「编辑标签」那個欄位)。
+網頁上的計畫不再帶擺位 —— 兩個來源會打架,而且原本計畫上那段移動是假的。
+
+ACQUA 不能對資料夾加標籤,所以沒標的測項會**看同一個資料夾裡其他測項**:
+只有一種擺位就跟著用;有兩種以上就不猜、記一筆;都沒有就再往上一層。
+實際效果是每個資料夾標一筆就夠。規則細節見 `acqua/setuptags.py` 檔頭。
+
+**開跑前會先檢查**(單批頁在「為這一批命名」視窗裡,序列頁在每一步的說明行):
+幾筆有擺位、幾筆沒有、哪些名稱打錯(附最接近的建議)、哪些判斷不出來。
+只警告,不擋。
+
+開跑時照擺位重排順序以少移動幾次 —— 但**不拆散 MMD 群組**,裡面常常是
+「錄音 → 分析」,拆開分析會找不到結果。而且重排只在**真的比較少切換**的
+時候才採用:約 6% 的群組本身混了兩個擺位,硬排反而會多切幾次。
 
 名稱找不到對應的擺位時,規則是**不移動機構、記一筆、繼續測**。
 這是刻意的 —— 打錯一個字不該讓一整晚的批次停擺。但代價是那幾筆會在
@@ -203,8 +228,17 @@ SQL 不同:`raw_query()` 自己確保呼叫端執行緒有 COM(ADO 也是 COM),
 理由很直接:無人值守時沒有人看得到執行當下那一行。
 **一個沒人看到的警告等於沒有警告。**
 
-規則與實作進度見 `acqua_scripts/SETUP_AUTOMATION_PLAN.md`,
-程式在 `acqua/setuptags.py` 與 `app.py` 的 `_ensure_setup_before_item()`。
+規則與實作進度見 `acqua_scripts/SETUP_AUTOMATION_PLAN.md`。程式分兩層:
+`acqua/setuptags.py` 只管標籤(讀、繼承、檢查,純資料、好測),
+`acqua/setupcoord.py` 拿結果去動機構。`app.py` 只負責接線。
+
+盤點任一專案的標籤狀況(跟執行時同一套規則):
+
+```bash
+.venv\Scripts\python.exe tools\setup_inventory.py --project "專案標題" [--db 資料庫] [--suggest]
+.venv\Scripts\python.exe tools\setup_inventory.py --project-id 6 --db 資料庫   # 有同名專案時
+.venv\Scripts\python.exe tools\setup_inventory.py --plan <計畫 id>
+```
 
 ---
 
@@ -253,7 +287,8 @@ SQL 不同:`raw_query()` 自己確保呼叫端執行緒有 COM(ADO 也是 COM),
 | Standards 群組不能執行 | ACQUA 回「This is a standard. It cannot be modified」。要先在 ACQUA 裡複製成實際專案 |
 | `UserReaction` 無效 | pywin32 的 ByRef 出參送不回 ACQUA,所以 REDO/CANCEL 那條路是死的 |
 | 中斷後不能續跑 | `runs/current.json` 有記錄,但續跑邏輯還沒做 |
-| setup 位置是 mock | 序列中間固定停五秒。之後接 Raspberry Pi |
+| 機構預設是 mock | `.env` 沒設 `ACQUA_SETUP_CONTROLLER` 時位置是模擬的(`crane.py`)。設了就走 `HttpCrane` 打天車控制中心,但還沒接過真的 Raspberry Pi |
+| 從 ACQUA 直接跑沒有資料夾繼承 | 掛鉤只看得到自己的標籤;要等 `Smd.Path` 的格式驗證(`acqua_scripts/HOOK_diagnose_smd.py`) |
 | 條件式的數值比較未驗證 | `Relation` 2/3/4 的語意是推的,`condeval.py` 有標出來 |
 | 中止擋不住在途的那一筆 | 中止是「不送下一筆」。只剩一筆在跑時按下去會等它跑完 |
 | 供電不符只會記錄不會擋 | `labcore.mismatch()` 算得出來,但還沒接進 `/api/run` 的前置檢查 |
@@ -321,13 +356,21 @@ ACQUA 照樣回報 `PASS`,資料卻是廢的。更危險的是載入 `Teams_cham
 
 ## 檢查程式
 
-沒有測試框架,但有兩支機械化盤點:
+沒有測試框架,每支都是可以直接跑的腳本,回傳碼 0 = 通過:
 
 ```bash
+# 不需要 ACQUA、資料庫或服務
 .venv\Scripts\python.exe tools\check_context.py    # 上下文一致性
-.venv\Scripts\python.exe tools\check_ui.py         # 前端與路由
-.venv\Scripts\python.exe tools\test_setupflow.py   # 擺位流程(模擬後端)
-.venv\Scripts\python.exe tools\test_hook_bridge.py # ACQUA 掛鉤(要先起服務)
+.venv\Scripts\python.exe tools\check_ui.py         # 前端與路由的機械化盤點
+.venv\Scripts\python.exe tools\test_setupflow.py   # 擺位流程(真的協調器 + 模擬後端)
+
+# 要先起服務(mock 或 com 都可以)
+.venv\Scripts\python.exe tools\test_hook_bridge.py # ACQUA 掛鉤的外部半邊
+
+# 要接真的 ACQUA,而且已經開好一個專案
+.venv\Scripts\python.exe tools\test_nonblocking.py # 量測中 UI 還能不能用
+.venv\Scripts\python.exe tools\test_resolve.py     # 跨庫測項對應
+.venv\Scripts\python.exe tools\test_selfheal.py    # 專案樹變動後的自我校正
 ```
 
 會抓什麼:
@@ -336,7 +379,9 @@ ACQUA 照樣回報 `PASS`,資料卻是廢的。更危險的是載入 `Teams_cham
 - JS 取用的 id 是否存在、按鈕是否有人接、fetch 的路由是否存在
 - worker 命令兩個 backend 是否都實作
 - 切換專案的防線是否還在
-- 擺位找不到對應時的警告有沒有活到最後(結果、摘要、CSV、報告)
+- 擺位:有標就移、資料夾繼承、名稱找不到照常量、已在位置不白跑、機構出錯分開記,
+  而且警告活到最後(結果、摘要、runlog、跑完的訊息)—— `test_setupflow` 用真的程式碼跑,
+  不是另寫一份規則來比對
 
 > 這些檢查是被真實 bug 逼出來的。舉例:區間替換不小心刪掉 `renderBlocking()`,
 > 頁面照樣載入,直到有人按下去才炸。括號平衡、語法檢查都查不出這種洞。

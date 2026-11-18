@@ -49,11 +49,5 @@
     "ctx": "AUTOMATION_ACQU\\ACQUADBSERVER|ACQUA_auto_v2026Aug|1",
     "tree_fingerprint": "7e10c14f931b52fa:1477"
   },
-  "manual_excluded": [],
-  "setup": {
-    "name": "",
-    "note": "",
-    "params": {},
-    "_note": "尚未自動化:目前只會在序列中間停下來提示人工調整"
-  }
+  "manual_excluded": []
 }

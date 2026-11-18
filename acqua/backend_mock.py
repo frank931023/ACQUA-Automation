@@ -13,7 +13,7 @@ import random
 import time
 
 from .backend_base import AcquaBackend
-from .constants import EMEEventType, EVariableState, EVariableType
+from .constants import EVariableState, EVariableType
 
 # 模擬用的假資料 —— 模仿電聲/通訊測試常見的測項命名
 _FAKE_TREE = {
@@ -98,9 +98,9 @@ class MockBackend(AcquaBackend):
 
     def list_databases(self, server=""):
         dbs = [
-            {"name": "61_Demo_SMDs_Rev07", "is_acqua": True, "online": True,
+            {"name": "MOCK_Demo", "is_acqua": True, "online": True,
              "smds": 132, "mmds": 61, "results": 0},
-            {"name": "AUTOMATION_TEST_0806", "is_acqua": True, "online": True,
+            {"name": "MOCK_Empty", "is_acqua": True, "online": True,
              "smds": 0, "mmds": 10, "results": 0},
         ]
         self.state.set(databases=dbs)

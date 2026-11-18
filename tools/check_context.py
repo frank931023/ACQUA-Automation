@@ -193,15 +193,22 @@ pl2 = read("templates/plans.html")
 tp = read("acqua/testplans.py")
 
 check("計畫存 source(庫/專案/MO/ctx)", "def source_of(snap)" in tp)
-check("計畫存 setup 位置(未來接 Raspberry Pi)", "def new_setup(" in tp)
+# 計畫不再帶擺位(2026-11-17):擺位改由每個測項在 ACQUA 裡的 Setup 標籤
+# 決定。兩個來源會打架 —— 計畫說 A、標籤說 B,機構會先移 A 再移 B。
+check("計畫不再帶擺位", "def new_setup(" not in tp and 'd.pop("setup", None)' in tp)
 check("舊格式計畫會被補成新格式", "def _migrate(d: dict)" in tp)
 check("存計畫時帶路徑(跨庫才對得回來)", "path: s.path" in idx)
 check("prepare 會切庫 / 開專案 / 選 MO / 載入 / 對應",
       all(k in ap for k in ('切換到 {where}', '開啟專案 {proj}',
                             '選定量測物件 {mo}', '"載入測項"', '"resolve_items"')))
-check("序列頁有 setup 編輯", 'id="setupov"' in pl2 and "su-save" in pl2)
+check("序列頁沒有每個計畫配擺位的編輯", 'id="setupov"' not in pl2
+      and 'id="nosetupov"' not in pl2)
 check("序列頁會標出要切換資料庫", "switch to ${esc(s.database)}" in pl2)
-check("步驟之間會處理 setup", "movingToSetup(" in pl2)
+# 那段是寫死的 5 秒假動作,從來沒移動過任何東西 —— 真的移動在
+# 每一筆送出前的 before_item 鉤子(看 Setup 標籤)。
+check("步驟之間沒有假的移動階段", "movingToSetup(" not in pl2)
+check("序列每一步看得到標籤檢查", "setupBrief(st.id)" in pl2
+      and "/acqua/api/setup-check" in pl2)
 check("序列存在瀏覽器,重整不會不見", "acqua.sequence" in pl2)
 check("對應不到會問過使用者才繼續", "item(s) unmatched" in pl2)
 

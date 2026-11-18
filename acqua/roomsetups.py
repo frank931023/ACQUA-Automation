@@ -14,14 +14,14 @@
     {
       "id": "20260915-143052-a3f1",
       "name": "近場 0.5 m ・ HATS 前傾 17°",
-      "description": "MS Teams Rev05 用",
+      "description": "手持裝置的近場測試",
       "created": "2026-09-15T14:30:52",
       "updated": "2026-09-15T14:31:10",
       "axes": {"hats.mrp": 1.2, "hats.head": 17.0, ...},
       "source": "setup"          ← 這組數字是設定模式畫的,還是實機讀回來的
     }
 
-axes 的鍵就是 acqua/crane.py 的 AXES 鍵,也是 soundproofroom/src/axes.js
+axes 的鍵就是 acqua/crane.py 的 AXES 鍵,也是 soundproofroom/src/main.js PANEL
 的控制項 id。三邊同一組字串 —— 所以存檔能直接餵給天車,不需要任何轉換表。
 **改那些 id 會讓存好的 setup 對不上**,要改就得寫搬移。
 """
@@ -31,8 +31,8 @@ import io
 import json
 import os
 import re
+import secrets
 import threading
-import time
 from datetime import datetime
 
 from .crane import AXES
@@ -72,10 +72,16 @@ class RoomSetups:
     def _path(self, setup_id: str) -> str:
         return os.path.join(self.dir, _SAFE.sub("_", str(setup_id)) + ".json")
 
-    @staticmethod
-    def _new_id() -> str:
-        return (datetime.now().strftime("%Y%m%d-%H%M%S-")
-                + "%04x" % (int(time.time() * 1000) % 0xFFFF))
+    def _new_id(self) -> str:
+        """時間開頭(清單排序靠它)+ 隨機尾碼,而且保證沒有被用過。
+
+        以前尾碼是毫秒數 —— 同一毫秒存兩個擺位會拿到同一個 id,
+        第二個靜靜蓋掉第一個(test_setupflow 連存兩筆時踩到)。
+        """
+        while True:
+            sid = datetime.now().strftime("%Y%m%d-%H%M%S-") + secrets.token_hex(2)
+            if not os.path.exists(self._path(sid)):
+                return sid
 
     def _write(self, data: dict):
         """原子寫入 —— 先寫暫存檔再 replace。半個 JSON 等於整份擺位沒了。"""
@@ -151,6 +157,16 @@ class RoomSetups:
         out.sort(key=lambda x: (x.get("updated") or x.get("created") or "",
                                 x.get("id") or ""), reverse=True)
         return out
+
+    def names(self) -> set:
+        """所有擺位的名稱。測項的 Setup 標籤比對的就是這個。"""
+        return {(d.get("name") or "").strip() for d in self.list()} - {""}
+
+    def find(self, name):
+        """依名稱找擺位(Setup 標籤存的是名稱,不是 id)。找不到回 None。"""
+        want = str(name or "").strip()
+        return next((d for d in self.list()
+                     if (d.get("name") or "").strip() == want), None) if want else None
 
     def delete(self, setup_id: str) -> bool:
         path = self._path(setup_id)

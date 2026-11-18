@@ -46,11 +46,5 @@
     "measurement_object": "Front_of_Room",
     "ctx": "AUTOMATION_ACQU\\ACQUADBSERVER|ACQUA_auto_v2026Aug|1"
   },
-  "manual_excluded": [],
-  "setup": {
-    "name": "",
-    "note": "",
-    "params": {},
-    "_note": "尚未自動化:目前只會在序列中間停下來提示人工調整"
-  }
+  "manual_excluded": []
 }

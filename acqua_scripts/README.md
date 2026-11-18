@@ -3,9 +3,27 @@
 ACQUA 本體是 Delphi 寫的,**安裝目錄裡一個 .py 都沒有**。但它會執行
 使用者寫的 Python 腳本 —— 那些才是你能改的東西。
 
-這個資料夾放了 19 支從資料庫解出來的範例,每一支都加了說明:
-它什麼時候執行、在哪個資料庫哪個專案、ACQUA 裡怎麼點進去、
-改了會影響幾個測項。**原始程式碼一字未改**,放在說明下面。
+這個資料夾放兩種東西:
+
+- **我們寫的掛鉤**(`HOOK_*.py`)—— 要貼進 ACQUA 專案的腳本,見下一節
+- **19 支從資料庫解出來的範例**,每一支都加了說明:什麼時候執行、出自哪個
+  資料庫哪個專案、ACQUA 裡怎麼點進去、改了會影響幾個測項。
+  **原始程式碼一字未改**,放在說明下面。這是一次性挑選的參考資料,不會自動更新
+
+---
+
+## 我們寫的掛鉤
+
+| 檔案 | 貼到哪 | 做什麼 |
+|---|---|---|
+| `HOOK_setup_bridge.py` | 專案的 `before_each_measurement.py` | 讀這一筆的 `Setup` 標籤 -> 請本服務移動機構 -> 等到位才放行。服務連不上、名稱找不到、移動失敗都**不擋量測**,改回報到 `/api/room/not-applied` 進跑完的摘要 |
+| `HOOK_diagnose_smd.py` | 同上(暫時) | 只印不做事:印出 `Smd.Title / Path / Filename / Namespace`、`Tags` 等實際的值。用來確認 `Smd.Path` 的格式 —— ACQUA 直接跑時的資料夾繼承要靠它 |
+
+兩支都不綁任何資料庫或專案:標籤名固定是 `Setup`,擺位用名稱對應,
+服務位址在檔頭的 `SERVICE`。專案原本已經有 `before_each_measurement.py` 時
+(例如 SP2 的 `hook_1_...`),把擺位那段接在原本內容的**前面**。
+
+不需要 ACQUA 就能測外部那半邊:`tools/test_hook_bridge.py`(要先起服務)。
 
 ---
 
@@ -145,6 +163,10 @@ from HSL import (run_universal_questionnaire_gui, save_var, get_var_value,
 那份文件有完整的證據、實測數據(41 次切換 vs 分組後 11 次)、
 依序的開發步驟,以及還沒解決的疑慮。做的時候一邊填結果。
 
+現況(2026-11-18):從網頁跑的那條路已完成並真機驗過(含資料夾繼承與開跑前
+檢查);ACQUA 直接跑的掛鉤 `HOOK_setup_bridge.py` 外部半邊驗完,等在 ACQUA
+裡貼上實測。
+
 ---
 
 ## 對我們自動化的兩個機會
@@ -169,8 +191,8 @@ from HSL import (run_universal_questionnaire_gui, save_var, get_var_value,
 ## 重新產生
 
 ```bash
-.venv\Scripts\python.exe tools\export_acqua_scripts.py      # 解出全部 + 建索引
-.venv\Scripts\python.exe tools\annotate_acqua_scripts.py    # 挑 19 支加說明
+.venv\Scripts\python.exe tools\export_acqua_scripts.py      # 解出全部 + 建 index.json
 ```
 
-兩支都**只讀資料庫,不寫入**。
+**只讀資料庫,不寫入。** 那 19 支加了說明的範例是一次性整理的,產生它們的
+工具(綁死了特定資料庫與檔名)已經移除;要看別的腳本,用上面這支解出來即可。

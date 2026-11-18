@@ -156,11 +156,13 @@ EMEResult:
 ```powershell
 .\.venv\Scripts\python.exe tools\check_context.py
 .\.venv\Scripts\python.exe tools\check_ui.py
+.\.venv\Scripts\python.exe tools\test_setupflow.py
 ```
 
-兩支都應該印「結論:全部通過」。這裡會抓出「按鈕沒接 handler」「fetch 打到
-不存在的路由」「新增狀態欄位忘了決定它屬於哪個專案」這類**頁面照樣載入、
-但按下去才炸**的問題。
+三支都應該印「結論:全部通過」,而且都不需要 ACQUA。前兩支抓「按鈕沒接
+handler」「fetch 打到不存在的路由」「新增狀態欄位忘了決定它屬於哪個專案」
+這類**頁面照樣載入、但按下去才炸**的問題;第三支用模擬後端把擺位流程
+(讀標籤、資料夾繼承、移動、警告活到最後)實際跑一遍。
 
 ### 5.3b 非阻塞實測(會真的跑一次量測)
 
@@ -200,6 +202,17 @@ EMEResult:
 這一步在驗**跨資料庫的隔離**。不同資料庫的 `idTreeItem` 必然重疊,
 沒隔離乾淨的話會安靜地跑到別的測項 —— 那是最難發現的一種錯。
 
+### 5.5 擺位與機構
+
+擺位存在 `setups/*.json`,跟著專案資料夾走。測項要哪個擺位由 ACQUA 裡的
+`Setup` 標籤決定(見 `README.md`「擺位對不上時」)。新機器上:
+
+1. `.env` 填 `ACQUA_SETUP_CONTROLLER=http://<天車控制中心>:5001`;留空就是模擬機構
+2. 看一個專案的標籤狀況:`tools\setup_inventory.py --project "專案標題"`
+3. 要讓「直接在 ACQUA 按執行」也會移機構:把 `acqua_scripts/HOOK_setup_bridge.py`
+   貼進該專案的 `before_each_measurement.py`(見 `acqua_scripts/README.md`),
+   檔頭的 `SERVICE` 指向本服務
+
 ---
 
 ## 6. 移植時容易踩的坑
@@ -216,31 +229,35 @@ EMEResult:
 
 ---
 
-## 7. 不會跟著 clone 的東西
+## 7. 專案資料夾以外的東西
 
-git repo 只涵蓋 `ACQUA Automation/` 這層以下。上層這些**不在版控裡**:
+專案資料夾 `ACQUA Automation/` 裡已經包含程式、文件(`README.md`、這份、
+`ACQUA_COM_自動化開發指南.md`、`acqua_scripts/`)、計畫 `plans/` 與擺位 `setups/`。
+上一層還有這些,**程式不需要**:
 
 | 檔案 | 要不要帶 |
 |---|---|
-| `../ACQUA_COM_自動化開發指南.md` | ⭐ **建議手動帶** —— COM 觀念與 API 參考 |
-| `../61_Demo_SMDs_Rev07_測項清單.md` | ⭐ **建議手動帶** —— 測項清單 |
 | `../Acqua3COM.chm` | 不用 —— 2012 年版已過時,而且程式不讀它 |
 | `../SMD/` | 不用 —— 官方精靈,程式不讀它(同樣的東西也存在資料庫裡) |
 | `../Example Applications/` | 不用 —— 原廠 VB 範例,純參考 |
 
-**程式碼對後三者是零相依**,只有註解裡提到而已。
+**程式碼對這些是零相依**,只有註解裡提到而已。
 
 ---
 
-## 8. 環境變數?
+## 8. `.env`:這台機器專屬的值
 
-**不需要任何 `.env`。** 所有設定都在 `config.json`,原因:
+```powershell
+copy .env.example .env
+```
 
-- 要改的東西不多(5 個值)
-- Windows 驗證不需要帳密
-- 設定跟著專案走比較好追
+`.env` 只放「換一台機器就要改」的東西:後端、SQL Server 與資料庫、帳密、
+網頁位址與 port、報告暫存資料夾、**天車控制中心位址**(`ACQUA_SETUP_CONTROLLER`)。
+對應表在 `acqua/env.py` 的 `MAPPING`。行為設定(哪些視窗自動關、哪些測項
+需人工、逾時)留在 `config.json`。
 
-真的要用環境變數(例如 CI),可以自己在 `app.py` 的 `load_config()` 加覆寫邏輯。
+優先權:真正的環境變數 > `.env` > `config.json`。沒有 `.env` 也能跑,
+那就完全照 `config.json`。`.env` 不進版控。
 
 ---
 
@@ -253,14 +270,15 @@ cd "ACQUA Automation"
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 .\.venv\Scripts\python.exe -c "import struct; print('bits =', struct.calcsize('P')*8)"
 copy config.example.json config.json
-notepad config.json
+copy .env.example .env
+notepad .env
 .\.venv\Scripts\python.exe tools\dump_typelib.py --enums-only
 .\.venv\Scripts\python.exe app.py --backend mock
 ```
 
 ---
 
-## 6. 常見狀況
+## 9. 常見狀況
 
 | 現象 | 原因與處理 |
 |---|---|

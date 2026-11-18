@@ -87,12 +87,6 @@
   .prep div { padding:2px 0; }
   .prep .bad { color:var(--fail); }
 
-  /* 兩步之間的「移動治具」階段 */
-  .setupph { margin-top:12px; padding:11px 13px; border-radius:9px;
-             border:1px solid var(--brand); background:#2f6fed0d; }
-  .setupph .h { font-size:12px; font-weight:600; color:var(--brand);
-                margin-bottom:5px; }
-
   /* 擺位未套用的警告 —— 做得比 PASS/FAIL 搶眼,因為它的意思是
      「數據可能是錯的」,比單純一筆 FAIL 嚴重。 */
   .warnbox { margin-top:12px; padding:11px 13px; border-radius:9px;
@@ -190,45 +184,6 @@
 </main>
 </div>
 
-<!-- setup 位置設定 -->
-<!-- 加進序列時沒設擺位的提醒。
-     不是硬擋 —— 序列的第一步本來就不需要移動治具,所以「照樣加入」
-     是合理選項。但沉默地加進去會讓人以為中間會自己移動。 -->
-<div class="ov" id="nosetupov">
-  <div class="bx">
-    <h3>No position set</h3>
-    <p class="hint" id="ns-plan"></p>
-    <p>This plan has no setup position. The sequence will pause here and wait
-       for someone to move the hardware by hand.</p>
-    <p class="hint">The first step usually needs no position — the hardware is
-       already where you left it.</p>
-    <div class="acts">
-      <button class="primary" id="ns-pick">Choose a position</button>
-      <button id="ns-anyway">Add anyway</button>
-      <button id="ns-cancel">Cancel</button>
-    </div>
-  </div>
-</div>
-
-<div class="ov" id="setupov">
-  <div class="bx">
-    <h3>Setup position</h3>
-    <div class="hint" id="su-plan"></div>
-    <!-- 擺位是從「Setup list」存好的那些挑,不是自己打字 ——
-         打字打出來的名字對不到任何真實擺位,送不去實機。 -->
-    <label>Position
-      <select id="su-pick"><option value="">(not set)</option></select></label>
-    <p class="hint" id="su-hint"></p>
-    <label>Note<input type="text" id="su-note" placeholder="Optional"></label>
-    <div class="acts">
-      <button class="primary" id="su-save">Save</button>
-      <button id="su-cancel">Cancel</button>
-    </div>
-    <p class="hint">Positions are created on the
-      <a href="/setups" target="_blank">Setup list</a> page.</p>
-  </div>
-</div>
-
 <!-- 計畫細節:這個計畫會跑哪些測項 -->
 <div class="ov" id="detov">
   <div class="bx" style="width:min(680px,94vw)">
@@ -279,12 +234,6 @@
       <div class="p"><b id="r-pass">0</b>PASS</div>
       <div class="f"><b id="r-fail">0</b>FAIL</div>
       <div><b id="r-left">0</b>Left</div>
-    </div>
-    <div class="setupph" id="r-setup" style="display:none">
-      <div class="h">Moving to new setup</div>
-      <div id="sp-name">—</div>
-      <div class="pbar" style="margin:8px 0 4px"><i id="sp-bar" style="width:0%"></i></div>
-      <div id="sp-left" style="font-size:11px;color:var(--faint)"></div>
     </div>
     <!-- 擺位未套用 —— 計畫書防線 ⑤。這一頁是無人值守的主要入口,
          所以警告一定要在這裡看得到,不能只留在日誌裡。 -->
@@ -376,12 +325,11 @@ function srcLine(p) {
   return bits.length ? bits.map(esc).join(' <i>/</i> ') : '(source unknown — legacy plan)';
 }
 
-/** 關鍵字比對:名稱、說明、來源、setup 都算 —— 使用者記得哪個就用哪個找 */
+/** 關鍵字比對:名稱、說明、來源都算 —— 使用者記得哪個就用哪個找 */
 function matches(p) {
   if (!query) return true;
-  const s = p.source || {}, su = p.setup || {};
-  return [p.title, p.description, s.database, s.project, s.measurement_object,
-          su.name, su.note]
+  const s = p.source || {};
+  return [p.title, p.description, s.database, s.project, s.measurement_object]
     .filter(Boolean).join(' ').toLowerCase().includes(query);
 }
 
@@ -423,13 +371,11 @@ function render() {
     <div class="pl">
       <div class="t">
         <b>${esc(p.title)}</b>
-        <small>${p.count} items${
-          (p.setup && p.setup.name) ? ' ・ ' + esc(p.setup.name) : ''}</small>
+        <small>${p.count} items</small>
       </div>
       <div class="btns">
         <button data-add="${esc(p.id)}">Add</button>
         <button data-detail="${esc(p.id)}">Details</button>
-        <button data-setup="${esc(p.id)}">Setup…</button>
         <button data-del="${esc(p.id)}">Delete</button>
       </div>
     </div>`).join('')
@@ -447,13 +393,11 @@ function render() {
     sb.innerHTML = seq.map((st, i) => {
       const p = byId(st.id) || {};
       const s = p.source || {};
-      const su = p.setup || {};
 
-      // 兩步之間會發生什麼,先講出來:調整 setup、必要時換資料庫
+      // 這一步會發生什麼,先講出來:擺位標籤的狀況、必要時換資料庫
       const bits = [];
-      if (i > 0) {
-        bits.push(su.name ? `setup:${esc(su.name)}` : 'setup (not set)');
-      }
+      const sc = setupBrief(st.id);
+      if (sc) bits.push(sc);
       if (s.database && s.database !== prevDb) {
         bits.push(`<span class="sw">switch to ${esc(s.database)}</span>`);
       }
@@ -584,7 +528,6 @@ $('#list').addEventListener('click', async (e) => {
   if (!b) return;
   if (b.dataset.add) { addToSeq(b.dataset.add); return; }
   if (b.dataset.detail) { openDetail(b.dataset.detail); return; }
-  if (b.dataset.setup) { openSetup(b.dataset.setup); return; }
   if (b.dataset.del) { openDelete(b.dataset.del); return; }
 });
 
@@ -594,14 +537,17 @@ let detailId = null;
 async function openDetail(id) {
   const p = byId(id); if (!p) return;
   detailId = id;
-  const s = p.source || {}, su = p.setup || {};
+  const s = p.source || {};
   $('#dt-title').textContent = p.title;
   $('#dt-meta').textContent =
     [s.database, s.project, s.measurement_object].filter(Boolean).join(' / ');
   $('#dt-desc').textContent = p.description || '';
-  $('#dt-setup').textContent = su.name
-    ? `Setup: ${su.name}${su.note ? ' — ' + su.note : ''}`
-    : 'Setup: not set';
+  // 完整的擺位標籤檢查 —— 序列說明行只放得下一句話,細節在這裡。
+  // 查完時使用者可能已經點開別的計畫,所以要比對 detailId 才畫。
+  $('#dt-setup').innerHTML = '';
+  ensureSetupCheck(id).then(r => {
+    if (detailId === id) $('#dt-setup').innerHTML = setupCheckHtml(r);
+  });
   $('#dt-when').textContent =
     `Created ${(p.created || '').replace('T', ' ')}`
     + (p.updated && p.updated !== p.created
@@ -771,100 +717,47 @@ $('#btn-addall').onclick = () => {
 };
 $('#btn-clear').onclick  = () => { seq = []; saveSeq(); render(); };
 
-// ── setup 位置 ────────────────────────────────
-let setupId = null;
-/** 加進執行序列。沒設擺位的話先提醒一次。
+// ── 擺位標籤檢查 ──────────────────────────────
+// 擺位改由 ACQUA 裡每個測項的 Setup 標籤決定(見 acqua/setuptags.py),
+// 計畫本身不再帶擺位。這裡把每一步的標籤狀況查出來,放在序列的說明行 ——
+// 按下執行之前就看得到哪一步有漏標或打錯,不必再多一個確認視窗。
+//
+// 快取到重新載入頁面為止:序列每 2.5 秒重畫一次,不能每次都去查。
+// 在 ACQUA 裡改了標籤之後重新整理頁面就會更新。
+const setupChecks = {};          // planId -> Promise(查詢中或已查完)
+const setupResults = {};         // planId -> 結果;查完才有這個鍵
 
-    不硬擋的理由:序列的第一步不需要移動治具(機構就停在上次的位置),
-    所以「照樣加入」是合理的。但沉默地加進去會讓人以為中間會自動移動,
-    結果跑到那一步才發現只是停著等人。 */
-let pendingAdd = null;
-
-function addToSeq(id) {
-  const p = byId(id);
-  if (p && !(p.setup && (p.setup.setup_id || p.setup.name))) {
-    pendingAdd = id;
-    $('#ns-plan').textContent = p.title;
-    $('#nosetupov').classList.add('on');
-    return;
+/** 查一個計畫的標籤狀況,同一個計畫只查一次。查失敗回 null。 */
+function ensureSetupCheck(planId) {
+  if (!setupChecks[planId]) {
+    setupChecks[planId] = post('/acqua/api/setup-check', {plan_id: planId})
+      .catch(() => null)
+      .then(j => { setupResults[planId] = j; return j; });
   }
+  return setupChecks[planId];
+}
+
+/** 序列說明行裡的一句話。還沒查完先回「checking」,查完會自己重畫。 */
+function setupBrief(planId) {
+  if (!(planId in setupResults)) {
+    ensureSetupCheck(planId).then(render);
+    return 'setup: checking…';
+  }
+  const r = setupResults[planId];
+  if (!r || !r.ok) return '';
+  const bad = (r.unknown || []).reduce((n, u) => n + u.rows.length, 0)
+            + (r.ambiguous || []).length;
+  const has = r.own + r.inherited;
+  if (!has && !bad) return 'setup: no tags';
+  return `setup: ${esc((r.used || []).join(', ') || '—')}`
+    + (r.untagged ? ` · ${r.untagged} untagged` : '')
+    + (bad ? ` · <span class="sw">${bad} problem(s) — see Details</span>` : '');
+}
+
+/** 加進執行序列。 */
+function addToSeq(id) {
   seq.push(newStep(id)); saveSeq(); render();
 }
-
-$('#ns-anyway').onclick = () => {
-  $('#nosetupov').classList.remove('on');
-  if (pendingAdd) { seq.push(newStep(pendingAdd)); saveSeq(); render(); }
-  pendingAdd = null;
-};
-$('#ns-cancel').onclick = () => {
-  $('#nosetupov').classList.remove('on');
-  pendingAdd = null;
-};
-$('#ns-pick').onclick = () => {
-  const id = pendingAdd;
-  $('#nosetupov').classList.remove('on');
-  pendingAdd = null;
-  if (id) openSetup(id);
-};
-
-// 存好的擺位清單。開這個視窗時抓一次就好 —— 它不常變,
-// 而且抓不到也不該讓視窗開不起來(頂多只剩「(not set)」可選)。
-let roomSetups = [];
-
-async function loadRoomSetups() {
-  try {
-    const d = await (await fetch('/api/room/setups')).json();
-    roomSetups = d.setups || [];
-  } catch (e) { roomSetups = []; }
-}
-
-function describeSetup(s) {
-  return `${s.count || 0} axes` + (s.description ? ' · ' + s.description : '');
-}
-
-async function openSetup(id) {
-  const p = byId(id); if (!p) return;
-  setupId = id;
-  const su = p.setup || {};
-  $('#su-plan').textContent = p.title;
-  $('#su-note').value = su.note || '';
-
-  await loadRoomSetups();
-  const sel = $('#su-pick');
-  sel.innerHTML = '<option value="">(not set)</option>'
-    + roomSetups.map(s =>
-        `<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('');
-  // 計畫存的是 setup_id;舊資料只有 name,用名字回頭對一次。
-  const match = su.setup_id
-    || (roomSetups.find(s => s.name === su.name) || {}).id || '';
-  sel.value = match;
-  showSetupHint();
-  $('#setupov').classList.add('on');
-  sel.focus();
-}
-
-function showSetupHint() {
-  const s = roomSetups.find(x => x.id === $('#su-pick').value);
-  $('#su-hint').textContent = s ? describeSetup(s)
-    : (roomSetups.length ? 'Nothing selected — the sequence will just pause here.'
-                         : 'No positions saved yet.');
-}
-$('#su-pick').onchange = showSetupHint;
-
-$('#su-cancel').onclick = () => $('#setupov').classList.remove('on');
-$('#su-save').onclick = async () => {
-  const picked = roomSetups.find(s => s.id === $('#su-pick').value);
-  await fetch('/acqua/api/plans/' + encodeURIComponent(setupId), {
-    method: 'POST', headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({setup: {
-      setup_id: picked ? picked.id : '',
-      name: picked ? picked.name : '',
-      note: $('#su-note').value.trim(),
-    }}),
-  });
-  $('#setupov').classList.remove('on');
-  await loadPlans();
-};
 
 // ── 狀態輪詢 ──────────────────────────────────
 async function poll() {
@@ -988,7 +881,6 @@ async function runSeq() {
   madeDocs = [];
   stepResults = [];
   $('#r-done').style.display = 'none';
-  $('#r-setup').style.display = 'none';
   $('#r-log').innerHTML = '';
   $('#runov').classList.add('on');
   render();
@@ -1004,16 +896,6 @@ async function runSeq() {
       const st = seq[i];
       const p = byId(st.id);
       if (!p) { log(`Step ${i + 1}: plan was deleted, skipping`); continue; }
-
-      // 第二步開始:先跑一段「移動治具」。
-      // ⚠️ 目前是 mock —— 固定五秒,不會真的動任何東西。
-      //    之後這裡會換成「發 HTTP 給 Raspberry Pi 並等它回報就位」,
-      //    介面不變(一樣是 await 一個會結束的動作)。
-      if (i > 0) {
-        if (!(await movingToSetup(p, i + 1, seq.length))) {
-          log('Sequence stopped'); break;
-        }
-      }
 
       miniPhase = {active: true, title: `序列 ${i + 1}/${seq.length}`,
                    index: i + 1, total: seq.length,
@@ -1102,51 +984,12 @@ async function runSeq() {
   } finally {
     running = false; curStep = -1;
     miniPhase = null;
-    $('#r-setup').style.display = 'none';
     render();
     $('#r-title').textContent = abort ? 'Sequence stopped' : 'Sequence complete';
     $('#r-name').textContent = '';
     beep();
     showDone(Math.round((Date.now() - t0) / 1000));
   }
-}
-
-/** 兩步之間的「移動治具」。回傳 false = 使用者中止。
-
-    現在是 mock:固定五秒、只顯示進度。之後換成發 HTTP 給 Raspberry Pi
-    時,把這個函式裡面換掉就好,外面的流程不用動。 */
-function movingToSetup(plan, idx, total) {
-  const su = plan.setup || {};
-  const label = su.name
-    ? `${su.name}${su.note ? ' — ' + su.note : ''}`
-    : `${plan.title} (no position set)`;
-  const SEC = 5;
-
-  $('#r-title').textContent = 'Moving to new setup';
-  $('#r-meta').textContent = `序列 ${idx} / ${total}`;
-  $('#r-setup').style.display = '';
-  $('#sp-name').textContent = label;
-  log(`Moving to new setup — ${label}`);
-
-  return new Promise(res => {
-    const start = Date.now();
-    const timer = setInterval(() => {
-      const el = (Date.now() - start) / 1000;
-      const pct = Math.min(100, Math.round(el / SEC * 100));
-      $('#sp-bar').style.width = pct + '%';
-      $('#sp-left').textContent = `${Math.max(0, (SEC - el)).toFixed(1)}s left`
-        + ' (simulated — a Raspberry Pi will report readiness later)';
-      miniPhase = {active: true, title: 'Moving to new setup',
-                   index: idx, total, percent: pct, detail: label};
-      if (abort) { clearInterval(timer); finish(false); return; }
-      if (el >= SEC) { clearInterval(timer); finish(true); }
-    }, 100);
-    const finish = (ok) => {
-      $('#r-setup').style.display = 'none';
-      $('#sp-bar').style.width = '0%';
-      res(ok);
-    };
-  });
 }
 
 /** 跑完的摘要:總結 + 產生了哪些 Word。五秒後自動關閉。 */

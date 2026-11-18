@@ -6,12 +6,11 @@
  * **存好的擺位可以原封不動送去驅動機構,中間不需要任何對應表**。
  * 這是整個設計裡最關鍵的一個決定;代號改名就會讓舊檔對不上。
  */
-import { confirmBox, formBox, toast, esc, jsonFetch } from './ui.js';
+import { formBox, toast, jsonFetch } from './ui.js';
 
 const API = '/api/room/setups';
 
 export const listSetups = () => jsonFetch(API).then((d) => d.setups || []);
-export const getSetup = (id) => jsonFetch(`${API}/${encodeURIComponent(id)}`);
 
 function send(url, method, body) {
   return jsonFetch(url, {
@@ -51,40 +50,6 @@ export async function saveCurrent(axes, { existing = null } = {}) {
   if (!d.ok) { toast(d.error || 'Could not save', 'bad'); return null; }
   toast(`Saved "${d.setup.name}"`);
   return d.setup;
-}
-
-/** 把實機當下的位置存成擺位。source 標成 live,清單上會標出來。 */
-export async function saveFromLive(axes) {
-  const v = await formBox({
-    title: 'Save the hardware position',
-    note: 'Stores <b>what the hardware reports right now</b>, not the slider values.',
-    fields: [
-      { key: 'name', label: 'Name', required: true,
-        placeholder: 'e.g. 2026-09-15 shipping validation' },
-      { key: 'description', label: 'Description', textarea: true,
-        placeholder: 'Why this position is worth keeping' },
-    ],
-  });
-  if (!v) return null;
-  const d = await send(API, 'POST',
-    { name: v.name, description: v.description, axes, source: 'live' });
-  if (!d.ok) { toast(d.error || 'Could not save', 'bad'); return null; }
-  toast(`Saved "${d.setup.name}"`);
-  return d.setup;
-}
-
-export async function removeSetup(s) {
-  const yes = await confirmBox({
-    title: 'Delete this position?',
-    html: `<div class="bxnote"><b>${esc(s.name)}</b><br>
-      ${esc(s.description || '(no description)')}</div>
-      <div class="bxnote warn">This cannot be undone. The hardware does not move.</div>`,
-    ok: 'Delete', danger: true,
-  });
-  if (!yes) return false;
-  const d = await send(`${API}/${encodeURIComponent(s.id)}`, 'DELETE');
-  toast(d.ok ? 'Deleted' : 'Could not delete', d.ok ? 'ok' : 'bad');
-  return !!d.ok;
 }
 
 /**

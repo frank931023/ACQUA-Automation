@@ -32,8 +32,8 @@
 import time
 
 from .backend_base import AcquaBackend
-from .constants import (PROGID_ACQUA, EMEEventType, EMEResult, EUserReaction,
-                        EVariableState, EVariableType)
+from .constants import (PROGID_ACQUA, EMEEventType, EMEResult, EVariableState,
+                        EVariableType)
 
 
 class _Events:
@@ -1559,28 +1559,4 @@ class ComBackend(AcquaBackend):
         self.state.log(f"硬體設定已切換為:{name}")
         return self.list_hardware_settings()
 
-    def check_preconditions(self):
-        """開跑前檢查(硬體、校正、參考檔等)。ACQUA 6 提供的方法,CHM 沒寫。"""
-        try:
-            r = self.project.MeasurementEngine.CheckPreconditions()
-            self.state.log(f"CheckPreconditions → {r!r}")
-            return r
-        except Exception as exc:                            # noqa: BLE001
-            self.state.log(f"CheckPreconditions 失敗:{exc}", "warn")
-            return None
 
-    def run_script(self, code: str, language: str = "Python"):
-        """⭐ 直接在 ACQUA 內部執行腳本(層級 3 的入口)。
-
-        來源:IMeasurementEngine.RunScript(Language, Code)
-        這是 COM 與 ACQUA 內建 Python 之間的橋 —— 可以從外部呼叫
-        HSL.save_var() 之類只有內部才拿得到的 API。
-
-        ⚠️ [未驗證] 回傳值格式與錯誤處理方式未知。
-        """
-        me = self.project.MeasurementEngine
-        if not me.PythonAvailable:
-            raise RuntimeError("這套 ACQUA 沒有啟用 Python 腳本引擎")
-        result = me.RunScript(language, code)
-        self.state.log(f"RunScript 回傳:{result!r}")
-        return result

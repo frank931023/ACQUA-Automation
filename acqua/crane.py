@@ -25,7 +25,7 @@
        **由起點、終點、標稱速度推算出來的估計值**(estimated=True),
        等指令回來才用真實查詢校正回去。
 
-    也就是說 mock 跟真機的差別只有一個方法:_start_move()。
+    也就是說 mock 跟真機的差別只有送指令與讀位置:_send_move() / _query()。
     其他的(估計、進度、中止、狀態機)全部是同一份程式在跑。
 
 ⚠️ 中止(stop)的真實語意
@@ -55,7 +55,7 @@ from urllib.request import Request, urlopen
 class Axis:
     """一根可動的自由度。
 
-    id      場景側的邏輯代號(與 soundproofroom/src/axes.js 一致,也是
+    id      場景側的邏輯代號(與 soundproofroom/src/main.js 的 PANEL 一致,也是
             setup 檔裡的鍵 —— 改名字會讓存好的 setup 對不上,別改)
     pi      這根軸接在哪一台 Raspberry Pi 上
     ch      韌體的軸前綴。'SX'/'SY'/'SZ' 是滑台,'R' 轉盤,'T' 傾角。
