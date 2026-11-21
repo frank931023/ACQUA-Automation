@@ -1,0 +1,22 @@
+%% 責任分層:每一層只懂自己那一塊,只跟相鄰的層講話
+flowchart TB
+    L1["<b>ACQUA Automation</b><br/>懂:測項、Setup 標籤、擺位名稱、房間座標<br/>不懂:韌體指令細節、哪根先動"]
+    L2["<b>MCC</b><br/>懂:裝置清單、指令鎖、逾時、狀態<br/>不懂:ACQUA、擺位"]
+    L3["<b>Pi 控制端</b><br/>懂:序列埠、DONE / ERR、心跳過濾<br/>不懂:軸屬於哪個總成"]
+    L4["<b>Arduino 韌體</b><br/>懂:校正、歸位、移動、極限開關<br/>不懂:誰在呼叫它"]
+
+    L1 -- "去擺位 X<br/>(目前:逐軸送 SXM,mm)" --> L2
+    L2 -- "一台一次一個指令" --> L3
+    L3 -- "字串 + 換行" --> L4
+    L4 -. "DONE / ERR / Exceeded" .-> L3
+    L3 -. "arduino_response[]" .-> L2
+    L2 -. "pi_response" .-> L1
+
+    classDef ours fill:#dbeafe,stroke:#2563eb,color:#1e3a8a
+    classDef mccc fill:#dcfce7,stroke:#16a34a,color:#14532d
+    classDef pic fill:#fef3c7,stroke:#d97706,color:#78350f
+    classDef ext fill:#f3f4f6,stroke:#6b7280,color:#111827
+    class L1 ours
+    class L2 mccc
+    class L3 pic
+    class L4 ext

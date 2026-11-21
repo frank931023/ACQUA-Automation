@@ -1,0 +1,30 @@
+%% 一個韌體指令走完整條路
+sequenceDiagram
+    autonumber
+    participant H as HttpCrane
+    participant M as MCC
+    participant P as Pi 控制端
+    participant R as Arduino
+
+    H->>M: POST /api/pi/pi-03/command {"command":"SZM,2250","timeout":90}
+    alt 這台正在跑別的指令
+        M-->>H: 409 busy
+    else 有設 API_TOKEN 但沒帶
+        M-->>H: 401
+    else 可以送
+        M->>M: 上鎖(這台)
+        M->>P: POST /api/command (timeout 照轉發)
+        P->>R: "SZM,2250\n"
+        R-->>P: HB,123456,BUSY(心跳,Pi 濾掉)
+        R-->>P: Calling move z
+        R-->>P: Max Travel = 300
+        alt 超出行程
+            R-->>P: Exceeded Max travel.
+        end
+        R-->>P: DONE
+        P-->>M: arduino_result=DONE, arduino_response=[...]
+        M->>M: 解鎖
+        M-->>H: 200 pi_response
+        H->>H: 掃描 Exceeded → 有就當失敗
+    end
+    Note over M,P: MCC 等 timeout + 5 秒,我們等 timeout + 8 秒<br/>讓下一層先回報明確的原因

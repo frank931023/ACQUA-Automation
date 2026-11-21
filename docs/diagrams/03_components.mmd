@@ -1,0 +1,48 @@
+%% ACQUA Automation 內部元件
+flowchart LR
+    subgraph WEB["前端"]
+        ui["/acqua/<br/>測項・計畫・執行"]
+        room["/soundproofroom/<br/>3D 隔音室・擺位編輯"]
+    end
+
+    subgraph APP["app.py(Flask 路由)"]
+        run["/api/run"]
+        roomapi["/api/room/*<br/>current・apply・not-applied"]
+    end
+
+    subgraph CORE["acqua/"]
+        worker["worker.py<br/>COM 工作執行緒(STA)"]
+        com["backend_com.py"]
+        sqlcat["sqlcat.py<br/>SQL 目錄(唯讀)"]
+        tags["setuptags.py<br/>標籤・資料夾繼承"]
+        coord["setupcoord.py<br/>SetupCoordinator"]
+        setups["roomsetups.py<br/>setups/*.json"]
+        crane["crane.py<br/>AXES・MockCrane / HttpCrane"]
+        lab["labcore.py<br/>麥克風供電"]
+        win["winwatch.py<br/>關彈窗"]
+    end
+
+    hook["HOOK_setup_bridge.py<br/>(在 ACQUA 裡執行)"]
+
+    ui --> run
+    room --> roomapi
+    hook --> roomapi
+    run --> coord
+    run --> worker
+    roomapi --> coord
+    roomapi --> crane
+    worker --> com
+    com --> sqlcat
+    com --> lab
+    com --> win
+    com -- "before_item" --> coord
+    coord --> tags
+    coord --> setups
+    coord --> crane
+    tags --> sqlcat
+    crane -- "HTTP" --> mccx(["MCC"])
+    com -- "COM" --> acq(["ACQUA"])
+    sqlcat -- "ADO" --> db[("SQL")]
+
+    classDef key fill:#dbeafe,stroke:#2563eb,color:#1e3a8a
+    class coord,crane,tags key

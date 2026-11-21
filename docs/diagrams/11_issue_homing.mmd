@@ -1,0 +1,24 @@
+%% 問題 1:位置輪詢會讓轉盤一直歸位
+sequenceDiagram
+    autonumber
+    participant H as HttpCrane
+    participant M as MCC
+    participant R as Arduino(轉盤)
+
+    H->>M: RM,90(轉到 90°)
+    M->>R: RM,90
+    R-->>M: DONE(轉盤在 90°)
+    M-->>H: DONE
+    H->>M: RP(移動後查一次位置)
+    M->>R: RP
+    R-->>M: 90 / Homing rotation / DONE
+    Note over R: 韌體已知行為:<br/>RP 會順便觸發歸位 → 轉盤回到 0°
+    M-->>H: DONE
+    Note over H: 我們以為在 90°,實際在 0°
+
+    loop 閒置時每 2 秒(所有軸,包括 R、T)
+        H->>M: RP / TP
+        M->>R: RP / TP
+        R-->>M: Homing rotation
+    end
+    Note over H,R: 修法:R / T 不主動查,記住最後一次下的目標

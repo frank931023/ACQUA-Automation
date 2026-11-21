@@ -13,6 +13,9 @@
                                           └──ADO──▶  SQL Server(測項樹 / 結果 / 數值)
 ```
 
+機構那一側(天車控制中心 MCC、各台 Pi、Arduino)怎麼跟本專案配合、還有哪些
+問題沒解決,見 **[SYSTEM_OVERVIEW.md](SYSTEM_OVERVIEW.md)**。
+
 ---
 
 ## 快速開始

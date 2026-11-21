@@ -1,0 +1,40 @@
+%% 從網頁開跑:一批測項、遇到要換擺位的那一筆
+sequenceDiagram
+    autonumber
+    actor U as 操作人員
+    participant W as 網頁
+    participant A as ACQUA Automation
+    participant C as SetupCoordinator
+    participant H as HttpCrane
+    participant M as MCC
+    participant Q as ACQUA
+
+    U->>W: 勾測項、按 Run
+    W->>A: POST /api/run (row_ids, ctx)
+    A->>A: 檢查 ctx 一致、專案已開、DUT 已選
+    A->>C: prepare(ctx, row_ids)
+    C->>C: 解析每筆的 Setup(含資料夾繼承)
+    C->>C: 依擺位分組重新排序
+    C-->>A: 新順序
+    A-->>W: ok(開始跑)
+
+    loop 每一筆測項
+        A->>C: before_item(smd)
+        alt 已經在這個擺位(誤差 1 cm / 1° 內)
+            C-->>A: 不用動
+        else 要移動
+            C->>H: apply(擺位)
+            loop 每一根要動的軸(目前依序)
+                H->>M: POST /api/pi/{id}/command SZM,2250
+                M-->>H: DONE(或 Exceeded / 409 / 逾時)
+            end
+            C->>H: busy()? 輪詢直到完成
+            alt 移動失敗或找不到擺位
+                C->>C: 記成「擺位未套用」
+            end
+            C-->>A: 回來(不論成敗)
+        end
+        A->>Q: StartSingleMeasurement(smd)
+        Q-->>A: 結果事件
+    end
+    A-->>W: 摘要(含未套用的擺位)

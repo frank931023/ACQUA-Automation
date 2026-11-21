@@ -1,0 +1,50 @@
+%% 資料關係:從 ACQUA 的標籤一路到韌體指令
+erDiagram
+    TREE_ITEM ||--o| SETUP_TAG : "AdvancedDescription 內含"
+    SETUP_TAG }o--|| ROOM_SETUP : "用名稱對應"
+    ROOM_SETUP ||--|{ AXIS_TARGET : "axes"
+    AXIS_TARGET }o--|| AXIS : "鍵 = axis id"
+    AXIS }o--|| DEVICE : "pi(目前寫死)"
+    DEVICE ||--|| PI_APP : "pi_id = PI_ID"
+    PI_APP ||--|| ARDUINO : "Serial"
+
+    TREE_ITEM {
+        int idTreeItem "= SMD row id"
+        string Title
+        int LeftNode "巢狀集合"
+        int RightNode
+        xml AdvancedDescription
+    }
+    SETUP_TAG {
+        string name "固定為 Setup"
+        string value "擺位名稱"
+    }
+    ROOM_SETUP {
+        string id "setups/id.json"
+        string name "唯一"
+    }
+    AXIS_TARGET {
+        string axis "例如 hats.z"
+        float value "公尺 或 度"
+    }
+    AXIS {
+        string id "hats.z"
+        string ch "SX SY SZ R T"
+        float lo "韌體 0 點"
+        float hi
+        string unit "m 或 deg"
+    }
+    DEVICE {
+        string pi_id "MCC 裝置"
+        string host
+        json park "停車位置"
+    }
+    PI_APP {
+        string PI_ID
+        string BOARD "mega 或 uno"
+        int COMMAND_TIMEOUT "預設 130"
+        string rig_name "韌體回報"
+    }
+    ARDUINO {
+        int maxTravel "校正值 EEPROM"
+    }

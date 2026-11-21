@@ -1,0 +1,65 @@
+%% 全景圖:由上而下 = 由「決定要什麼」到「真的動起來」
+%% 次要連線(人直接操作 MCC、Pi 的健康資料送 Beszel)沒畫,見 SYSTEM_OVERVIEW.md
+flowchart TB
+    user(["👤 操作人員(瀏覽器)"])
+
+    subgraph T1["🖥️ 實驗室 PC・HEAD acoustics(既有,不修改)"]
+        direction LR
+        acqua["ACQUA 6<br/>桌面程式"]
+        sql[("SQL Server<br/>ACQUA 資料庫")]
+        labcore["labCORE<br/>麥克風卡"]
+    end
+
+    subgraph T2["🖥️ 實驗室 PC・Windows 原生"]
+        auto["<b>① ACQUA Automation</b>  :5000<br/>測項 → Setup 標籤 → 擺位 → 房間座標"]
+    end
+
+    subgraph T3["🐳 實驗室 PC・Docker"]
+        direction LR
+        mcc["<b>② MCC</b>  :5001<br/>裝置清單・一台一次一個指令・逾時"]
+        beszel["Beszel hub :8090<br/>Pi 健康監控"]
+    end
+
+    subgraph T4["🌐 區網・每台 Raspberry Pi 一份(Docker)"]
+        direction LR
+        pi1["<b>③ Pi 控制端</b>  :5000<br/>BOARD=mega"]
+        pi2["<b>③ Pi 控制端</b>  :5000<br/>BOARD=uno"]
+        piN["③ …共 N 台"]
+    end
+
+    subgraph T5["⚙️ 機構"]
+        direction LR
+        a1["Arduino Mega<br/>X・Y・Z・轉盤・傾角"]
+        a2["Arduino Uno<br/>X・Y"]
+        aN["Arduino …"]
+    end
+
+    user -- "網頁" --> auto
+    auto -- "COM" --> acqua
+    acqua -- "掛鉤 HTTP" --> auto
+    auto -- "ADO 唯讀" --> sql
+    auto -- "MfeControlLib" --> labcore
+    auto == "HTTP<br/>POST /api/pi/id/command" ==> mcc
+    mcc -.- beszel
+    mcc == "HTTP" ==> pi1
+    mcc == "HTTP" ==> pi2
+    mcc == "HTTP" ==> piN
+    pi1 == "USB Serial" ==> a1
+    pi2 == "USB Serial" ==> a2
+    piN == "USB Serial" ==> aN
+
+    classDef ours fill:#dbeafe,stroke:#2563eb,stroke-width:2px,color:#1e3a8a
+    classDef mccc fill:#dcfce7,stroke:#16a34a,stroke-width:2px,color:#14532d
+    classDef pic fill:#fef3c7,stroke:#d97706,stroke-width:2px,color:#78350f
+    classDef ext fill:#f3f4f6,stroke:#6b7280,color:#111827
+    classDef hw fill:#fae8ff,stroke:#a21caf,color:#4a044e
+    class auto ours
+    class mcc,beszel mccc
+    class pi1,pi2,piN pic
+    class acqua,sql,labcore ext
+    class a1,a2,aN hw
+    style T1 fill:#f9fafb,stroke:#d1d5db
+    style T2 fill:#eff6ff,stroke:#93c5fd
+    style T3 fill:#f0fdf4,stroke:#86efac
+    style T4 fill:#fffbeb,stroke:#fcd34d
+    style T5 fill:#fdf4ff,stroke:#f0abfc

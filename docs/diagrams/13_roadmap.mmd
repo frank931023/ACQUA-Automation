@@ -1,0 +1,31 @@
+%% 接上真機的建議順序
+flowchart TB
+    subgraph S1["1・我們這邊先修"]
+        direction LR
+        a1["R / T 不主動查位置"]
+        a2["逾時改用 Pi 的值"]
+        a3["取第一行解析位置"]
+        a4["API_TOKEN・409 重試"]
+    end
+    subgraph S2["2・對齊資料"]
+        direction LR
+        b1["軸 ↔ Pi 對應搬到設定檔"]
+        b2["用 rig_name / board 核對"]
+        b3["確認真機行程"]
+    end
+    subgraph S3["3・MCC 加功能"]
+        direction LR
+        c1["POST /api/motion/home"]
+        c2["移動作業 API"]
+        c3["碰撞規則・並行"]
+    end
+    subgraph S4["4・驗證"]
+        direction LR
+        d1["LED 模擬台<br/>test_hook_bridge"]
+        d2["真測項一批"]
+        d3["真機上線"]
+    end
+    S1 --> S2 --> S3 --> S4
+
+    classDef red fill:#fee2e2,stroke:#dc2626,color:#7f1d1d
+    class a1,b3 red

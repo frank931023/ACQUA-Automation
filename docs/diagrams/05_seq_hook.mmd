@@ -1,0 +1,35 @@
+%% 直接在 ACQUA 按開始:由掛鉤請服務移動
+sequenceDiagram
+    autonumber
+    participant Q as ACQUA
+    participant K as HOOK_setup_bridge.py
+    participant A as ACQUA Automation
+    participant H as CraneBridge
+    participant M as MCC
+
+    Q->>K: before_each_measurement
+    K->>K: 讀這一筆的 Setup 標籤
+    alt 沒有標籤
+        K-->>Q: 放行(不動機構)
+    else 有標籤
+        K->>A: GET /api/room/current
+        A-->>K: 目前擺位
+        alt 已經在這個擺位
+            K-->>Q: 放行
+        else 要移動
+            K->>A: POST /api/room/apply (setup_name)
+            A->>H: apply
+            H->>M: 逐軸送指令
+            loop 最多 900 秒
+                K->>A: GET /api/room/current
+                A-->>K: 還沒到 / 到了
+            end
+            alt 到位
+                K-->>Q: 放行
+            else 逾時、找不到、服務連不上
+                K->>A: POST /api/room/not-applied
+                K-->>Q: 照樣放行(不擋量測)
+            end
+        end
+    end
+    Q->>Q: 量測這一筆

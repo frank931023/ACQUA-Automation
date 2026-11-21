@@ -1,0 +1,32 @@
+%% 建議:移動順序交給 MCC 的「移動作業」
+sequenceDiagram
+    autonumber
+    participant C as SetupCoordinator
+    participant H as HttpCrane(改版)
+    participant M as MCC 移動作業(待開發)
+    participant P1 as Pi 01
+    participant P2 as Pi 03
+
+    Note over C,M: 批次開跑前
+    C->>H: home_all()
+    H->>M: POST /api/motion/home
+    M->>P1: SXC / SXH …
+    M->>P2: SZC / SZH / RC / RH …
+    M-->>H: done
+
+    Note over C,M: 每次換擺位
+    C->>H: apply(擺位)
+    H->>M: POST /api/motion/jobs {targets}
+    M-->>H: job_id
+    M->>M: 依碰撞規則排順序
+    par 不同 Pi 同時動
+        M->>P1: SYM,…
+    and
+        M->>P2: SYM,…(先升高)
+        M->>P2: SZM,…(再橫移)
+    end
+    loop 輪詢
+        H->>M: GET /api/motion/jobs/{id}
+        M-->>H: running / done / error
+    end
+    H-->>C: busy() = false

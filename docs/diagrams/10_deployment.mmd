@@ -1,0 +1,37 @@
+%% 部署:什麼跑在哪、為什麼
+flowchart TB
+    subgraph WIN["Windows 實驗室 PC"]
+        direction TB
+        subgraph DESK["使用者桌面工作階段(登入後)"]
+            acq["ACQUA 6<br/>需要 dongle・桌面視窗"]
+            auto["ACQUA Automation<br/>.venv 原生・run stay・:5000<br/>要用 COM、要點彈窗 → 不能進 Docker"]
+        end
+        subgraph DD["Docker Desktop(登入時自動啟動)"]
+            mcc["MCC :5001<br/>restart: unless-stopped"]
+            hub["Beszel hub :8090"]
+        end
+        sqls[("SQL Server<br/>Windows 服務")]
+    end
+
+    subgraph PIS["每一台 Raspberry Pi"]
+        direction TB
+        piapp["pi-arduino-controller<br/>Docker・ghcr 映像・:5000"]
+        agent["beszel-agent(選用)"]
+    end
+
+    ans["Ansible<br/>(部署多台 Pi)"]
+
+    auto --> acq
+    auto --> sqls
+    auto -- "127.0.0.1:5001" --> mcc
+    mcc -- "LAN :5000" --> piapp
+    agent -. "WebSocket" .-> hub
+    ans -. "部署 + PUT /api/pi/id" .-> piapp
+    ans -. "註冊裝置" .-> mcc
+
+    classDef ours fill:#dbeafe,stroke:#2563eb,color:#1e3a8a
+    classDef mccc fill:#dcfce7,stroke:#16a34a,color:#14532d
+    classDef pic fill:#fef3c7,stroke:#d97706,color:#78350f
+    class auto ours
+    class mcc,hub mccc
+    class piapp,agent pic

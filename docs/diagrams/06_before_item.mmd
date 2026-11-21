@@ -1,0 +1,26 @@
+%% before_item 的決策流程(setupcoord.py)
+flowchart TD
+    s(["輪到一筆測項"]) --> t{"自己有 Setup 標籤?"}
+    t -- "有" --> n["擺位名稱"]
+    t -- "沒有" --> f{"同資料夾的<br/>兄弟測項有?"}
+    f -- "有,而且一致" --> n
+    f -- "沒有" --> skip["不動機構"]
+    n --> e{"setups/ 裡<br/>有這個名稱?"}
+    e -- "沒有" --> na["記成未套用:<br/>找不到擺位"]
+    e -- "有" --> b{"有接機構控制器?"}
+    b -- "沒有" --> na2["記成未套用:<br/>沒有控制器"]
+    b -- "有" --> p{"目前位置已經<br/>在誤差內?"}
+    p -- "是" --> go
+    p -- "否" --> mv["apply 擺位<br/>等 busy() 結束"]
+    mv --> r{"結果"}
+    r -- "到位" --> go
+    r -- "錯誤 / 中止 /<br/>位置不符 / 逾時" --> na3["記成未套用:<br/>原因"]
+    skip --> go(["量測這一筆"])
+    na --> go
+    na2 --> go
+    na3 --> go
+
+    classDef warn fill:#fee2e2,stroke:#dc2626,color:#7f1d1d
+    classDef ok fill:#dcfce7,stroke:#16a34a,color:#14532d
+    class na,na2,na3 warn
+    class go ok

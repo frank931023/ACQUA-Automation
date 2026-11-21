@@ -1,0 +1,26 @@
+%% MCC 眼中一台裝置的狀態
+stateDiagram-v2
+    [*] --> checking : 新增裝置
+    checking --> online : Pi 和 Arduino 都有回應
+    checking --> no_arduino : Pi 有回應,Arduino 沒有
+    checking --> offline : Pi 連不到(8 秒逾時)
+
+    online --> busy : 有指令在跑(任何來源)
+    busy --> online : DONE / ERR
+    busy --> offline : 逾時,連線失敗
+
+    online --> no_arduino : SERIAL_DISCONNECTED
+    no_arduino --> online : Arduino 接回
+    online --> offline : 連不到
+    offline --> online : 恢復
+
+    state "no-arduino" as no_arduino
+
+    note right of busy
+        這時再送指令 → 409
+        我們目前當成失敗(問題 8)
+    end note
+    note left of online
+        背景每 5 秒檢查一次
+        30 秒沒有 API 呼叫就暫停
+    end note
