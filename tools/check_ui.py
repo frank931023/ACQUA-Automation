@@ -448,6 +448,29 @@ for _f in ("acqua/crane.py", "acqua/roomsetups.py"):
     check("%s 的使用者字串全英文" % os.path.basename(_f), not _left,
           "%d 行:%s" % (len(_left), (_left[0][:40] if _left else "")))
 
+# 本專案只設計擺位;看實機位置、手動推機構屬於天車控制中心(MCC)。
+_spr = os.path.join(ROOT, "soundproofroom", "src")
+_spr_js = "".join(read("soundproofroom/src/" + f)
+                  for f in os.listdir(_spr) if f.endswith(".js"))
+check("3D 頁沒有即時模式", not os.path.exists(os.path.join(_spr, "live.js"))
+      and "mode=live" not in _spr_js and "/api/room/move" not in _spr_js)
+check("沒有手動移動 / 即時位置的路由",
+      not any(r in app for r in ('"/api/room/live"', '"/api/room/move"',
+                                 '"/api/room/stop"')))
+check("擺位頁沒有「套用到實機」",
+      "Apply to hardware" not in read("templates/setup_detail.html")
+      and "apply=" not in read("templates/setup_detail.html"))
+# 換擺位整組交給 MCC(名稱 + 目標),見 docs/MCC_MOTION_API.md
+_crane = read("acqua/crane.py")
+check("真機走 MCC 移動作業 API", "/api/motion/jobs" in _crane
+      and "/command" not in _crane)
+check("不主動查位置(RP/TP 會讓轉盤歸位)",
+      "_poll_loop" not in _crane and "cmd_query" not in _crane)
+check("送給 MCC 的 label 是擺位名稱", "submit(moves, label=name)"
+      in read("acqua/setupcoord.py"))
+check("掛鉤用的依名稱套用還在", '"/api/room/apply"' in app
+      and "setup_name" in app.split('"/api/room/apply"')[1][:1200])
+
 
 print("\n=== L. 非阻塞與二次確認 ===")
 # 核心承諾:按下執行就可以走人。工作執行緒是單執行緒,量測一跑起來

@@ -103,7 +103,7 @@ class AcquaWorker(threading.Thread):
         """中止不走佇列 —— 因為 run 正在阻塞工作執行緒,佇列排不進去。
 
         直接設旗標,由 backend.run_smds 的迴圈自己檢查。
-        逐項模式下這是**真的中止** —— 排隊的是 Python 的 for 迴圈,
+        這是**真的中止** —— 排隊的是 Python 的 for 迴圈,
         不送下一筆就結束了。在途的那一筆會跑完(強行打斷會留半筆資料)。
         對 bool 做跨執行緒讀寫在 CPython 是安全的。
         """
@@ -111,15 +111,14 @@ class AcquaWorker(threading.Thread):
         self.state.log("■ 已送出中止 —— 目前這筆跑完就停,不會再送下一筆", "warn")
 
     def request_pause(self):
-        """暫停。逐項模式停在兩筆之間;整批模式停止關對話框。"""
+        """暫停。停在兩筆之間,在途的那一筆會跑完。"""
         self.state.set(paused=True)
         self.state.log("⏸ 已暫停", "warn")
 
     def request_resume(self):
         """從暫停恢復。跟 request_cancel 一樣不走佇列。
 
-        暫停的實作是「停掉視窗監看器」,恢復就是把它開回來 ——
-        run_smds 的迴圈每一圈都會比對這個旗標。
+        run_smds 的迴圈在兩筆之間等 paused 變回 False,清掉旗標就接著跑。
         """
         self.state.set(cancel_requested=False, paused=False)
         self.state.log("▶ 已繼續", "info")
@@ -128,7 +127,7 @@ class AcquaWorker(threading.Thread):
         """回答 ACQUA 的阻塞對話框。**不走佇列**。
 
         原因跟 request_cancel 一樣:run_smds 正在阻塞這條執行緒,
-        排進佇列的命令要等整批跑完才會被處理 —— 但阻塞視窗偏偏只在
+        排進佇列的命令要等這一批跑完才會被處理 —— 但阻塞視窗偏偏只在
         量測進行中才出現,排隊等於永遠不會被回答。
 
         安全性:只碰 Win32 訊息與 winwatch 內部有鎖的 dict,不碰 COM,

@@ -207,7 +207,7 @@ class SetupCoordinator:
         moves = [(k, v) for k, v in (target.get("axes") or {}).items()
                  if k in AXES]
         try:
-            self.bridge.submit(moves, label="setup: %s" % name)
+            self.bridge.submit(moves, label=name)
         except Exception as exc:                            # noqa: BLE001
             return str(exc)[:80]
 

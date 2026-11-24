@@ -11,12 +11,12 @@
 | `04_seq_web_run` | 從網頁開跑(循序圖) |
 | `05_seq_hook` | 直接在 ACQUA 按開始,經過掛鉤(循序圖) |
 | `06_before_item` | 每一筆量測前要不要移動的決策流程 |
-| `07_seq_command` | 一個韌體指令走完整條路 |
+| `07_seq_command` | 一個擺位走完整條路:送 MCC 作業 → MCC 驅動 Pi → 回報 |
 | `08_data_model` | 資料關係:標籤 → 擺位 → 軸 → 裝置 → 韌體 |
 | `09_device_state` | MCC 的裝置狀態 |
 | `10_deployment` | 部署:什麼跑在哪 |
-| `11_issue_homing` | 問題 1:位置輪詢讓轉盤一直歸位 |
-| `12_proposed_motion` | 建議:移動順序交給 MCC |
+| `11_issue_homing` | 問題 1(舊版,已修):位置輪詢讓轉盤一直歸位 |
+| `12_proposed_motion` | MCC 內部可以怎麼做(示意,待 MCC 設計) |
 | `13_roadmap` | 接上真機的建議順序 |
 
 ## 重新產生

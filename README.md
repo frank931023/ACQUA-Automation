@@ -37,8 +37,8 @@ cd "ACQUA Automation"
 | `/` | 入口 |
 | `/acqua/` | 連線、開專案、勾測項、跑、出報告 |
 | `/acqua/plans` | 把多個計畫接成序列連續跑 |
-| `/soundproofroom` | 測試室 3D。**即時模式**看實機位置並確認後移動、**設定模式**離線排擺位 |
-| `/setups` | 擺位清單。點進去可以逐軸改數字、套用到實機 |
+| `/soundproofroom` | 測試室 3D:設計擺位並存檔(不會動到機構) |
+| `/setups` | 擺位清單。點進去可以逐軸改數字 |
 
 ---
 
@@ -125,7 +125,7 @@ acqua/
   condeval.py          ConditionalExecution 的求值
   wizard.py            從條件式反推精靈選項
   testplans.py         計畫的本地儲存(plans/*.json)
-  crane.py             ⭐ 天車橋接:3D 邏輯軸 ←→ Pi 韌體指令(mock / http 兩種後端)
+  crane.py             ⭐ 機構橋接:擺位 → 韌體數值;mock 本機模擬 / http 整組交給 MCC
   roomsetups.py        擺位的本地儲存(setups/*.json)
   setuptags.py         ⭐ Setup 標籤:讀取、資料夾繼承、開跑前檢查、照擺位分組(純資料)
   setupcoord.py        ⭐ 擺位協調:標籤 -> 機構動作、等到位、沒套用到的記下來
@@ -133,6 +133,7 @@ acqua/
   prefs.py             每個資料庫上次用什麼(prefs.json)
   runlog.py            執行紀錄(runs/current.json)
   constants.py         TypeLib 來的列舉
+  env.py               讀 config.json + 套 .env(app 與 tools 共用 load_config)
 templates/
   _ui.html             ⭐ 共用設計系統 + armConfirm() 二次確認 helper
   _runmini.html        右下角進度視窗(跨頁)
@@ -144,13 +145,15 @@ templates/
   home.html            入口
   soundproofroom.html  3D 頁(免 build 模式)
   setups.html          擺位清單
-  setup_detail.html    單一擺位:逐軸編輯 + 套用到實機
+  setup_detail.html    單一擺位:逐軸編輯
 tools/
   check_context.py     上下文一致性檢查
   check_ui.py          前端與路由的機械化盤點
   test_nonblocking.py  ⭐ 量測進行中 UI 還能不能用(會真的跑一次量測)
   test_setupflow.py    ⭐ 擺位流程的端對端:真的協調器 + 模擬後端,只把機構換成假的
   test_hook_bridge.py  ⭐ ACQUA 掛鉤的外部半邊(把 Tags 換成假的跑真掛鉤)
+  test_mcc_jobs.py     ⭐ 換擺位交給 MCC 的整條路(真的 HttpCrane + 假 MCC)
+  fake_mcc.py          照 docs/MCC_MOTION_API.md 回應的假 MCC,可以單獨跑
   setup_inventory.py   任一專案 / 計畫的 Setup 標籤盤點與轉折點建議(只讀)
   export_acqua_scripts.py  把資料庫裡的 ACQUA Python 腳本解出來(只讀)
   test_resolve.py      跨庫測項對應
@@ -164,6 +167,10 @@ acqua_scripts/
   HOOK_diagnose_smd.py 只印不做事的診斷掛鉤(看 ACQUA 腳本環境裡拿得到什麼)
   SETUP_AUTOMATION_PLAN.md  擺位自動化的計畫書與進度
   其他 *.py            從資料庫匯出、加了說明的 ACQUA 腳本範例(見該資料夾 README)
+soundproofroom/       3D 隔音室:設計擺位(src/spec.json = 房間與設備尺寸)
+docs/MCC_MOTION_API.md  給 MCC 實作的移動作業 API(擺位名稱 + 目標)
+docs/diagrams/        系統圖(.mmd 原始檔 + 產生的 .svg)
+SYSTEM_OVERVIEW.md    三個專案(本專案 / MCC / Pi)怎麼配合、已知問題
 ```
 
 ### 為什麼 COM 只在工作執行緒碰
@@ -180,21 +187,18 @@ SQL 不同:`raw_query()` 自己確保呼叫端執行緒有 COM(ADO 也是 COM),
 
 ---
 
-### 讓機構動之前一定先問
+### 這裡只設計擺位,不做即時操作
 
-3D 頁的即時模式裡,拉桿**不會**直接驅動機構 —— 放手後跳確認框,按確定才
-下指令。理由不是「多一道保險比較好」,而是:
+3D 頁只用來**設計擺位並存檔**,拉桿與拖曳只改畫面,不會碰到機構。
+看實機位置、手動推機構屬於天車控制中心(MCC),不在本專案
+(2026-11-24 拿掉了原本的「即時模式」與「套用到實機」按鈕)。
 
-- 機構有物理行程,而且一動就是真的在動。手滑碰到拉桿讓天車跑起來太貴。
-- 在按下確定之前,**畫面上不會有任何東西動**。如果拉桿一動 3D 就跟著動,
-  使用者會以為東西已經移過去了 —— 那個錯覺比「沒動」危險得多。
-- 韌體**沒有中止指令**。送出去就只能等它走完。既然事後救不回來,唯一的
-  機會就是事前問清楚:哪一根軸、從哪到哪、走幾毫米、大概幾秒、哪一台 Pi。
+機構只在**測試執行時**被驅動:依測項的 `Setup` 標籤,由 `SetupCoordinator`
+(或 ACQUA 掛鉤經 `/api/room/apply`)把存好的擺位送過去。一次動一根軸、
+依序走完 —— 機構的行程互相重疊,同時動撞到了也看不出是誰撞的。韌體
+**沒有中止指令**,已經送出去的那一段一定會走完。
 
-同一個理由讓「套用整組擺位」是**一根軸一根軸依序**走的:機構的行程互相
-重疊,同時動撞到了也看不出是誰撞的。
-
-細節見 `acqua/crane.py` 的檔頭與 `soundproofroom/README.md`。
+細節見 `acqua/crane.py` 的檔頭與 [SYSTEM_OVERVIEW.md](SYSTEM_OVERVIEW.md)。
 
 ### 擺位對不上時,不擋,但警告要活到最後
 
@@ -366,6 +370,7 @@ ACQUA 照樣回報 `PASS`,資料卻是廢的。更危險的是載入 `Teams_cham
 .venv\Scripts\python.exe tools\check_context.py    # 上下文一致性
 .venv\Scripts\python.exe tools\check_ui.py         # 前端與路由的機械化盤點
 .venv\Scripts\python.exe tools\test_setupflow.py   # 擺位流程(真的協調器 + 模擬後端)
+.venv\Scripts\python.exe tools\test_mcc_jobs.py    # 換擺位交給 MCC(真的 HttpCrane + 假 MCC)
 
 # 要先起服務(mock 或 com 都可以)
 .venv\Scripts\python.exe tools\test_hook_bridge.py # ACQUA 掛鉤的外部半邊
@@ -393,14 +398,23 @@ ACQUA 照樣回報 `PASS`,資料卻是廢的。更危險的是載入 `Teams_cham
 
 ## 設定
 
-`config.json`:
+兩個檔案,分工不同:
 
-| 區塊 | 用途 |
+- **`config.json`:行為設定**,每台機器都一樣。新機器直接 `copy config.example.json config.json`,
+  兩份內容一樣,只差資料庫位址。
+- **`.env`:這台機器的事實**(資料庫位址、帳密、port、機構控制器位址),會蓋過 `config.json`
+  的同名欄位。對應表在 `acqua/env.py` 的 `MAPPING`。
+
+| `config.json` 區塊 | 用途 |
 |---|---|
-| `database` | SQL Server 與預設資料庫 |
-| `run` | `use_mmd_settings`、逾時、預設 `result_comment` |
+| `database` | 預設資料庫(通常留空,由 `.env` 提供) |
+| `target` | 網頁沒選 DUT 時的預設量測物件 |
+| `run` | `use_mmd_settings`、單筆逾時 `item_timeout_sec`、預設批次名稱 `result_comment` |
+| `setup_controller` | 換擺位最長等多久(位址放 `.env`) |
+| `report` | 報告暫存資料夾、報告選取方式 |
+| `metadata` | 開跑時寫進量測物件的欄位 |
 | `blocking_windows` | 哪些視窗自動關、哪些要問人 |
-| `manual_items` | 哪些測項需人工(標題或萬用字元) |
-| `report` | 報告暫存資料夾 |
+| `manual_items` | 哪些測項需人工(標題或萬用字元)—— 少了它,自動勾選會把會跳精靈的測項也勾進去 |
+| `wizard_scopes` | 網頁精靈裡,每個 ACQUA 精靈對應哪些變數 |
 
 `prefs.json`(自動產生)記每個資料庫上次用的專案與 DUT,連線後會自動接回去。

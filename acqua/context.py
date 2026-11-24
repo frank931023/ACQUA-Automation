@@ -51,7 +51,7 @@ UNSCOPED = frozenset({
     "backend", "backend_kind", "acqua_ready", "connected", "server", "database",
     "databases",            # 屬於 server,不屬於某個 database
     # 執行層
-    "running", "cancel_requested", "paused", "progress", "run_mode",
+    "running", "cancel_requested", "paused", "progress",
     "blocking_window",
     # ACQUA 全域設定(實測:硬體設定是跨專案共用的)
     "hardware_settings", "hardware_active",

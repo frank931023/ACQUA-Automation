@@ -39,7 +39,7 @@ flowchart TB
     acqua -- "掛鉤 HTTP" --> auto
     auto -- "ADO 唯讀" --> sql
     auto -- "MfeControlLib" --> labcore
-    auto == "HTTP<br/>POST /api/pi/id/command" ==> mcc
+    auto == "HTTP<br/>POST /api/motion/jobs<br/>(擺位名稱 + 目標)" ==> mcc
     mcc -.- beszel
     mcc == "HTTP" ==> pi1
     mcc == "HTTP" ==> pi2

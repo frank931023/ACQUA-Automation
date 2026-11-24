@@ -1,30 +1,30 @@
-%% 一個韌體指令走完整條路
+%% 一個擺位走完整條路(約定見 docs/MCC_MOTION_API.md)
 sequenceDiagram
     autonumber
+    participant C as SetupCoordinator
     participant H as HttpCrane
     participant M as MCC
-    participant P as Pi 控制端
+    participant P as Pi 控制端(每台)
     participant R as Arduino
 
-    H->>M: POST /api/pi/pi-03/command {"command":"SZM,2250","timeout":90}
-    alt 這台正在跑別的指令
-        M-->>H: 409 busy
-    else 有設 API_TOKEN 但沒帶
-        M-->>H: 401
-    else 可以送
-        M->>M: 上鎖(這台)
-        M->>P: POST /api/command (timeout 照轉發)
-        P->>R: "SZM,2250\n"
-        R-->>P: HB,123456,BUSY(心跳,Pi 濾掉)
-        R-->>P: Calling move z
-        R-->>P: Max Travel = 300
-        alt 超出行程
-            R-->>P: Exceeded Max travel.
+    C->>H: submit(擺位 location2 的 19 根軸)
+    H->>H: 房間座標 → 韌體數值,依 Pi 分組
+    H->>M: POST /api/motion/jobs {"label":"location2","targets":{"pi-03":{"SZM":3350,"RM":0},...}}
+    alt 已有作業在跑 / 裝置忙 / 離線 / token 不對
+        M-->>H: 409 / 503 / 401 + error
+        H-->>C: 例外 → 記成「擺位未套用」,照常量測
+    else 收下
+        M-->>H: 202 {"job_id":"j-1"}
+        Note over M,R: 順序、並行、防撞由 MCC 決定(待 MCC 實作)
+        M->>P: POST /api/command SZM,3350
+        P->>R: "SZM,3350\n"
+        R-->>P: … DONE(或多一行 Exceeded Max travel.)
+        P-->>M: arduino_result / arduino_response
+        loop 每秒,直到結束
+            C->>H: busy()?
+            H->>M: GET /api/motion/jobs/j-1
+            M-->>H: running / done(+ positions)/ error
         end
-        R-->>P: DONE
-        P-->>M: arduino_result=DONE, arduino_response=[...]
-        M->>M: 解鎖
-        M-->>H: 200 pi_response
-        H->>H: 掃描 Exceeded → 有就當失敗
+        H-->>C: done → 更新位置 / error → 記成未套用
     end
-    Note over M,P: MCC 等 timeout + 5 秒,我們等 timeout + 8 秒<br/>讓下一層先回報明確的原因
+    Note over H,M: 不主動查 RP / TP(會讓轉盤歸位),位置以 positions 為準

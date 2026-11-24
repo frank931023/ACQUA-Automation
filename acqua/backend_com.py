@@ -117,7 +117,6 @@ class _Events:
                                Canceled, ResultOverview):
         self._tick()
         self.backend._measuring_done = True
-        self.backend._batch_canceled = bool(Canceled)
         # ⭐ ResultOverview 是 Variant,CHM 沒有說明結構。
         #    這是唯一可能一次拿到整批數值的地方 —— 階段 4 務必把它 dump 出來研究。
         self._st().log(f"ACQUA 回報:完成 {NbrOfMeasurementsFinished}/{NbrOfMeasurements}"
@@ -141,10 +140,11 @@ class ComBackend(AcquaBackend):
     def __init__(self, state, config):
         super().__init__(state, config)
         self.app = None
-        # 整批進度:Progress 參數不可信(永遠回 1),自己數
+        # 進度:Progress 參數不可信(永遠回 1),自己數。
+        # run_smds 跑的時候由迴圈維護(_per_item = True);使用者直接在 ACQUA
+        # 按開始時由 OnBegin… 事件維護,網頁一樣看得到跑到第幾筆。
         self._batch_total = 0
         self._batch_index = 0
-        self._batch_canceled = False
         self._per_item = False
         self._watcher = None
         self.project = None            # IProjectSelected
@@ -335,11 +335,11 @@ class ComBackend(AcquaBackend):
         return ""
 
     def _on_single_finished(self, title, status):
-        """記下一筆結果。
+        """記下一筆結果(由 OnFinishedSingleMeasurement 事件呼叫)。
 
-        ⚠️ 整批模式下**只有這裡**會寫結果 —— 舊版是 run_smds 的 Python 迴圈
-           在每一輪自己呼叫 add_result,那個迴圈已經沒有了。
-           漏掉的話 summary 會一直是 0(2026-08-20 真機實測踩到過)。
+        正常結果**只在這裡**寫入 —— run_smds 的迴圈只補記 Busy / NoResult /
+        Exception 這幾種拿不到事件的情況。漏掉這裡 summary 會一直是 0
+        (2026-08-20 真機實測踩到過)。
         """
         title, status = str(title), int(status)
         self._last_result = (title, status)
@@ -1227,11 +1227,11 @@ class ComBackend(AcquaBackend):
         return False
 
     def run_smds(self, row_ids, comment=None):
-        """⭐ 逐項執行勾選的測項。
+        """⭐ 唯一的執行入口:逐項執行勾選的測項(StartSingleMeasurement)。
 
-        跟 run_measurements 的差別:
-            run_smds          你勾什麼跑什麼,順序由你決定,**可以真的中止**
-            run_measurements  ACQUA 依 ConditionalExecution 決定跑哪些
+        你勾什麼跑什麼,順序由你決定,**可以真的中止**。不用 StartMeasurements
+        整批交給 ACQUA:那條路沒辦法排除任何項目,互動精靈一定會跳出來等人
+        (理由見 README「逐項送,而不是整批交給 ACQUA」)。
 
         中止之所以在這裡有效:排隊的是 Python 的 for 迴圈,
         不送下一筆就停了 —— 不需要 ACQUA 配合。
@@ -1366,107 +1366,8 @@ class ComBackend(AcquaBackend):
                 f"=== 結束:{snap['passed']} PASS / {snap['failed']} FAIL"
                 + (f" ・ ⚠️ {warn} 筆擺位未套用" if warn else "") + " ===")
 
-    def run_measurements(self, variables=None):
-        """⭐ 唯一的執行入口:整批跑,由 ACQUA 依 ConditionalExecution 決定範圍。
-
-        執行模型(2026-08-20 實測後定案)
-        ────────────────────────────────
-            ACQUA 排隊     StartMeasurements 一次送出,它自己決定跑哪些、什麼順序
-            事件只讀       OnBegin/OnFinished 用來更新進度,**不能**用回傳值下指令
-            winwatch 控流  關不關阻塞視窗 = 走或停
-
-        為什麼不用回傳值:見 _Events.OnFinishedSingleMeasurement 的註解。
-        """
-        if self.project is None or self.mo is None:
-            raise RuntimeError("尚未開啟專案或選定量測物件")
-
-        run_cfg = self.config.get("run", {})
-        use_mmd = bool(run_cfg.get("use_mmd_settings", True))
-        result_comment = str(run_cfg.get("result_comment", ""))
-        timeout = float(run_cfg.get("full_run_timeout_sec", 28800))
-
-        watcher = self._start_watcher()
-        self._per_item = False
-
-        self._batch_total = 0
-        self._batch_index = 0
-        self._batch_canceled = False
-        self._current_row_id = None
-        self._measuring_done = False
-        self._meas_started = False
-        self._last_result = None
-        self._last_event_at = time.monotonic()
-
-        self.state.clear_results()
-        self.state.set(running=True, cancel_requested=False, current=None)
-
-        hw = self.active_hardware_setting()
-        self.state.log("=== 開始整批量測 ===")
-        self.state.log(f"    專案:{self.state.open_project} / 量測物件:{self.mo.Title}")
-        self.state.log(f"    硬體設定:{hw or '(讀不到)'}")
-
-        rl = self.state.runlog
-        if rl:
-            rl.start(mode="batch", database=self.state.database,
-                     project_group=self.state.open_group,
-                     project=self.state.open_project,
-                     measurement_object=self.state.measurement_object,
-                     planned=[])          # 事前不知道清單,ACQUA 才知道
-
-        try:
-            # ⚠️ 簽章以 TypeLib 為準,比 CHM 多一個 ResultComment
-            self.project.StartMeasurements(use_mmd, self.mo.Title, result_comment)
-
-            deadline = time.monotonic() + timeout
-            while True:
-                self.pump()
-                time.sleep(0.05)
-
-                if self._measuring_done:
-                    break
-
-                # ACQUA 結束但沒發事件(例如整批被 GUI 取消)
-                if self._meas_started:
-                    try:
-                        if not self.app.IsMeasuring:
-                            break
-                    except Exception:                       # noqa: BLE001
-                        pass
-
-                # 暫停/恢復都是靠 winwatch 的開關 ——
-                # 它停了,ACQUA 的對話框就沒人關,量測自然停在那裡。
-                if watcher:
-                    want_running = not self.state.cancel_requested
-                    is_running = bool(watcher._thread)
-                    if is_running and not want_running:
-                        watcher.stop()
-                        self.state.log(
-                            "⏸ 已暫停 —— 停止自動關閉 ACQUA 的對話框,"
-                            "量測會停在下一個視窗。按「繼續」可以接回去。", "warn")
-                    elif want_running and not is_running:
-                        watcher.start()
-                        self.state.log("▶ 已繼續 —— 重新開始處理 ACQUA 的對話框")
-
-                if time.monotonic() > deadline:
-                    self.state.log(f"整批量測超過 {timeout:.0f} 秒上限,停止等待", "error")
-                    break
-        finally:
-            if watcher:
-                watcher.stop()
-            self.state.set(running=False, current=None, progress=None)
-            if rl:
-                rl.finish(canceled=bool(self._batch_canceled
-                                        or self.state.cancel_requested))
-            warn = self.log_setup_warnings()
-            snap = self.state.snapshot()["summary"]
-            self.state.log(
-                f"=== 結束:{snap['passed']} PASS / {snap['failed']} FAIL"
-                + (f" ・ ⚠️ {warn} 筆擺位未套用" if warn else "")
-                + f"(ACQUA 回報總數 {self._batch_total})===")
-
-
     def _start_watcher(self):
-        """啟動視窗監看器 —— 這是唯一的流程控制手段,見 acqua/winwatch.py。"""
+        """啟動視窗監看器:跑的期間自動處理 ACQUA 跳出來的對話框,見 acqua/winwatch.py。"""
         try:
             from .winwatch import WindowWatcher, DEFAULT_RULES
         except Exception as exc:                            # noqa: BLE001
@@ -1494,7 +1395,7 @@ class ComBackend(AcquaBackend):
         """UI 回覆某個擋住流程的視窗要怎麼處理。
 
         ⚠️ 這個方法會被 **Flask 的請求執行緒**直接呼叫(不走命令佇列),
-           因為 run_measurements 正阻塞著工作執行緒。所以這裡
+           因為 run_smds 正阻塞著工作執行緒。所以這裡
            **只能碰 Win32 與有鎖的資料結構,絕對不能碰 COM 物件**。
         """
         w = getattr(self, "_watcher", None)

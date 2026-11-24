@@ -1,17 +1,12 @@
 /**
  * 聲學測試室 3D 視覺化 —— 進入點
  *
- * 兩個模式,同一個場景
- * ────────────────────
- *   設定模式  離線畫圖。拉桿與拖曳直接改 3D,存成「擺位(setup)」。
- *             不會碰到任何機構,愛怎麼試都行。
- *   即時模式  3D 反映**實機報回來的位置**。拉桿變成「提出一個目標」,
- *             放手後跳確認框,按確定才真的下指令。拖曳整個關掉。
+ * 這一頁只做一件事:**設計擺位(setup)並存起來**。
+ * 拉桿與拖曳直接改 3D,存成擺位;不會碰到任何機構,愛怎麼試都行。
  *
- * 為什麼即時模式不能沿用設定模式那套「拉了就動」:機構有物理限制,
- * 而且一動就是真的在動。手滑碰到拉桿就讓天車跑起來太隨便了 ——
- * 所以在即時模式,**在按下確定之前畫面上不會有任何東西動**,不會給人
- * 「已經移過去了」的錯覺。
+ * 看實機位置、手動推機構這類即時操作**不在這個專案** —— 那是天車控制中心
+ * (MCC,pc-led-controller)的工作。這裡存好的擺位,由測試執行時的
+ * SetupCoordinator(acqua/setupcoord.py)依 Setup 標籤自動套用。
  *
  * 側邊欄是依 PANEL 宣告動態生成的:物件多了之後,再用靜態 HTML 維護
  * 二十幾個拉桿很容易漏。要加新物件只要在 PANEL 裡多一筆。
@@ -20,7 +15,7 @@
  *      soundproofroom/src/main.js   這裡的 PANEL
  *      acqua/crane.py               AXES(對應到哪台 Pi 的哪根軸)
  *      setups/*.json                存好的擺位的鍵
- *    改 id 會讓存好的擺位對不上,也會讓即時模式找不到軸。要改就得寫搬移。
+ *    改 id 會讓存好的擺位對不上。要改就得寫搬移。
  */
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -33,8 +28,7 @@ import {
   buildScreen, setScreenLift, buildLights,
 } from './builders.js';
 import { createInteraction } from './interaction.js';
-import { createLive } from './live.js';
-import { fmt, esc, toast, confirmBox } from './ui.js';
+import { fmt, esc, toast, jsonFetch } from './ui.js';
 import { listSetups, saveCurrent, applyToScene } from './setups.js';
 
 const $ = (s) => document.querySelector(s);
@@ -127,10 +121,6 @@ const interaction = createInteraction({
   onChange: (key, axis, value, source) => {
     const c = controls[`${key}.${axis}`];
     if (!c) return;
-    // 即時模式的讀數是「實機報回來的位置」,由 live.js 負責寫(它還要標
-    // estimated)。這裡再寫一次會把它蓋成補間出來的中間值 —— 數字看起來
-    // 一樣在動,但已經不是實機回報的那個值了。
-    if (mode === 'live') return;
     if (source !== 'slider') c.el.value = value;
     c.out.textContent = c.format(value);
   },
@@ -224,37 +214,14 @@ const PANEL = [
   },
 ];
 
-// ══════════════════════════════════════════════════
-//  模式
-// ══════════════════════════════════════════════════
-//
-// 預設是**設定模式**,不是即時模式 —— 一開頁面就去跟硬體講話、而且
-// 3D 立刻跳到實機位置,對不預期的人太突然。要看實機就自己切,或帶
-// ?mode=live 進來。切過之後記在 localStorage,下次照上次的。
-const MODES = {
-  live: {
-    label: 'Live mode',
-    hint: '<b>The 3D view shows where the hardware actually is.</b> A slider proposes a target; you are asked before anything moves.'
-        + '<br><b>Dragging objects is off.</b> Left-drag: orbit - Wheel: zoom - Right-drag: pan',
-  },
-  setup: {
-    label: 'Layout mode',
-    hint: '<b>Left-drag objects:</b> speaker array, screen, HATS, both tables, both mic rigs'
-        + '<br><b>Left-drag empty space:</b> orbit - <b>Wheel:</b> zoom - <b>Right-drag:</b> pan'
-        + '<br>This mode <b>never moves the hardware</b>. Save a position first, then apply it from Live mode.',
-  },
-};
+const HINT = '<b>Left-drag objects:</b> speaker array, screen, HATS, both tables, both mic rigs'
+  + '<br><b>Left-drag empty space:</b> orbit - <b>Wheel:</b> zoom - <b>Right-drag:</b> pan'
+  + '<br>This page <b>never moves the hardware</b> - it only designs and saves positions.';
 
 const params = new URLSearchParams(location.search);
-let mode = params.get('mode') === 'live' ? 'live'
-  : params.get('mode') === 'setup' ? 'setup'
-    : (localStorage.getItem('sprMode') === 'live' ? 'live' : 'setup');
 
-/** id → 控制項。live.js 與 setups.js 都吃這個登記表。 */
+/** id → 控制項。setups.js 也吃這個登記表。 */
 const controls = {};
-
-/** 即時模式的控制器。buildPanel() 之後才建 —— 它要 #livestatus 這個容器。 */
-let live = null;
 
 // ══════════════════════════════════════════════════
 //  側邊欄
@@ -264,12 +231,8 @@ function buildPanel() {
   panel.innerHTML = `
     <h1>Acoustic test room</h1>
     <div class="sub">Room ${C.room.width} x ${C.room.depth} x ${C.room.height} m</div>
-    <div class="modesw" id="modesw">
-      <button data-mode="live">Live</button>
-      <button data-mode="setup">Layout</button>
-    </div>
-    <div id="livestatus"></div>
-    <div id="modebar"></div>`;
+    <div id="limitwarn"></div>
+    <div id="setupbar"></div>`;
 
   for (const grp of PANEL) {
     const box = document.createElement('div');
@@ -283,13 +246,7 @@ function buildPanel() {
         for (const v of it.values) {
           const b = document.createElement('button');
           b.textContent = it.format ? it.format(v) : v;
-          // 快捷鍵在即時模式也要走確認流程 —— 它就是一個「把拉桿撥到這裡」
-          b.onclick = () => {
-            const c = controls[it.target];
-            if (!c) return;
-            if (mode === 'live') { c.el.value = v; c.el.dispatchEvent(new Event('change')); }
-            else c.set(v);
-          };
+          b.onclick = () => controls[it.target]?.set(v);
           row.appendChild(b);
         }
         box.appendChild(row);
@@ -303,7 +260,7 @@ function buildPanel() {
   panel.appendChild(makeViewBox());
 }
 
-/** 一個控制項:讀數 + 拉桿 + (即時模式)目標提示 */
+/** 一個控制項:讀數 + 拉桿 */
 function makeControl(it) {
   const wrap = document.createElement('div');
   wrap.className = 'ctl';
@@ -311,25 +268,23 @@ function makeControl(it) {
   wrap.innerHTML = `
     <div class="row"><span class="name">${it.label}</span><span class="val">—</span></div>
     <input type="range">
-    <div class="tgt" hidden></div>
     ${it.hint ? `<div class="lim">${it.hint}</div>` : ''}`;
 
   const el = wrap.querySelector('input');
   const out = wrap.querySelector('.val');
-  const tgt = wrap.querySelector('.tgt');
   const format = it.format || fmt.by(it.unit);
   const r = it.range;
 
   el.min = r.min; el.max = r.max; el.step = it.step ?? 0.01;
   el.value = r.default ?? r.min;
 
-  /** 只套用到 3D,不動拉桿(即時模式由回報的位置驅動) */
+  /** 只套用到 3D */
   const apply = (v) => {
     if (it.drag) interaction.set(it.drag.key, it.drag.axis, v);
     else it.apply(v);
   };
 
-  /** 拉桿 + 讀數 + 3D 一起設 —— 設定模式與載入擺位用 */
+  /** 拉桿 + 讀數 + 3D 一起設 —— 載入擺位與快捷鍵用 */
   const set = (v) => {
     el.value = v;
     out.textContent = format(parseFloat(el.value));
@@ -338,26 +293,13 @@ function makeControl(it) {
 
   el.addEventListener('input', () => {
     const v = parseFloat(el.value);
-    if (mode === 'setup') {
-      out.textContent = format(v);
-      apply(v);
-      return;
-    }
-    // 即時模式:拉桿只是在挑目標,3D 一動也不動
-    tgt.hidden = false;
-    tgt.innerHTML = `Target <b>${format(v)}</b> - you will be asked before it moves`;
-  });
-
-  // change(放手)才問 —— input 每動一格就跳框會變成連環轟炸
-  el.addEventListener('change', async () => {
-    if (mode !== 'live') return;
-    await live.requestMove(it.id, parseFloat(el.value));
-    tgt.hidden = true;
+    out.textContent = format(v);
+    apply(v);
   });
 
   controls[it.id] = {
     id: it.id, label: it.label, unit: it.unit, range: r, format,
-    el, out, wrap, tgt, apply, set,
+    el, out, wrap, apply, set,
     get value() { return parseFloat(el.value); },
   };
   set(parseFloat(el.value));
@@ -367,8 +309,6 @@ function makeControl(it) {
 function makeViewBox() {
   const v = document.createElement('div');
   v.className = 'group';
-  // 只有視角按鈕。原本底下那排連結(回首頁 / 擺位清單)拿掉了 ——
-  // 左邊那條側邊欄已經有同樣的入口,重複放只是把面板拉長。
   v.innerHTML = `<h2>View</h2>
     <div class="views">
       <button data-view="iso">Iso</button>
@@ -392,17 +332,54 @@ function makeViewBox() {
 }
 
 // ══════════════════════════════════════════════════
-//  每個模式自己的動作列
+//  行程對照
+// ══════════════════════════════════════════════════
+/**
+ * 拿後端的軸清單,跟 spec.json 的行程對一次。
+ *
+ * 兩邊刻意各存一份(後端不能拿瀏覽器送來的範圍當行程上限)。存擺位時
+ * 後端會把超出行程的值夾回範圍內(roomsetups.clean_axes),所以兩邊不一致
+ * 時,畫面上擺的位置跟存進去的會不一樣 —— 一定要看得見。
+ */
+async function checkLimits() {
+  const host = $('#limitwarn');
+  let m;
+  try { m = await jsonFetch('/api/room/axes'); } catch (e) {
+    host.innerHTML = `<div class="lv bad"><b>Cannot read the backend axis list</b>
+      <div class="sub">${esc(e.message || e)}</div></div>`;
+    return;
+  }
+  const byId = Object.fromEntries((m.axes || []).map((a) => [a.id, a]));
+  const near = (x, y) => Math.abs(x - y) < 1e-6;
+  const bad = [];
+  for (const [id, c] of Object.entries(controls)) {
+    const a = byId[id];
+    if (!a) { bad.push(`${id}: the backend has no such axis`); continue; }
+    if (!near(a.min, c.range.min) || !near(a.max, c.range.max)) {
+      bad.push(`${id}: 3D ${c.range.min} to ${c.range.max} / backend ${a.min} to ${a.max}`);
+    }
+  }
+  for (const a of m.axes || []) {
+    if (!controls[a.id]) bad.push(`${a.id}: the 3D view has no control for this axis`);
+  }
+  host.innerHTML = bad.length ? `<div class="lv bad"><b>Travel limits disagree</b><div class="sub">
+    ${bad.map(esc).join('<br>')}<br>
+    <code>spec.json</code> and <code>acqua/crane.py</code> disagree. Saved values are clamped
+    to the backend limits.</div></div>` : '';
+}
+
+// ══════════════════════════════════════════════════
+//  擺位
 // ══════════════════════════════════════════════════
 let setupCache = [];
 let editing = null;         // 正在編輯哪個已存的擺位(從擺位清單開過來的)
 
 async function refreshSetups() {
   try { setupCache = await listSetups(); } catch { setupCache = []; }
-  renderModeBar();
+  renderSetupBar();
 }
 
-//: 「原始設計位置」在下拉選單裡的代號。不是一個存檔,是 spec.js 的預設值 ——
+//: 「原始設計位置」在下拉選單裡的代號。不是一個存檔,是 spec.json 的預設值 ——
 //  也就是這一頁第一次打開時的樣子。放在選單最上面,讓人隨時回得去看原本長怎樣。
 const DEFAULT_ID = '__default__';
 
@@ -413,20 +390,20 @@ function setupOptions(selected) {
   const opts = ['<option value="">Choose a position...</option>',
     '<optgroup label="Built in">',
     `<option value="${DEFAULT_ID}"${selected === DEFAULT_ID ? ' selected' : ''}>`
-    + 'Original design position (spec.js defaults)</option>',
+    + 'Original design position (spec.json defaults)</option>',
     '</optgroup>'];
   if (setupCache.length) {
     opts.push('<optgroup label="Saved positions">');
     for (const s of setupCache) {
       opts.push(`<option value="${esc(s.id)}"${s.id === selected ? ' selected' : ''}>`
-        + `${esc(shortName(s.name))}${s.source === 'live' ? ' (from hardware)' : ''}</option>`);
+        + `${esc(shortName(s.name))}</option>`);
     }
     opts.push('</optgroup>');
   }
   return opts.join('');
 }
 
-/** spec.js 的預設值長成一個「假擺位」,好讓載入的路徑只有一條 */
+/** spec.json 的預設值長成一個「假擺位」,好讓載入的路徑只有一條 */
 function defaultSetup() {
   return {
     id: DEFAULT_ID, name: 'Original design position',
@@ -435,70 +412,50 @@ function defaultSetup() {
   };
 }
 
-function renderModeBar() {
-  const bar = $('#modebar');
-  if (mode === 'setup') {
-    bar.className = 'group modebar';
-    bar.innerHTML = `<h2>Positions</h2>
-      ${editing ? `<div class="editing">Editing
-         <b>${esc(editing.name)}</b></div>` : ''}
-      <button class="wide primary" id="mb-save">
-        ${editing ? 'Update this position' : 'Save current position...'}</button>
-      ${editing ? '<button class="wide" id="mb-saveas">Save as a new position...</button>' : ''}
-      <label class="lbl">Load a position into the view</label>
-      <select id="mb-pick">${setupOptions(editing?.id)}</select>
-      <button class="wide" id="mb-load">Load into view</button>
-      <div class="lim">"Original design position" is the <code>spec.js</code> default -
-        what this page looks like the first time you open it.<br>
-        This mode only changes the view. To move the hardware, switch to Live mode and apply.</div>`;
+function renderSetupBar() {
+  const bar = $('#setupbar');
+  bar.className = 'group modebar';
+  bar.innerHTML = `<h2>Positions</h2>
+    ${editing ? `<div class="editing">Editing
+       <b>${esc(editing.name)}</b></div>` : ''}
+    <button class="wide primary" id="mb-save">
+      ${editing ? 'Update this position' : 'Save current position...'}</button>
+    ${editing ? '<button class="wide" id="mb-saveas">Save as a new position...</button>' : ''}
+    <label class="lbl">Load a position into the view</label>
+    <select id="mb-pick">${setupOptions(editing?.id)}</select>
+    <button class="wide" id="mb-load">Load into view</button>
+    <div class="lim">"Original design position" is the <code>spec.json</code> default -
+      what this page looks like the first time you open it.<br>
+      Saved positions are applied to the hardware automatically during a test run,
+      by the <code>Setup</code> tag on each test item.</div>`;
 
-    $('#mb-save').onclick = async () => {
-      const s = await saveCurrent(snapshotAxes(), { existing: editing });
-      if (s) { editing = s; await refreshSetups(); }
-    };
-    const saveas = $('#mb-saveas');
-    if (saveas) saveas.onclick = async () => {
-      const s = await saveCurrent(snapshotAxes());
-      if (s) { editing = s; await refreshSetups(); }
-    };
-    $('#mb-load').onclick = () => {
-      const id = $('#mb-pick').value;
-      if (!id) { toast('Choose a position first', 'warn'); return; }
+  $('#mb-save').onclick = async () => {
+    const s = await saveCurrent(snapshotAxes(), { existing: editing });
+    if (s) { editing = s; await refreshSetups(); }
+  };
+  const saveas = $('#mb-saveas');
+  if (saveas) saveas.onclick = async () => {
+    const s = await saveCurrent(snapshotAxes());
+    if (s) { editing = s; await refreshSetups(); }
+  };
+  $('#mb-load').onclick = () => {
+    const id = $('#mb-pick').value;
+    if (!id) { toast('Choose a position first', 'warn'); return; }
 
-      // 原始設計位置走同一條載入路徑,只是那組數字是 spec.js 給的。
-      // editing 要清掉 —— 它不是存檔,下次按儲存該是「新增」而不是
-      // 「更新」,不然會把某個存好的擺位覆蓋成預設值。
-      const s = id === DEFAULT_ID ? defaultSetup()
-        : setupCache.find((x) => x.id === id);
-      if (!s) { toast('That position no longer exists', 'warn'); return; }
+    // 原始設計位置走同一條載入路徑,只是那組數字是 spec.json 給的。
+    // editing 要清掉 —— 它不是存檔,下次按儲存該是「新增」而不是
+    // 「更新」,不然會把某個存好的擺位覆蓋成預設值。
+    const s = id === DEFAULT_ID ? defaultSetup()
+      : setupCache.find((x) => x.id === id);
+    if (!s) { toast('That position no longer exists', 'warn'); return; }
 
-      const r = applyToScene(s, controls);
-      editing = id === DEFAULT_ID ? null : s;
-      renderModeBar();
-      if (id === DEFAULT_ID) $('#mb-pick').value = DEFAULT_ID;
-      toast(`Loaded "${s.name}" (${r.applied.length} axes`
-        + (r.absent.length ? `, ${r.absent.length} not stored` : '') + ')');
-    };
-    return;
-  }
-
-  // ── 即時模式 ──
-  //
-  // 刻意留空。即時模式的側欄只放「現在什麼狀況」跟「每一根軸在哪」——
-  // 那才是這個模式存在的理由。把擺位的下拉、按鈕也塞進來,等於在一個
-  // 「按下去機構就會動」的畫面裡多放兩個入口,而且擺位一筆都沒有的時候
-  // 就是一個灰掉的按鈕配一句「(還沒有存過擺位)」,佔位置又沒有用。
-  //
-  // 「把擺位套用到實機」的入口在擺位詳細頁(/setups/<id>),從那裡按會帶
-  // ?mode=live&apply=<id> 進來,一樣走這一頁的確認框。
-  bar.className = '';
-  bar.innerHTML = '';
-}
-
-function paintModeButtons() {
-  $('#modesw')?.querySelectorAll('[data-mode]').forEach((b) => {
-    b.classList.toggle('on', b.dataset.mode === mode);
-  });
+    const r = applyToScene(s, controls);
+    editing = id === DEFAULT_ID ? null : s;
+    renderSetupBar();
+    if (id === DEFAULT_ID) $('#mb-pick').value = DEFAULT_ID;
+    toast(`Loaded "${s.name}" (${r.applied.length} axes`
+      + (r.absent.length ? `, ${r.absent.length} not stored` : '') + ')');
+  };
 }
 
 /** 目前畫面上每一根軸的值 —— 存擺位用 */
@@ -508,144 +465,27 @@ function snapshotAxes() {
 }
 
 // ══════════════════════════════════════════════════
-//  切模式
-// ══════════════════════════════════════════════════
-/**
- * 切模式前的確認框。
- *
- * 為什麼連「切到設定模式」都要問:兩個模式底下,**同一根拉桿的意思完全
- * 不一樣** —— 一邊是畫圖,一邊是對真的機構下指令。不知道自己在哪個模式
- * 就去拉拉桿,是這一頁最容易出事的地方。所以切換不做成無聲的 toggle。
- *
- * 切到即時模式時會**先探一次**再問,把「現在到底抓不抓得到實機位置」寫在
- * 框上。切過去才發現讀不到,那個資訊來得太晚。
- */
-async function askSwitch(next) {
-  if (next === 'setup') {
-    return confirmBox({
-      title: 'Switch to Layout mode?',
-      html: `
-        <div class="mdsw setup">
-          <div class="r"><i>✏️</i><span>Sliders and dragging <b>change the 3D view only</b></span></div>
-          <div class="r"><i>🔒</i><span>This mode <b>never touches the hardware</b> - experiment freely</span></div>
-          <div class="r"><i>💾</i><span>Save the arrangement as a position when you are happy</span></div>
-        </div>
-        <div class="bxnote">Sliders start from the <b>last position the hardware reported</b>,
-          so you can adjust from where things actually are.</div>`,
-      ok: 'Switch to Layout', cancel: 'Stay in Live',
-    });
-  }
-
-  // ── 切到即時模式:先探一次 ──
-  const p = await live.probe();
-  const status = {
-    live: `<div class="mdst ok"><b>Connected to the hardware</b>
-             <div>Read ${p.total} axes${
-               p.estimated ? ` - ${p.estimated} estimated` : ''}${
-               p.offline ? ` - ${p.offline} of ${p.devices} devices offline` : ''}</div></div>`,
-    mock: `<div class="mdst warn"><b>No hardware - showing simulated positions</b>
-             <div>Not connected to the crane controller, so these numbers are computed, not measured.
-             Set <code>ACQUA_SETUP_CONTROLLER</code> in <code>.env</code> to use real hardware.</div></div>`,
-    error: `<div class="mdst bad"><b>Cannot read positions</b>
-             <div>${esc(p.error || '')}</div></div>`,
-  }[p.state];
-
-  return confirmBox({
-    title: 'Switch to Live mode?',
-    html: `
-      ${status}
-      <div class="mdsw live">
-        <div class="r"><i>📡</i><span>The 3D view switches to <b>what the hardware reports</b></span></div>
-        <div class="r"><i>🎚️</i><span>Sliders <b>propose a target</b> - you are asked again before it moves</span></div>
-        <div class="r"><i>🚫</i><span>Dragging objects is <b>turned off</b> (you can still orbit)</span></div>
-      </div>
-      ${p.busy ? '<div class="bxnote warn">The hardware is <b>moving right now</b>.</div>' : ''}
-      ${p.state === 'error'
-        ? '<div class="bxnote warn">You can still switch, but nothing updates until a position is read.</div>'
-        : ''}`,
-    ok: 'Switch to Live', cancel: 'Cancel',
-  });
-}
-
-async function setMode(next, { remember = true, ask = false } = {}) {
-  if (!MODES[next]) return;
-  if (next === mode && ask) return;         // 點目前這一顆不算切換
-  // 機構正在動的時候不准切走 —— 切到設定模式會讓拉桿又變成「直接改 3D」,
-  // 畫面就跟實際位置脫節了,而機構還在跑。
-  if (mode === 'live' && next !== 'live' && live.busy) {
-    toast('The hardware is still moving - wait for it to finish', 'warn');
-    return;
-  }
-  if (ask && !(await askSwitch(next))) {
-    // 取消了 —— 把切換鈕的亮起狀態撥回目前這個模式
-    paintModeButtons();
-    return;
-  }
-  mode = next;
-  if (remember) localStorage.setItem('sprMode', mode);
-
-  document.body.dataset.mode = mode;
-  paintModeButtons();
-  const hint = $('#hint');
-  if (hint) hint.innerHTML = MODES[mode].hint;
-
-  interaction.setEnabled(mode === 'setup');
-
-  if (mode === 'live') {
-    await live.enable();
-  } else {
-    live.disable();
-    // 從即時模式切回來:把拉桿與 3D 對回實機最後的位置,而不是
-    // 跳回預設值 —— 通常下一步就是「照現在的位置微調一下再存起來」。
-    const pos = live.positions;
-    for (const [id, v] of Object.entries(pos)) controls[id]?.set(v);
-    Object.values(controls).forEach((c) => { c.el.disabled = false; c.tgt.hidden = true; });
-  }
-  renderModeBar();
-}
-
-// ══════════════════════════════════════════════════
 //  啟動
 // ══════════════════════════════════════════════════
 buildPanel();
-
-live = createLive({
-  controls,
-  applyToScene: (id, v) => controls[id]?.apply(v),
-  statusHost: $('#livestatus'),
-});
-
-$('#modesw').querySelectorAll('[data-mode]').forEach((b) => {
-  b.onclick = () => setMode(b.dataset.mode, { ask: true });
-});
+const hint = $('#hint');
+if (hint) hint.innerHTML = HINT;
 
 await refreshSetups();
+checkLimits();
 
 // ?setup=<id> —— 從擺位清單的「在 3D 裡開啟」進來的
 const wantSetup = params.get('setup');
 if (wantSetup) {
   const s = setupCache.find((x) => x.id === wantSetup);
   if (s) {
-    mode = 'setup';
     applyToScene(s, controls);
     editing = s;
+    renderSetupBar();
     toast(`Loaded "${s.name}"`);
   } else {
     toast('That position no longer exists', 'bad');
   }
-}
-
-// ?apply=<id> —— 從擺位詳細頁的「套用到實機」進來的。刻意**不自動送出**:
-// 一定要走 live.applySetup 的確認框,讓人在機構動之前看到會動哪幾根軸。
-const wantApply = params.get('apply');
-if (wantApply) mode = 'live';
-
-await setMode(mode, { remember: false });
-
-if (wantApply) {
-  const s = setupCache.find((x) => x.id === wantApply);
-  if (!s) toast('That position no longer exists', 'bad');
-  else live.applySetup(s.axes || {}, s.name);
 }
 
 // ── 迴圈 ────────────────────────────────────────
@@ -659,12 +499,7 @@ function onResize() {
 window.addEventListener('resize', onResize);
 new ResizeObserver(onResize).observe(container);
 
-let last = performance.now();
 renderer.setAnimationLoop(() => {
-  const now = performance.now();
-  const dt = Math.min(0.1, (now - last) / 1000);
-  last = now;
-  live.tick(dt);            // 即時模式:往回報的位置補間
   controls3d.update();
   renderer.render(scene, camera);
 });

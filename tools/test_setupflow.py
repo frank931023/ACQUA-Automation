@@ -148,7 +148,7 @@ with tempfile.TemporaryDirectory() as tmp:
     state, coord, be = make_run(tmp, bridge)
     snap = run(state, coord, be)
     warn = snap["setup_not_applied"]
-    check("找得到的有移動", bridge.moves == ["setup: near", "setup: far"],
+    check("找得到的有移動", bridge.moves == ["near", "far"],
           str(bridge.moves))
     check("最後停在最後一個擺位", coord.current() == "far")
     check("找不到的沒移動,記一筆", [w["row_id"] for w in warn] == [102], str(warn))
@@ -175,7 +175,7 @@ with tempfile.TemporaryDirectory() as tmp:
     state, coord, be = make_run(tmp, bridge)
     run(state, coord, be, (101,))
     run(state, coord, be, (101,))
-    check("第二輪沒有再移動", bridge.moves == ["setup: near"], str(bridge.moves))
+    check("第二輪沒有再移動", bridge.moves == ["near"], str(bridge.moves))
 
 print("\n=== 4. 機構出錯要記得是出錯 ===")
 with tempfile.TemporaryDirectory() as tmp:

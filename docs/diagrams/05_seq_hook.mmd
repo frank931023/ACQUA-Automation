@@ -19,7 +19,7 @@ sequenceDiagram
         else 要移動
             K->>A: POST /api/room/apply (setup_name)
             A->>H: apply
-            H->>M: 逐軸送指令
+            H->>M: POST /api/motion/jobs(名稱 + 目標)
             loop 最多 900 秒
                 K->>A: GET /api/room/current
                 A-->>K: 還沒到 / 到了

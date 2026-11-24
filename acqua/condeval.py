@@ -185,7 +185,7 @@ def parse(xml: str) -> dict:
         })
     if not conds:
         return None
-    a = _ACT = _RE_ACT.search(xml)
+    a = _RE_ACT.search(xml)
     m = _RE_MATCH.search(xml)
     d = _RE_DIS.search(xml)
     return {

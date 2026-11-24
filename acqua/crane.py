@@ -12,33 +12,23 @@
 
 兩種後端,介面完全一樣
 ──────────────────────
-    MockCrane   沒有硬體時用。位置是模擬的,會隨時間慢慢跑。
-    HttpCrane   真的去打天車控制中心(port 5001)的 REST API。
+    MockCrane   沒有硬體時用。在本機一根一根模擬,位置會隨時間慢慢跑。
+    HttpCrane   把「擺位名稱 + 每台 Pi 的目標」整組交給天車控制中心(MCC),
+                由 MCC 決定順序、並行與防撞,我們等它回報完成。
+                約定見 docs/MCC_MOTION_API.md。
 
-由 .env 的 ACQUA_SETUP_CONTROLLER 決定用哪個 —— 沒設就是 Mock。前端、API、3D 動畫完全
-不知道差別,因為**「移動中的位置怎麼算」是在基底類別裡算的,兩個後端共用**
-(見 _run_job)。這不是為了讓 mock 好寫,是因為真機也非得這樣做:
+由 .env 的 ACQUA_SETUP_CONTROLLER 決定用哪個 —— 沒設就是 Mock。呼叫端
+(SetupCoordinator、/api/room/*)只用 submit / busy / snapshot,不知道差別。
 
-    ⚠️ 機構在動的時候讀不到位置。
-       Pi 是序列埠單線程,移動指令會一直佔著埠直到 Arduino 回 DONE ——
-       這期間送位置查詢只會排在後面。所以「動的時候」的位置一律是
-       **由起點、終點、標稱速度推算出來的估計值**(estimated=True),
-       等指令回來才用真實查詢校正回去。
+不主動查位置:韌體的 RP / TP 查詢會順便讓轉盤歸位,而且機構在動的時候
+序列埠被佔著也問不到。位置以作業結束時 MCC 回報的為準。
 
-    也就是說 mock 跟真機的差別只有送指令與讀位置:_send_move() / _query()。
-    其他的(估計、進度、中止、狀態機)全部是同一份程式在跑。
-
-⚠️ 中止(stop)的真實語意
-────────────────────────
-韌體沒有中止指令。所以 stop 只能做到「不要再送後面那幾軸」——
-**已經送出去的那一段機構會自己走完**。UI 上要照這個講,不能寫成
-「緊急停止」讓人誤會按了就會停。真的要停只能斷電。
+這裡**沒有**給人手動推機構、看即時位置的功能 —— 那屬於天車控制中心。
+本專案只在測試執行時,依測項的 Setup 標籤把存好的擺位送過去。
 """
 from __future__ import annotations
 
 import json
-import os
-import re
 import socket
 import threading
 import time
@@ -60,11 +50,10 @@ class Axis:
     pi      這根軸接在哪一台 Raspberry Pi 上
     ch      韌體的軸前綴。'SX'/'SY'/'SZ' 是滑台,'R' 轉盤,'T' 傾角。
             指令由前綴組出來:移動 <ch>M,<值> ・ 查詢 <ch>P ・
-            校正 <ch>C ・ 歸位 <ch>H
+            校正 <ch>C ・ 歸位 <ch>H。送給 MCC 的目標用 <ch>M 當鍵
     lo/hi   場景座標的行程兩端。**韌體的 0 對應 lo**(見 to_device)
     unit    'm' 線性軸(公尺,對韌體換成公釐)/ 'deg' 旋轉軸(直接給度數)
-    speed   標稱速度,場景單位 / 秒。只用來估計移動中的位置與預估時間,
-            不會送給韌體
+    speed   標稱速度,場景單位 / 秒。只用來估計預估時間與模擬,不會送給韌體
     """
     id: str
     pi: str
@@ -99,21 +88,14 @@ class Axis:
     def cmd_move(self, scene: float) -> str:
         return f"{self.ch}M,{self.to_device(scene)}"
 
-    def cmd_query(self) -> str:
-        # ⚠️ [待確認] 位置查詢的助憶碼。PC 端 README 只寫「查詢位置」按鈕
-        #    存在,沒列字串。照 <ch>C/<ch>H/<ch>M 的規律推成 <ch>P。
-        #    對不上的話韌體會回 ERR,程式會退回用估計值(不會壞掉,只是
-        #    位置標成 estimated),換成正確的字串就好。
-        return f"{self.ch}P"
-
     def travel_seconds(self, a: float, b: float) -> float:
         return abs(b - a) / max(self.speed, 1e-6)
 
 
-#: 一台 Pi = 一組天車 = 一個可動總成。行程數字與 soundproofroom/src/spec.js
+#: 一台 Pi = 一組天車 = 一個可動總成。行程數字與 soundproofroom/src/spec.json
 #: 同源 —— 但**刻意各存一份**:後端絕對不能拿前端送來的範圍當行程上限,
 #: 不然瀏覽器改個數字就能把機構送去撞牆。兩邊不一致時由 /api/room/axes
-#: 交叉比對並在 UI 上示警(見 live.js 的 limit mismatch)。
+#: 交叉比對並在 3D 頁上示警(見 main.js 的 checkLimits)。
 #:
 #: ⚠️ [待確認] pi_id 與哪個總成配對,要照現場接線對一次。
 AXES = {
@@ -151,9 +133,7 @@ AXES = {
     "micRig2.h": Axis("micRig2.h", "pi-007", "SY",  0.70, 1.50, "Mic rig 2 - height Y"),
 }
 
-#: 開機時的「假設位置」。真機第一次查詢成功就會被蓋掉;mock 則一直用這組
-#: 當起點。用 spec.js 的 default 而不是行程中點 —— 這樣 mock 一開就跟
-#: 設定模式看到的畫面一樣,不會一進即時模式所有東西都跳一次。
+#: 開機時的「假設位置」(標成推估)。第一次作業完成後就換成 MCC 回報的位置。用 spec.json 的 default 而不是行程中點 —— 跟 3D 頁一打開的畫面一致。
 HOME = {
     "speakers.x": 0.0, "speakers.lift": 1.30,
     "screen.z": 2.05, "screen.lift": 1.25,
@@ -164,11 +144,9 @@ HOME = {
     "micRig2.x": 0.40, "micRig2.z": -0.35, "micRig2.h": 1.25,
 }
 
-DEVICES = sorted({a.pi for a in AXES.values()})
-
-
 def axes_manifest() -> list:
-    """給前端交叉比對用的軸清單(行程以場景單位表示)。"""
+    """軸清單(行程以場景單位表示)。3D 頁拿來跟 spec.json 交叉比對,
+    擺位詳細頁拿來做範圍提示。"""
     return [{"id": a.id, "pi": a.pi, "ch": a.ch, "label": a.label,
              "unit": a.unit, "min": a.lo, "max": a.hi, "speed": a.speed}
             for a in AXES.values()]
@@ -178,103 +156,79 @@ def axes_manifest() -> list:
 #  移動作業(job)—— 一次只有一個
 # ══════════════════════════════════════════════════════════
 #
-# 「手動移動一根軸」與「把一整個 setup 套到實機」是同一件事的兩種大小:
-# 一串 (軸, 目標) 依序執行。做成同一個模型的好處是進度顯示、中止、
-# 「正在動,別再下指令」這些狀態只要寫一次。
+# 「把一個擺位套到實機」= 一個作業:名稱 + 每根軸的目標。呼叫端
+# (SetupCoordinator、/api/room/apply)只用三個方法:
 #
-# 為什麼是**依序**而不是所有軸一起跑:機構之間會互相干涉(HATS 平台跟
-# 升降台的行程是重疊的)。一次只動一根,任何時刻都只有一個東西在動,
-# 撞到什麼也看得出來是誰。
+#     submit(moves, label)   送出。label 就是擺位名稱
+#     busy()                 還在動嗎
+#     snapshot()             每根軸的位置 + 作業狀態
+#
+# 誰負責「怎麼走」:
+#     MockCrane   自己在本機一根一根模擬(沒有硬體時)
+#     HttpCrane   整組交給天車控制中心(MCC),**順序、並行、防撞由 MCC 決定**,
+#                 我們只送名稱與目標、等它回報完成。約定見 docs/MCC_MOTION_API.md
 
 
-class _Handle:
-    """一個「已經送出去的移動」。done() 問完成了沒,error() 問失敗原因。
+def targets_by_device(moves) -> dict:
+    """[(axis_id, 場景值), ...] → {pi: {"<ch>M": 韌體值}}。
 
-    抽出來的理由:mock 是「睡一段時間」,真機是「等 HTTP 回來」,
-    但上層的等待邏輯要一模一樣(見 CraneBridge._drive)。
+    鍵用韌體的移動指令名稱(SXM / SZM / RM …),跟 MCC 既有的停車位置
+    (PATCH /api/pi/<id> 的 park)同一種格式。單位換算只在這裡做一次:
+    MCC 只看得到韌體數值,不需要知道房間座標。
     """
-
-    def __init__(self, fn):
-        self._err = None
-        self._done = threading.Event()
-        self._t = threading.Thread(target=self._run, args=(fn,), daemon=True)
-        self._t.start()
-
-    def _run(self, fn):
-        try:
-            fn()
-        except Exception as exc:                            # noqa: BLE001
-            self._err = str(exc)[:300]
-        finally:
-            self._done.set()
-
-    def done(self) -> bool:
-        return self._done.is_set()
-
-    def error(self):
-        return self._err
+    out = {}
+    for axis_id, value in moves:
+        ax = AXES[axis_id]
+        out.setdefault(ax.pi, {})[ax.ch + "M"] = ax.to_device(value)
+    return out
 
 
 class CraneBridge:
-    """位置橋接的基底 —— 狀態機、位置估計、進度都在這裡。
+    """位置橋接的基底:位置表、作業狀態、輸入檢查。
 
-    子類只要實作三件事:
-        _send_move(axis, target)    阻塞著把移動指令做完
-        _query(axis)                讀一根軸的真實位置(讀不到回 None)
-        device_status()             每台 Pi 的連線狀態
+    子類實作:
+        _start(job)    把作業送出去(失敗就丟例外,作業不會被記下來)
+        _refresh()     需要的話更新作業狀態(預設不做事)
     """
-
-    #: 沒有作業在跑時,多久去問一次真實位置
-    poll_interval = 2.0
 
     def __init__(self):
         self._lock = threading.RLock()
         self._pos = dict(HOME)               # 目前位置(場景單位)
-        self._est = {k: True for k in HOME}  # 這個值是估計的還是真的量到的
+        self._est = {k: True for k in HOME}  # True = 推估的,False = 有人回報過
         self._job = None
-        self._abort = threading.Event()
-        self._stop_poll = threading.Event()
-        threading.Thread(target=self._poll_loop, daemon=True,
-                         name="crane-poll").start()
-
-    # ── 子類要實作 ──────────────────────────────────
-    def _send_move(self, axis: Axis, target: float):
-        raise NotImplementedError
-
-    def _query(self, axis: Axis):
-        return None
-
-    def device_status(self) -> dict:
-        return {pi: {"status": "unknown"} for pi in DEVICES}
 
     @property
     def kind(self) -> str:
         return "unknown"
 
-    # ── 對外:讀位置 ────────────────────────────────
+    # ── 子類要實作 ──────────────────────────────────
+    def _start(self, job: dict):
+        raise NotImplementedError
+
+    def _refresh(self):
+        pass
+
+    # ── 對外 ────────────────────────────────────────
     def snapshot(self) -> dict:
-        """目前所有軸的位置 + 作業狀態。前端即時模式每秒拿這個。"""
+        """目前所有軸的位置 + 作業狀態。SetupCoordinator 與 /api/room/current 用。"""
+        self._refresh()
         with self._lock:
             axes = {k: {"value": round(self._pos.get(k, AXES[k].lo), 4),
                         "estimated": bool(self._est.get(k, True))}
                     for k in AXES}
             job = self._job_view()
-        return {"kind": self.kind, "axes": axes, "job": job,
-                "devices": self.device_status()}
+        return {"kind": self.kind, "axes": axes, "job": job}
 
-    def _job_view(self):
-        if not self._job:
-            return None
-        job = dict(self._job)
-        job["steps"] = [dict(s) for s in self._job["steps"]]
-        return job
+    def busy(self) -> bool:
+        self._refresh()
+        with self._lock:
+            return bool(self._job and self._job["state"] == "running")
 
-    # ── 對外:下移動作業 ────────────────────────────
     def submit(self, moves, label="") -> dict:
-        """moves = [(axis_id, target), ...],依序執行。
+        """moves = [(axis_id, target), ...]。label = 擺位名稱。
 
-        目標值在這裡就夾到行程內 —— 不信任呼叫端,瀏覽器改個數字不該能
-        把機構送去撞牆。已經有作業在跑時丟 RuntimeError。
+        目標值在這裡就夾到行程內 —— 不信任呼叫端。已經有作業在跑、
+        或送不出去時丟 RuntimeError,作業不會被記下來。
         """
         steps = []
         for axis_id, target in moves:
@@ -293,149 +247,36 @@ class CraneBridge:
             raise ValueError("No axes to move")
 
         with self._lock:
-            if self._job and self._job["state"] in ("running", "aborting"):
-                raise RuntimeError("A move is already in progress")
-            self._abort.clear()
-            self._job = {
-                "id": "%x" % int(time.time() * 1000),
-                "label": label or steps[0]["label"],
-                "state": "running", "index": 0, "steps": steps,
-                "started": time.time(), "finished": None, "error": None,
-                "eta": round(sum(s["seconds"] for s in steps), 1),
-            }
-            job_id = self._job["id"]
-            view = self._job_view()
-
-        threading.Thread(target=self._run_job, args=(job_id,), daemon=True,
-                         name="crane-job").start()
-        return view
-
-    def abort(self) -> dict:
-        """停掉作業。
-
-        ⚠️ 只擋得住「還沒送出去」的那幾軸 —— 正在走的那一段機構會走完,
-           因為韌體沒有中止指令。UI 必須照這個講,不能寫成「緊急停止」。
-        """
-        self._abort.set()
-        with self._lock:
             if self._job and self._job["state"] == "running":
-                self._job["state"] = "aborting"
-        return self.snapshot()
-
-    def busy(self) -> bool:
+                raise RuntimeError("A move is already in progress")
+        job = {
+            "id": "%x" % int(time.time() * 1000),
+            "label": label or steps[0]["label"],
+            "state": "running", "index": 0, "steps": steps,
+            "started": time.time(), "finished": None, "error": None,
+            "eta": round(sum(s["seconds"] for s in steps), 1),
+        }
+        self._start(job)                     # 送不出去就在這裡丟例外
         with self._lock:
-            return bool(self._job and self._job["state"] in ("running", "aborting"))
-
-    # ── 作業執行 ────────────────────────────────────
-    def _run_job(self, job_id):
-        try:
-            while True:
-                with self._lock:
-                    job = self._job
-                    if not job or job["id"] != job_id:
-                        return
-                    idx = job["index"]
-                    if idx >= len(job["steps"]):
-                        break
-                    if self._abort.is_set():
-                        for s in job["steps"][idx:]:
-                            s["state"] = "skipped"
-                        job["state"] = "aborted"
-                        job["finished"] = time.time()
-                        return
-                    step = job["steps"][idx]
-                    step["state"] = "moving"
-                    step["began"] = time.time()
-                    frm, to = step["from"], step["to"]
-
-                self._drive(AXES[step["axis"]], frm, to)
-
-                with self._lock:
-                    job = self._job
-                    if not job or job["id"] != job_id:
-                        return
-                    job["steps"][idx]["state"] = "done"
-                    job["index"] = idx + 1
-
-            with self._lock:
-                if self._job and self._job["id"] == job_id:
-                    self._job["state"] = "done"
-                    self._job["finished"] = time.time()
-        except Exception as exc:                            # noqa: BLE001
-            with self._lock:
-                if self._job and self._job["id"] == job_id:
-                    self._job["state"] = "error"
-                    self._job["error"] = str(exc)[:300]
-                    self._job["finished"] = time.time()
-
-    def _drive(self, ax: Axis, start: float, target: float):
-        """送出一根軸的移動,期間用估計值餵位置,結束後用真實查詢校正。
-
-        這是 mock 與真機唯一共用、也最重要的一段。移動中的位置一律是
-        「起點 → 終點,照標稱速度線性內插」—— 因為序列埠被移動指令佔著,
-        那期間真的問不到(見檔頭)。所以:
-
-            移動中  estimated = True   位置是算出來的
-            停下來  estimated = False  位置是問出來的(問不到就維持 True)
-
-        3D 畫面吃的就是這個位置流,所以「慢慢移動過去」在 mock 與真機
-        看起來一樣 —— 不是動畫特效,是真的在追報回來的位置。
-        """
-        handle = _Handle(lambda: self._send_move(ax, target))
-        total = max(ax.travel_seconds(start, target), 0.001)
-        t0 = time.time()
-
-        while not handle.done():
-            frac = min(1.0, (time.time() - t0) / total)
-            with self._lock:
-                self._pos[ax.id] = start + (target - start) * frac
-                self._est[ax.id] = True
-            time.sleep(0.08)
-
-        err = handle.error()
-        if err:
-            raise RuntimeError(ax.label + ":" + err)
-
-        # 指令回來了,序列埠空出來,這才問得到真實位置
-        try:
-            real = self._query(ax)
-        except Exception:                                   # noqa: BLE001
-            real = None
-        with self._lock:
-            if real is None:
-                self._pos[ax.id] = target        # 問不到就相信目標值
-                self._est[ax.id] = True
-            else:
-                self._pos[ax.id] = ax.clamp(real)
-                self._est[ax.id] = False
-
-    # ── 閒置時的背景刷新 ────────────────────────────
-    def _poll_loop(self):
-        """作業沒在跑的時候,慢慢把真實位置補回來。
-
-        為什麼要背景執行緒而不是在 API 裡現問:真機有 7 台 Pi,逐台問
-        就是 7 次 HTTP 來回。前端每秒刷一次的話請求會越積越多(控制中心
-        README 記過同一個坑)。這裡用固定節奏刷快取,API 只讀快取。
-        """
-        while not self._stop_poll.wait(self.poll_interval):
-            if self.busy():
-                continue
-            for ax in list(AXES.values()):
-                if self.busy() or self._stop_poll.is_set():
-                    break
-                try:
-                    real = self._query(ax)
-                except Exception:                           # noqa: BLE001
-                    real = None
-                if real is None:
-                    continue
-                with self._lock:
-                    self._pos[ax.id] = ax.clamp(real)
-                    self._est[ax.id] = False
+            self._job = job
+            return self._job_view()
 
     def close(self):
-        self._stop_poll.set()
-        self._abort.set()
+        pass
+
+    # ── 內部 ────────────────────────────────────────
+    def _job_view(self):
+        if not self._job:
+            return None
+        job = dict(self._job)
+        job["steps"] = [dict(s) for s in self._job["steps"]]
+        return job
+
+    def _finish(self, job, state, error=None):
+        with self._lock:
+            job["state"] = state
+            job["error"] = error
+            job["finished"] = time.time()
 
 
 # ══════════════════════════════════════════════════════════
@@ -443,74 +284,99 @@ class CraneBridge:
 # ══════════════════════════════════════════════════════════
 
 class MockCrane(CraneBridge):
-    """沒接硬體時用的後端。
+    """沒接硬體時用。一根一根照標稱速度「走」過去,位置一律標成推估。
 
-    跟真機的差別**只有 _send_move 一個方法** —— 它不送 HTTP,只是睡掉
-    機構該花的時間。位置怎麼變、進度怎麼算、中止怎麼處理,全部走基底類別
-    那一份。所以等真機接上來,即時模式的行為不會忽然變成另一個樣子。
-
-    _query 刻意回 None(= 讀不到真實位置)。這樣開發時看到的就是真機
-    「移動中讀不到」的那個狀態,estimated 的標記會一直亮著 —— 如果哪天
-    前端把 estimated 當成不存在,在 mock 就會先被抓到,而不是上線才發現。
+    走的過程中位置照起點 → 終點線性內插,所以 /api/room/current 與
+    擺位協調看到的行為(要等、會動、到了才算)跟真機一樣。
     """
 
-    #: 模擬時把時間壓縮幾倍。1 = 照標稱速度(看起來最像真的)
+    #: 模擬時把時間壓縮幾倍。1 = 照標稱速度
     time_scale = 1.0
+
+    def __init__(self):
+        super().__init__()
+        self._closing = threading.Event()
 
     @property
     def kind(self) -> str:
         return "mock"
 
-    def _send_move(self, axis: Axis, target: float):
-        with self._lock:
-            start = self._pos.get(axis.id, axis.lo)
-        time.sleep(axis.travel_seconds(start, target) / max(self.time_scale, 0.01))
+    def _start(self, job):
+        threading.Thread(target=self._run, args=(job,), daemon=True,
+                         name="crane-mock").start()
 
-    def device_status(self) -> dict:
-        return {pi: {"status": "online", "note": "simulated"} for pi in DEVICES}
+    def _run(self, job):
+        for i, step in enumerate(job["steps"]):
+            if self._closing.is_set():
+                for s in job["steps"][i:]:
+                    s["state"] = "skipped"
+                self._finish(job, "aborted")
+                return
+            with self._lock:
+                job["index"], step["state"] = i, "moving"
+            total = max(step["seconds"] / max(self.time_scale, 0.01), 0.001)
+            t0 = time.time()
+            while True:
+                frac = min(1.0, (time.time() - t0) / total)
+                with self._lock:
+                    self._pos[step["axis"]] = step["from"] + (step["to"] - step["from"]) * frac
+                if frac >= 1.0 or self._closing.is_set():
+                    break
+                time.sleep(0.08)
+            with self._lock:
+                step["state"] = "done"
+                job["index"] = i + 1
+        self._finish(job, "done")
+
+    def close(self):
+        self._closing.set()
 
 
 # ══════════════════════════════════════════════════════════
-#  後端 B:真的打天車控制中心
+#  後端 B:天車控制中心(MCC)
 # ══════════════════════════════════════════════════════════
 
 class HttpCrane(CraneBridge):
-    """透過天車控制中心(預設 http://127.0.0.1:5001)驅動實機。
+    """把整個擺位交給天車控制中心,等它回報完成。約定見 docs/MCC_MOTION_API.md。
 
-    只用控制中心的兩支 API,不直接碰 Pi:
-        POST /api/pi/<id>/command   送指令
-        GET  /api/pis               所有裝置的三態狀態
+        POST /api/motion/jobs        {label, targets}  → job_id
+        GET  /api/motion/jobs/<id>   → state / error / positions
 
-    刻意不繞過控制中心自己連 Pi —— 那邊已經處理好並行檢測、timeout 緩衝、
-    三態判定(綠燈的門檻是 Arduino 真的回話)。重寫一份只會多一個要維護的
-    真相來源。
+    哪根軸先動、哪些 Pi 同時動、怎麼防撞、逾時與 409 都由 MCC 處理 ——
+    那是機構的知識,MCC 本來就管著裝置清單與指令鎖。
+
+    **不主動查位置**:韌體的 RP / TP 查詢會順便讓轉盤歸位。位置以 MCC 在作業
+    結束時回報的 positions 為準;沒回報就當作到了目標(標成推估)。
     """
 
-    def __init__(self, base_url: str, timeout_move: int = 90):
-        self.base = base_url.rstrip("/")
-        self.timeout_move = int(timeout_move)
-        self._dev = {}
-        self._dev_at = 0.0
+    #: 作業進行中,多久問一次 MCC
+    poll_seconds = 1.0
+
+    def __init__(self, base_url: str, token: str = ""):
         super().__init__()
+        self.base = base_url.rstrip("/")
+        self.token = (token or "").strip()
+        self._remote_id = None
+        self._polled_at = 0.0
 
     @property
     def kind(self) -> str:
         return "http"
 
-    # ── 低階:HTTP ──────────────────────────────────
+    # ── HTTP ────────────────────────────────────────
     #
     # 用 stdlib 的 urllib 而不是 requests:整個專案只有這裡要發 HTTP,
     # 為兩支呼叫多釘一個套件不值得(理由同 acqua/env.py 不用 python-dotenv)。
-    @staticmethod
-    def _http(url: str, timeout: float, payload=None):
-        """回 (status_code, 解析好的 JSON)。4xx/5xx 不丟例外 —— 控制中心會在
-        錯誤回應的 body 裡講原因(SERIAL_DISCONNECTED 之類),那比狀態碼
-        有用得多,不能因為 HTTPError 就把它丟掉。"""
-        req = Request(url, method="GET" if payload is None else "POST")
+    def _call(self, method: str, path: str, payload=None, timeout: float = 10):
+        """回 (status_code, 解析好的 JSON)。4xx/5xx 不丟例外 —— MCC 會在
+        錯誤回應的 body 裡講原因,那比狀態碼有用得多。連不上才丟例外。"""
+        req = Request(self.base + path, method=method)
         data = None
         if payload is not None:
             data = json.dumps(payload).encode("utf-8")
             req.add_header("Content-Type", "application/json")
+        if self.token:
+            req.add_header("Authorization", "Bearer " + self.token)
         try:
             with urlopen(req, data=data, timeout=timeout) as r:
                 return r.status, json.loads((r.read() or b"{}").decode("utf-8"))
@@ -525,98 +391,81 @@ class HttpCrane(CraneBridge):
         except socket.timeout as exc:
             raise RuntimeError("Controller timed out") from exc
 
-    def _command(self, pi: str, command: str, timeout: int):
-        code, body = self._http(
-            "%s/api/pi/%s/command" % (self.base, pi),
-            # +8 秒緩衝:讓控制中心先自己判定逾時、回傳看得懂的原因,
-            # 而不是我們這邊先斷線,把有原因的錯誤變成連線失敗。
-            timeout + 8,
-            {"command": command, "timeout": timeout})
-        if code >= 400 or body.get("status") != "success":
-            raise RuntimeError(body.get("error") or ("HTTP %d" % code))
-        return body.get("pi_response") or {}
+    # ── 送出 / 追蹤 ─────────────────────────────────
+    def _start(self, job):
+        moves = [(s["axis"], s["to"]) for s in job["steps"]]
+        code, body = self._call("POST", "/api/motion/jobs",
+                                {"label": job["label"],
+                                 "targets": targets_by_device(moves)})
+        job_id = (body or {}).get("job_id")
+        if code >= 400 or not job_id:
+            raise RuntimeError("Controller refused the move (HTTP %d): %s"
+                               % (code, (body or {}).get("error") or "no job_id"))
+        with self._lock:
+            self._remote_id = str(job_id)
+            self._polled_at = 0.0
+        job["remote_id"] = str(job_id)
 
-    def _send_move(self, axis: Axis, target: float):
-        resp = self._command(axis.pi, axis.cmd_move(target), self.timeout_move)
-        lines = resp.get("arduino_response") or []
-        if resp.get("arduino_result") == "ERR":
-            raise RuntimeError("Firmware rejected " + axis.cmd_move(target))
-        # 超出行程時韌體仍以 DONE 收尾,只是中間多一行 —— 不掃就會以為動了。
-        for ln in lines:
-            if "Exceeded Max travel" in str(ln):
-                raise RuntimeError("Out of travel (the axis may not be homed)")
-
-    def _query(self, axis: Axis):
-        """讀真實位置。讀不到回 None,讓基底類別退回估計值。
-
-        ⚠️ 位置查詢的助憶碼還沒對過(見 Axis.cmd_query)。對不上時韌體回
-           ERR,這裡就回 None —— 系統照樣能用,只是位置一直標成「估計」。
-           這是刻意的:寧願顯示「這個數字是推算的」,也不要編一個看起來
-           很確定的位置出來。
-        """
+    def _refresh(self):
+        with self._lock:
+            job, rid = self._job, self._remote_id
+            if not job or job["state"] != "running" or not rid:
+                return
+            if time.time() - self._polled_at < self.poll_seconds:
+                return
+            self._polled_at = time.time()
         try:
-            resp = self._command(axis.pi, axis.cmd_query(), 10)
-        except Exception:                                   # noqa: BLE001
-            return None
-        if resp.get("arduino_result") != "DONE":
-            return None
-        return self._parse_position(axis, resp.get("arduino_response") or [])
+            code, body = self._call("GET", "/api/motion/jobs/" + rid)
+        except RuntimeError as exc:
+            # 暫時連不上不算失敗 —— 機構可能還在走。擺位協調有自己的總逾時。
+            with self._lock:
+                job["poll_error"] = str(exc)[:120]
+            return
+        if code == 404:
+            self._finish(job, "error", "The controller no longer knows job %s" % rid)
+            return
+        remote = (body or {}).get("job") or {}
+        state = str(remote.get("state") or "")
+        with self._lock:
+            job.pop("poll_error", None)
+            job["remote_state"] = state
+        if state == "done":
+            self._apply_positions(job, remote.get("positions"))
+            self._finish(job, "done")
+        elif state in ("error", "aborted"):
+            self._finish(job, state, str(remote.get("error") or state)[:300])
 
-    @staticmethod
-    def _parse_position(axis: Axis, lines):
-        """從 Arduino 回的訊息行裡撈出一個數字。
-
-        韌體回什麼格式還沒定,所以取「最後一行裡的最後一個數字」——
-        不管它是 "pos: 412" 還是 "412" 都撈得到。格式定了就把這裡收緊,
-        現在寬鬆是刻意的:寧願讀到就用,讀不到就老實標成估計值。
-        """
-        for ln in reversed([str(x) for x in lines]):
-            nums = re.findall(r"-?\d+(?:\.\d+)?", ln)
-            if nums:
-                return axis.to_scene(float(nums[-1]))
-        return None
-
-    # ── 裝置狀態 ────────────────────────────────────
-    def device_status(self) -> dict:
-        """控制中心的三態狀態。快取 4 秒 —— 它那支 API 本身就會並行檢測
-        所有裝置,每次前端刷新都打一次太重。"""
-        now = time.time()
-        if now - self._dev_at < 4.0 and self._dev:
-            return self._dev
-        out = {pi: {"status": "offline"} for pi in DEVICES}
-        try:
-            _, body = self._http(self.base + "/api/pis", 8)
-            pis = (body or {}).get("pis") or {}
-            for pi in DEVICES:
-                info = pis.get(pi)
-                out[pi] = ({"status": info.get("status", "offline"),
-                            "name": info.get("name", "")} if info
-                           else {"status": "missing",
-                                 "note": "Not registered on the controller"})
-        except Exception as exc:                            # noqa: BLE001
-            for pi in DEVICES:
-                out[pi] = {"status": "offline", "note": str(exc)[:120]}
-        self._dev, self._dev_at = out, now
-        return out
+    def _apply_positions(self, job, reported):
+        """作業完成:有回報就用回報的位置,沒有就相信目標(標成推估)。"""
+        reported = reported if isinstance(reported, dict) else {}
+        with self._lock:
+            for step in job["steps"]:
+                ax = AXES[step["axis"]]
+                value = (reported.get(ax.pi) or {}).get(ax.ch + "M")
+                if isinstance(value, (int, float)):
+                    self._pos[ax.id] = ax.clamp(ax.to_scene(value))
+                    self._est[ax.id] = False
+                else:
+                    self._pos[ax.id] = step["to"]
+                    self._est[ax.id] = True
+                step["state"] = "done"
+            job["index"] = len(job["steps"])
 
 
 # ══════════════════════════════════════════════════════════
 #  選後端
 # ══════════════════════════════════════════════════════════
 
-def make_crane(base_url: str = None) -> CraneBridge:
-    """位址有設就打真機,沒設就用模擬。
+def make_crane(base_url: str = "", token: str = "") -> CraneBridge:
+    """位址有設就交給 MCC,沒設就用模擬。
 
-    位址從 config 的 setup_controller.url 來(由 .env 的
-    ACQUA_SETUP_CONTROLLER 覆寫)—— 沿用專案裡已經有的那個鉤子,
-    那一欄本來就是為「移動治具的控制器」留的,現在它有實作了。
+    位址從 config 的 setup_controller.url 來(由 .env 的 ACQUA_SETUP_CONTROLLER
+    覆寫),token 從 setup_controller.token(ACQUA_SETUP_CONTROLLER_TOKEN)。
 
     預設是模擬,而不是「試著連、連不到再退回」—— 連不到的時候要吵,
-    不要安靜地變成假的。要接真機就明確設環境變數。
+    不要安靜地變成假的。要接真機就明確設定位址。
     """
-    if base_url is None:
-        base_url = os.environ.get("ACQUA_SETUP_CONTROLLER", "")
     url = (base_url or "").strip()
     if not url:
         return MockCrane()
-    return HttpCrane(url)
+    return HttpCrane(url, token)

@@ -169,9 +169,6 @@ class MockBackend(AcquaBackend):
 
     def run_smds(self, row_ids, comment=None):
         """逐項執行(模擬)。中止/暫停的語意跟真機一致。"""
-        return self._run_titles(row_ids)
-
-    def _run_titles(self, row_ids):
         by_id = {s["row_id"]: s for s in self.state.smds}
         targets = [by_id[r] for r in row_ids if r in by_id]
         total = len(targets)
@@ -185,7 +182,8 @@ class MockBackend(AcquaBackend):
 
         rl = self.state.runlog
         if rl:
-            rl.start(mode="batch", database=self.state.database,
+            rl.start(mode="selected", comment=comment or "",
+                     database=self.state.database,
                      project_group=self.state.open_group,
                      project=self.state.open_project,
                      measurement_object=self.state.measurement_object,
@@ -351,20 +349,6 @@ class MockBackend(AcquaBackend):
         })
         self.state.log(f"【模擬模式】預測 {len(kept)}/{r['total_smds']} 個測項會執行")
         return r
-
-    def run_measurements(self, variables=None):
-        """模擬「設變數 → 一次跑完」。ACQUA 會自己略過不符條件的項目。"""
-        if variables:
-            self.set_variables(variables)
-        kept, skipped = self._conditional_filter()
-        self.state.log(f"=== 開始:整個專案(變數條件篩選後 {len(kept)}/"
-                       f"{len(self.state.smds)} 項)===")
-        for s, reason in skipped:
-            self.state.log(f"  略過 {s['title']} —— {reason}", "warn")
-        if not kept:
-            self.state.log("條件篩選後沒有任何測項可跑", "warn")
-            return
-        self._run_titles([s["row_id"] for s in kept])
 
     # ── 麥克風供電(模擬)──────────────────────────
     # 模擬模式也要能切,不然沒接硬體時前端那個下拉選單無從測試。

@@ -3,7 +3,8 @@
  *
  * 只存數字,不存 3D 的任何東西:一個擺位就是 {軸代號: 值},19 個浮點數。
  * 這組代號跟 acqua/crane.py 的 AXES、後端存檔的鍵完全同名 —— 所以
- * **存好的擺位可以原封不動送去驅動機構,中間不需要任何對應表**。
+ * 測試執行時,**存好的擺位可以原封不動送去驅動機構,中間不需要任何對應表**
+ * (由 acqua/setupcoord.py 依 Setup 標籤自動套用,不是從這一頁)。
  * 這是整個設計裡最關鍵的一個決定;代號改名就會讓舊檔對不上。
  */
 import { formBox, toast, jsonFetch } from './ui.js';
@@ -33,7 +34,7 @@ export async function saveCurrent(axes, { existing = null } = {}) {
   const v = await formBox({
     title: existing ? 'Update this position' : 'Save current position',
     note: `Stores the position of <b>${n}</b> axes.`
-      + (existing ? '' : ' You can load it later, or apply it to the hardware.'),
+      + (existing ? '' : ' Tag test items with this name (<code>Setup</code>) to use it in a run.'),
     fields: [
       { key: 'name', label: 'Name', required: true, value: existing?.name || '',
         placeholder: 'e.g. near field 0.5 m - HATS pitched 17 deg' },
@@ -46,7 +47,7 @@ export async function saveCurrent(axes, { existing = null } = {}) {
   if (!v) return null;
 
   const d = await send(existing ? `${API}/${encodeURIComponent(existing.id)}` : API,
-    'POST', { name: v.name, description: v.description, axes, source: 'setup' });
+    'POST', { name: v.name, description: v.description, axes });
   if (!d.ok) { toast(d.error || 'Could not save', 'bad'); return null; }
   toast(`Saved "${d.setup.name}"`);
   return d.setup;

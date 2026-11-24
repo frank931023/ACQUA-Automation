@@ -60,7 +60,6 @@ class AcquaBackend(ABC):
     def list_smds(self, search: str = "") -> list:
         """回傳 [{"row_id": int, "title": str}]。search 為空表示「全部」。"""
 
-
     @abstractmethod
     def create_report(self, output_path: str, selection_type: int) -> None:
         ...
@@ -87,7 +86,7 @@ class AcquaBackend(ABC):
 
     @abstractmethod
     def run_smds(self, row_ids: list) -> None:
-        """⭐ 逐項執行指定的測項(StartSingleMeasurement)。
+        """⭐ 唯一的執行入口:逐項執行指定的測項(StartSingleMeasurement)。
 
         實作必須:
           - 每一輪檢查 self.state.cancel_requested(中止)與 self.state.paused(暫停)
@@ -95,23 +94,6 @@ class AcquaBackend(ABC):
           - 每筆結果呼叫 self.state.add_result(...)
 
         中止在這裡是**真的中止** —— 排隊的是 Python 迴圈,不送下一筆就停了。
-        """
-
-    @abstractmethod
-    def run_measurements(self, variables: dict = None) -> None:
-        """⭐ 唯一的執行入口:整批跑(StartMeasurements)。
-
-        搭配 set_variables() 使用 —— ACQUA 會依 ConditionalExecution
-        自動略過不符條件的 SMD,所以實際跑的是變數篩選後的子集。
-
-        實作必須:
-          - 阻塞工作執行緒直到跑完或被暫停
-          - 等待時持續呼叫 self.pump()
-          - 每筆結果呼叫 self.state.add_result(...)
-
-        ⚠️ 不再有「逐項執行」。實測 pywin32 的 ByRef 回傳送不到 ACQUA,
-           所以 UserReaction 無法控制流程;範圍改由變數條件決定,
-           流程停走改由 acqua/winwatch.py 控制。
         """
 
     def answer_blocking_window(self, hwnd, action) -> bool:

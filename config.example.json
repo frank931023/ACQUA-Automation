@@ -1,51 +1,105 @@
 {
-  "_comment": "複製成 config.json 後修改。config.json 不要提交進版控(含密碼)。",
+  "_comment": "行為設定(每台機器都一樣)。複製成 config.json 即可。這一台機器的事實(資料庫位址、帳密、port、機構控制器位址)放 .env,會蓋過這裡的同名欄位,見 acqua/env.py。",
 
-  "backend": "mock",
-  "_backend_options": "mock = 模擬(不需要 ACQUA);com = 真實連接 ACQUA",
+  "backend": "com",
+  "_backend_note": "com = 真的接 ACQUA ・ mock = 不接,只看流程。通常由 .env 的 ACQUA_BACKEND 決定。",
 
   "database": {
-    "server": ".\\ACQUADBSERVER",
-    "_server_note": "本機實測:SQL Server 執行個體名稱為 ACQUADBSERVER,已在運行中",
+    "server": "",
     "name": "",
-    "_name_note": "⚠️ 目前這台機器上還沒有任何 ACQUA 資料庫。要先用 DBAdmin.exe 建立。",
     "use_windows_auth": true,
     "username": "",
-    "password": ""
+    "password": "",
+    "_note": "通常全部留空,由 .env 的 ACQUA_DB_* 提供。啟動後也可以在網頁左欄「掃描」找伺服器。"
   },
 
   "target": {
-    "project_group": "",
-    "project": "",
-    "measurement_object": "DUT_001",
-    "create_mo_if_missing": true
+    "measurement_object": "",
+    "_note": "網頁沒有選 DUT 時才用這個預設值。"
   },
 
   "run": {
     "use_mmd_settings": true,
-    "_use_mmd_settings_note": "true = 使用 SMD/MMD 內建設定;false = 需自行指定 MFE 設定",
-    "max_retries": 1,
-    "_max_retries_note": "單一測項失敗時自動重試次數(0 = 不重試)",
-    "stop_on_first_failure": false,
-    "single_measurement_timeout_sec": 1800
+    "result_comment": "auto",
+    "item_timeout_sec": 900,
+    "_note": "use_mmd_settings:true = 用 SMD/MMD 內建的 MFE 設定 ・ result_comment:網頁沒給批次名稱時的預設 ・ item_timeout_sec:單筆量測最長等多久"
+  },
+
+  "setup_controller": {
+    "move_timeout_sec": 900,
+    "_note": "換擺位時最長等機構多久。MCC 的位址與 token 放 .env 的 ACQUA_SETUP_CONTROLLER / ACQUA_SETUP_CONTROLLER_TOKEN(位址留空 = 模擬)。"
   },
 
   "report": {
-    "enabled": false,
     "output_dir": "reports",
     "selection_type": 3,
-    "_selection_type_note": "0=FirstPosition 3=LastPosition 4=AllPositions 5=ForIndex(注意數值不連續)"
+    "_note": "selection_type:0=FirstPosition 3=LastPosition 4=AllPositions 5=ForIndex(數值不連續)"
   },
 
   "metadata": {
-    "_note": "這些會透過 IAcquaBaseObject.UpdateProperty 寫進量測物件,跟量測資料一起存進資料庫",
     "Operator": "",
     "Fixture": "",
-    "TestPlan": ""
+    "TestPlan": "",
+    "_note": "開跑時透過 UpdateProperty 寫進量測物件,跟量測資料一起存進 ACQUA。"
   },
 
   "web": {
     "host": "127.0.0.1",
     "port": 5000
+  },
+
+  "blocking_windows": [
+    {
+      "class": "TfrmDocViewer",
+      "title": "*",
+      "action": "close",
+      "note": "Info 說明文件(SMDType 34)—— 沒有量測內容,自動關掉即可"
+    },
+    {
+      "class": "#32770",
+      "title": "*",
+      "action": "ask",
+      "note": "Windows 標準對話框(例如 'Missing Associations')。不處理的話 ACQUA 會停住、連事件都不發"
+    },
+    {
+      "class": "TkTopLevel",
+      "title": "*",
+      "action": "ask",
+      "note": "ACQUA 的 Tcl/Tk 精靈:DUT & Measurement Wizard / BGN Wizard / Hardware options。關掉可能等於取消,一律問人"
+    }
+  ],
+  "_blocking_windows_note": "量測期間 ACQUA 開的視窗怎麼處理。action:close = 自動關 ・ ask = 推到網頁問人 ・ click = 按指定按鈕(要加 button 欄位)・ ignore = 不管。class 與 title 都支援萬用字元。遇到新的對話框在這裡加一行,不用改程式。",
+
+  "manual_items": {
+    "titles": [
+      "DUT & Measurement Wizard",
+      "BGN Wizard",
+      "Hardware options",
+      "Select automatic/manual volume control",
+      "Set nominal DUT playback volume",
+      "Load equipment delay values"
+    ],
+    "title_patterns": [
+      "*Wizard*"
+    ],
+    "script_smd_types": [
+      43
+    ],
+    "_note": "manual = 已確認會開視窗等人,自動勾選會排除。script_smd_types = 腳本型別,可能開視窗但不排除,只提醒。"
+  },
+
+  "wizard_scopes": {
+    "DUT & Measurement Wizard": [
+      "DUT_"
+    ],
+    "BGN Wizard": [
+      "BGN"
+    ],
+    "Hardware options": [
+      "HRT_",
+      "HRR_",
+      "HHP_"
+    ],
+    "_note": "點測項列上的「⋯」時,只顯示這個精靈管的變數。這個對應是從變數命名推的,ACQUA 沒有明說 —— 所以畫面上留了「顯示全部」。鍵是測項標題,值是變數名稱前綴。"
   }
 }

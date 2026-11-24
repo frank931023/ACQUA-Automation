@@ -41,11 +41,6 @@
   }
   a.sr .go { flex:none; color:var(--brand); font-weight:600; font-size:12px; }
 
-  .tag { font-size:10px; padding:2px 7px; border-radius:20px; white-space:nowrap;
-         border:1px solid var(--line); color:var(--muted); flex:none; }
-  .tag.live { color:var(--brand); border-color:var(--brand-line);
-              background:var(--brand-soft); }
-
   /* 沒有任何擺位時要說下一步做什麼,不是只寫「沒資料」 */
   .zero { text-align:center; padding:50px 20px; }
   .zero .ic { font-size:32px; color:var(--line-2); margin-bottom:12px; }
@@ -142,9 +137,6 @@ function render() {
         <small class="${s.description ? '' : 'none'}">${
           esc(s.description || 'No note')}</small>
       </div>
-      ${s.source === 'live'
-        ? '<span class="tag live" title="Captured from the real hardware">live</span>'
-        : '<span class="tag" title="Drawn in the 3D page">drawn</span>'}
       <div class="meta">
         <span>${s.count} axes</span>
         <span>${when(s.updated || s.created)}</span>

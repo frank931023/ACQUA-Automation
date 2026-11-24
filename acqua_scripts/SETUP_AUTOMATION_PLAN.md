@@ -1254,9 +1254,9 @@ import requests, socket, webbrowser, tkinter     # 都可用
 
 ```
 已有   GET  /api/room/setups      擺位清單
-已有   POST /api/room/apply       套用擺位到實機
+已有   POST /api/room/apply       依名稱套用擺位到實機 {setup_name}(掛鉤用)
 已有   GET  /api/room/axes        軸定義
-要加   GET  /api/room/current     現在在哪個擺位
+已有   GET  /api/room/current     現在在哪個擺位
 ```
 
 ---
@@ -1291,4 +1291,7 @@ import requests, socket, webbrowser, tkinter     # 都可用
 | 2026-11-16 | 用真的 `Setup` 標籤跑完一輪;抓到「等移動看 job 有沒有值」的 bug,改用 `busy()`。掛鉤 `HOOK_setup_bridge.py` 寫好,外部半邊 15 項全過 |
 | 2026-11-17 | **資料夾繼承**(ACQUA 不能對資料夾加標籤,改看同資料夾其他測項);開跑前標籤檢查 `/acqua/api/setup-check`;拿掉網頁上每個計畫配擺位 |
 | 2026-11-18 | 整理:擺位協調從 `app.py` 抽成 `acqua/setupcoord.py`;test_setupflow 改測真的程式碼(抓到擺位 id 撞號 bug);setup_inventory 改用共用規則並支援同名專案;測試與工具不再綁特定擺位名稱或資料庫 |
+| 2026-11-24 | **拿掉 3D 頁的即時模式**:本專案只設計擺位,看實機位置、手動推機構屬於 MCC。刪除 `live.js`、`/api/room/live`、`/api/room/move`、`/api/room/stop`、擺位頁的「套用到實機」;`/api/room/apply` 只收 `setup_name`(掛鉤用);擺位不再有 `source` 欄位。修好 3D 頁「three.js 載入失敗」提示框的語法錯誤(之前根本不會顯示) |
+| 2026-11-24 | 3D 尺寸搬到 `soundproofroom/src/spec.json`(純資料,出處寫在每區 `_src`);修好 Vite build(頂層 await 需要 es2022)。全專案整理:刪掉沒人呼叫的整批執行 `run_measurements` 與 `run_mode`;`crane.py` 拿掉沒人讀的裝置狀態(每次 snapshot 都多打一次 MCC);`config.example.json` 補齊 `manual_items` 等行為設定(新機器照抄原本會漏掉人工測項判斷),兩份設定檔拿掉 6 個沒人讀的欄位;設定讀取統一走 `acqua/env.load_config`(`survey.py` 原本沒套 `.env`);刪掉 index.html 約 30 行沒用到的 CSS |
+| 2026-11-24 | **換擺位整組交給 MCC**:`HttpCrane` 改成送 `POST /api/motion/jobs {label: 擺位名稱, targets: {pi: {SZM: 公釐…}}}`、每秒查 `GET /api/motion/jobs/<id>`;順序、並行、防撞由 MCC 決定。不再主動查位置(RP/TP 會讓轉盤歸位)、逐軸逾時交給 MCC、支援 `ACQUA_SETUP_CONTROLLER_TOKEN`。規格 `docs/MCC_MOTION_API.md`(MCC 還沒實作);假 MCC `tools/fake_mcc.py`;`test_mcc_jobs` 29 項全過,`test_hook_bridge` 經假 MCC 全過 |
 | | |

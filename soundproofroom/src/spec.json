@@ -1,0 +1,142 @@
+{
+  "_readme": [
+    "聲學測試室規格數字。要改尺寸只改這個檔案,存檔後重新整理 3D 頁即可。",
+    "單位一律公尺,角度一律度。原點在房間正中央地板,Y 朝上:X = 寬、Y = 高、Z = 深。",
+    "喇叭陣列在 -Z 端,大螢幕在 +Z 端。",
+    "每一區的 _src 是數字的出處:規格 = 原廠規格書或測試規範;圖面 = 現場圖面標註;",
+    "推估 = 圖面沒標、依比例抓的,要對照現場調;構造 = 模型結構件,照片目測。",
+    "以 _ 開頭的欄位只是說明,程式不讀。",
+    "⚠️ travel / lift / headAngle 是 3D 拉桿的範圍。後端真正的行程上限在 acqua/crane.py 的 AXES,兩邊不一致時 3D 頁會跳紅字。"
+  ],
+  "_equipment": "人工嘴 GRAS 44AA ×1 ・ HATS B&K 4128 ×1 ・ 喇叭 KEF LS50 Meta ・ 麥克風 GRAS 40AC ×1、40AF ×1",
+
+  "room": {
+    "width": 3.41,
+    "depth": 5.20,
+    "height": 2.35,
+    "_src": "全部:規格"
+  },
+
+  "speakerRail": {
+    "length": 2.00,
+    "z": -2.30,
+    "y": 0.04,
+    "barSize": 0.05,
+    "gauge": 0.40,
+    "travel": { "min": -0.75, "max": 0.75, "default": 0.0 },
+    "_src": "落地橫移軌(喇叭陣列不是吊在天花板)。length:圖面 ・ z:推估,靠 -Z 牆離牆 0.30 ・ y 軌面離地、barSize、gauge 兩軌中心距:構造 ・ travel = (軌長 2.00 − 台車寬 0.50) / 2"
+  },
+
+  "speakerStand": {
+    "base": { "width": 0.50, "height": 0.06, "depth": 0.46 },
+    "post": { "size": 0.09 },
+    "lift": { "min": 0.80, "max": 1.80, "default": 1.30 },
+    "_src": "base 台車底盤、post 立柱方管邊長:構造 ・ lift 陣列中心離地(立柱伸縮):推估"
+  },
+
+  "speakerArray": {
+    "cols": 2,
+    "rows": 4,
+    "spacingX": 0.46,
+    "spacingY": 0.24,
+    "speaker": { "width": 0.30, "height": 0.13, "depth": 0.16, "coneRatio": 0.62 },
+    "frame": { "marginX": 0.06, "marginY": 0.08, "thickness": 0.04, "backOffset": 0.03 },
+    "_src": "cols / rows:圖面 ・ spacingX 兩欄中心距、spacingY 上下列中心距:推估 ・ speaker 單體是左右長的長條(width 決定長短):推估;coneRatio = 前面板單體佔外殼比例 ・ frame 背板 = 單體外框 + 留邊:構造"
+  },
+
+  "screen": {
+    "width": 1.22,
+    "height": 0.71,
+    "thickness": 0.055,
+    "bezel": 0.022,
+    "lift": { "min": 0.70, "max": 1.90, "default": 1.25 },
+    "travelZ": { "min": 1.20, "max": 2.35, "default": 2.05 },
+    "base": { "width": 0.62, "height": 0.04, "depth": 0.42 },
+    "foot": { "width": 0.07, "height": 0.05, "depth": 0.40, "spacing": 0.24 },
+    "column": { "size": 0.10 },
+    "mount": { "size": 0.22, "thickness": 0.05, "offset": 0.024 },
+    "_src": "尺寸約 55 吋、lift 螢幕中心離地、travelZ 前後行程:推估 ・ base / foot(spacing = 離中心)/ column / mount 背面掛座:構造"
+  },
+
+  "floorRailZ": {
+    "length": 4.61,
+    "gauge": 0.54,
+    "barSize": 0.05,
+    "y": 0.05,
+    "ties": 9,
+    "travel": { "min": -1.85, "max": 1.85, "default": -0.30 },
+    "_src": "HATS 下層縱向軌。length、gauge 兩軌中心距:圖面 ・ barSize、y 軌面離地、ties 枕木數:構造"
+  },
+
+  "floorRailX": {
+    "length": 1.60,
+    "barSize": 0.045,
+    "y": 0.115,
+    "travel": { "min": -0.55, "max": 0.55, "default": 0.0 },
+    "_src": "HATS 上層橫向軌(跟著下層台車跑)。length:推估,⚠️ 圖面沒標 ・ 其餘:構造"
+  },
+
+  "hats": {
+    "totalHeight": 0.695,
+    "torso": { "width": 0.410, "height": 0.460, "depth": 0.183, "gap": 0.025 },
+    "neck": { "diameter": 0.112, "length": 0.07 },
+    "head": { "radius": 0.098, "scaleY": 1.14, "scaleZ": 1.08 },
+    "ear": { "radius": 0.024, "thickness": 0.018 },
+    "mouth": { "radius": 0.032, "depth": 0.05 },
+    "mrpMarker": { "radius": 0.012 },
+    "headAngle": { "min": -15, "max": 35, "default": 0, "presets": [0, 17] },
+    "stand": {
+      "test": 1.20, "min": 0.75, "max": 1.50,
+      "columnRadius": 0.055, "baseSize": 0.42, "baseThickness": 0.03
+    },
+    "mrpOffset": 0.225,
+    "holder": { "width": 0.20, "height": 0.05, "depth": 0.16 },
+    "bogie": { "overhang": 0.14, "height": 0.06, "depth": 0.34 },
+    "platform": { "size": 0.80, "height": 0.10, "lift": 0.03 },
+    "turntable": { "radius": 0.30, "height": 0.05, "defaultAngleDeg": 0 },
+    "_src": "B&K 4128 + HMS II.3 立架。totalHeight、torso 寬高深、neck.diameter:規格(torso.gap、neck.length:構造)・ head.radius 由總高反推:推估;scaleY / scaleZ 是外型比例 ・ ear 耳部麥克風:構造 ・ mouth GRAS 44AA:推估 ・ mrpMarker 只是 MRP 紅點 ・ headAngle 規格標「垂直或 17°」,這裡做成連續可調 ・ stand test/min/max:規格,其餘:構造 ・ mrpOffset 托座到 MRP 22.5 cm:規格 ・ holder 托座、bogie 下層台車(overhang = 比軌距寬出的部分):構造 ・ platform.size、turntable.radius:推估,其餘:構造"
+  },
+
+  "tables": {
+    "size": 0.80,
+    "thickness": 0.05,
+    "column": { "topRadius": 0.075, "bottomRadius": 0.095 },
+    "base": { "size": 0.46, "thickness": 0.035 },
+    "items": [
+      {
+        "key": "tableFront", "label": "Front DUT lift",
+        "lift": { "test": 0.90, "min": 0.40, "max": 2.30 },
+        "travelZ": { "min": 0.55, "max": 2.00, "default": 1.35 }
+      },
+      {
+        "key": "tableBack", "label": "Rear Dixie lift",
+        "lift": { "test": 1.20, "min": 0.40, "max": 2.30 },
+        "travelZ": { "min": -2.00, "max": -0.55, "default": -0.95 }
+      }
+    ],
+    "_src": "size 桌面 0.80 × 0.80:規格 ・ thickness、column 升降柱、base 底盤:構造 ・ items[].lift 測試高度與最高 2.3:規格 ・ items[].travelZ:推估 ・ ⚠️ items[].key 是軸代號的一部分(tableFront.z …),改了會讓存好的擺位對不上"
+  },
+
+  "micRig": {
+    "bridge": { "length": 2.60, "barSize": 0.05, "y": 2.28 },
+    "height": { "min": 0.70, "max": 1.50, "presets": [0.95, 1.25] },
+    "trolley": { "width": 0.16, "height": 0.08, "depth": 0.13, "drop": 0.055 },
+    "rod": { "radius": 0.014, "topOffset": 0.095 },
+    "mic": { "bodyRadius": 0.0135, "bodyLength": 0.10, "preampRadius": 0.0125, "preampLength": 0.12 },
+    "items": [
+      {
+        "key": "micRig1", "label": "Mic rig 1",
+        "travelX": { "min": -1.10, "max": 1.10, "default": -0.35 },
+        "travelZ": { "min": -1.30, "max": 1.70, "default": 0.55 },
+        "heightDefault": 0.95
+      },
+      {
+        "key": "micRig2", "label": "Mic rig 2",
+        "travelX": { "min": -1.10, "max": 1.10, "default": 0.40 },
+        "travelZ": { "min": -1.30, "max": 1.70, "default": -0.35 },
+        "heightDefault": 1.25
+      }
+    ],
+    "_src": "bridge 橫樑長與高度:推估;barSize:構造 ・ height 膜片離地,測試 0.95 / 1.25、範圍 0.70 ~ 1.50:規格 ・ trolley 吊車(drop = 掛在橫樑下方多少)、rod 伸縮吊桿:構造 ・ mic GRAS 40AC / 40AF 1/2 吋:bodyRadius 規格,其餘推估 ・ items[].travelX / travelZ:推估;heightDefault:規格 ・ ⚠️ items[].key 是軸代號的一部分,不要改"
+  }
+}

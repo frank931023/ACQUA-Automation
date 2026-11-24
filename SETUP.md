@@ -66,19 +66,22 @@ cd "ACQUA Automation"
 copy config.example.json config.json
 ```
 
-`config.json` 已在 `.gitignore` 裡(可能含資料庫密碼),**不會進版控**。
+`config.json` 已在 `.gitignore` 裡,**不會進版控**。
 
-### 要改的值
+`config.json` 是**行為設定**(哪些視窗自動關、哪些測項需人工、逾時多久),
+每台機器都一樣,複製過來通常**不用改**。這台機器專屬的東西改在 `.env`(見第 8 節):
 
-| 欄位 | 說明 |
+| `.env` | 說明 |
 |---|---|
-| `database.server` | ⚠️ **機器名會不一樣**,格式 `機器名\ACQUADBSERVER` |
-| `database.name` | ACQUA 資料庫名稱 |
-| `target.project_group` | 預設專案群組 |
-| `target.project` | 預設專案 |
-| `target.measurement_object` | 預設受測物(要是該專案裡**已經存在**的) |
-| `run.result_comment` | 沒有另外命名時的預設 run 名稱 |
-| `report.output_dir` | 報告的暫存資料夾 |
+| `ACQUA_DB_SERVER` | ⚠️ **機器名會不一樣**,格式 `機器名\ACQUADBSERVER` |
+| `ACQUA_DB_NAME` | ACQUA 資料庫名稱 |
+| `ACQUA_WEB_PORT` | 網頁 port(預設 5000) |
+| `ACQUA_SETUP_CONTROLLER` | 天車控制中心(MCC)位址,留空 = 模擬機構 |
+| `ACQUA_SETUP_CONTROLLER_TOKEN` | MCC 的 `API_TOKEN`,沒設就留空 |
+
+想改行為的話,`config.json` 裡常動的是 `target.measurement_object`(沒選 DUT 時的預設)、
+`run.result_comment`(預設批次名稱)、`report.output_dir`(報告暫存資料夾)。
+各區塊用途見 README「設定」。
 
 > `prefs.json` 會自己產生,記住每個資料庫上次用的專案與 DUT ——
 > 之後連線就會自動接回去,不用每次重點一遍。
@@ -207,7 +210,10 @@ handler」「fetch 打到不存在的路由」「新增狀態欄位忘了決定�
 擺位存在 `setups/*.json`,跟著專案資料夾走。測項要哪個擺位由 ACQUA 裡的
 `Setup` 標籤決定(見 `README.md`「擺位對不上時」)。新機器上:
 
-1. `.env` 填 `ACQUA_SETUP_CONTROLLER=http://<天車控制中心>:5001`;留空就是模擬機構
+1. `.env` 填 `ACQUA_SETUP_CONTROLLER=http://<MCC 那台的區網 IP>:5001`;留空就是模擬機構。
+   MCC 有設 `API_TOKEN` 的話,`ACQUA_SETUP_CONTROLLER_TOKEN` 填同一個值。
+   換擺位時會把「擺位名稱 + 每台 Pi 的目標」整組送過去,MCC 要先實作
+   `docs/MCC_MOTION_API.md`;在那之前可以用 `tools\fake_mcc.py` 當 MCC 測整條路
 2. 看一個專案的標籤狀況:`tools\setup_inventory.py --project "專案標題"`
 3. 要讓「直接在 ACQUA 按執行」也會移機構:把 `acqua_scripts/HOOK_setup_bridge.py`
    貼進該專案的 `before_each_measurement.py`(見 `acqua_scripts/README.md`),

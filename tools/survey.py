@@ -34,12 +34,10 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 sys.stdout.reconfigure(encoding="utf-8")
 
-import io                                                   # noqa: E402
-import json                                                 # noqa: E402
-
+from acqua.env import load_config                           # noqa: E402
 from acqua.sqlcat import raw_query, list_databases          # noqa: E402
 
-CFG = json.load(io.open(os.path.join(ROOT, "config.json"), encoding="utf-8"))
+CFG = load_config(ROOT)
 SERVER = CFG.get("database", {}).get("server", "")
 
 # 嚴重度分兩種,不要混在一起:
@@ -278,12 +276,6 @@ def survey_rules(db, prefixes):
         LEFT JOIN acqua.SMDs s ON s.idSMDItem = t.idTreeItem
         WHERE it.name='IType_SMD'""")
 
-    # Info: 類測項會開 PDF 檢視器(TfrmDocViewer),但 winwatch 的規則會
-    # 自動關掉它,不需要人 —— 所以不算「漏網的互動項」。
-    auto_closed = tuple(
-        str(r.get("title", "")).strip("*")
-        for r in (CFG.get("blocking_windows") or [])
-        if r.get("action") == "close")
     n_manual = n_script = n_auto = 0
     uncovered = set()
     SUSPECT = ("wizard", "dialog", "prompt", "please ", "manual",

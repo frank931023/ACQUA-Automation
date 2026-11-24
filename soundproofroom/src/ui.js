@@ -1,10 +1,8 @@
 /**
- * 小工具:對話框、格式化、提示條。
+ * 小工具:表單框、格式化、提示條。
  *
- * 為什麼不用 window.confirm():即時模式的確認框要講的東西比一行字多 ——
- * 哪一根軸、從哪到哪、走多遠、大概幾秒、送給韌體的是哪一條指令。
- * 這些全塞進 confirm() 的純文字裡沒人會讀;而且 confirm() 會凍住整個
- * 頁面,3D 的 render loop 也跟著停,按下去之前畫面是死的。
+ * 為什麼不用 window.prompt():存擺位要同時問名稱和說明,而且 prompt()
+ * 會凍住整個頁面,3D 的 render loop 也跟著停。
  */
 
 // ── 格式化 ──────────────────────────────────────
@@ -15,9 +13,6 @@ export const fmt = {
   deg: (v) => `${v.toFixed(1)}°`,
   /** 依單位挑一個 */
   by: (unit) => (unit === 'deg' ? fmt.deg : fmt.len),
-  /** 秒數講成人看得懂的 */
-  secs: (s) => (s < 60 ? `${Math.round(s)}s`
-    : `${Math.floor(s / 60)}m ${Math.round(s % 60)}s`),
 };
 
 export const esc = (s) => String(s ?? '').replace(/[&<>"']/g,
@@ -70,40 +65,6 @@ function teardown(ov, onKey) {
   document.removeEventListener('keydown', onKey);
   ov.remove();
   if (openOv === ov) openOv = null;
-}
-
-/**
- * 確認框。回傳 Promise<boolean>。
- *
- * @param title    標題
- * @param html     內容(已轉義的 HTML)
- * @param ok       確認鈕文字
- * @param danger   確認鈕要不要用警示色
- */
-export function confirmBox({ title, html = '', ok = 'OK', cancel = 'Cancel',
-                             danger = false } = {}) {
-  return new Promise((resolve) => {
-    const ov = shell(`
-      <h3>${esc(title)}</h3>
-      <div class="bxbody">${html}</div>
-      <div class="acts">
-        <button class="ghost" data-a="no">${esc(cancel)}</button>
-        <button class="${danger ? 'danger' : 'primary'}" data-a="yes">${esc(ok)}</button>
-      </div>`);
-
-    const done = (v) => { teardown(ov, onKey); resolve(v); };
-    const onKey = (e) => {
-      if (e.key === 'Escape') done(false);
-      // Enter 送出 —— 但這個框可能是「要不要移動機構」,所以焦點先給取消,
-      // 按 Enter 才是明確的確認動作(見下面的 focus())
-      if (e.key === 'Enter') done(true);
-    };
-    document.addEventListener('keydown', onKey);
-    ov.querySelector('[data-a="no"]').onclick = () => done(false);
-    ov.querySelector('[data-a="yes"]').onclick = () => done(true);
-    ov.onclick = (e) => { if (e.target === ov) done(false); };
-    ov.querySelector('[data-a="yes"]').focus();
-  });
 }
 
 /**

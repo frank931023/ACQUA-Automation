@@ -23,12 +23,13 @@ sequenceDiagram
         alt 已經在這個擺位(誤差 1 cm / 1° 內)
             C-->>A: 不用動
         else 要移動
-            C->>H: apply(擺位)
-            loop 每一根要動的軸(目前依序)
-                H->>M: POST /api/pi/{id}/command SZM,2250
-                M-->>H: DONE(或 Exceeded / 409 / 逾時)
+            C->>H: submit(擺位名稱 + 各軸目標)
+            H->>M: POST /api/motion/jobs {label, targets}
+            M-->>H: job_id(或 409 / 503 拒絕)
+            loop 每秒,直到結束
+                C->>H: busy()?
+                H->>M: GET /api/motion/jobs/{id}
             end
-            C->>H: busy()? 輪詢直到完成
             alt 移動失敗或找不到擺位
                 C->>C: 記成「擺位未套用」
             end

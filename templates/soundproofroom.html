@@ -62,21 +62,11 @@ window.addEventListener('unhandledrejection', (e) =>
 function showErr(msg) {
   var el = document.getElementById('err');
   el.style.display = 'block';
-  el.textContent = 'Could not load three.js
-
-' + msg +
-    '
-
-This page runs in no-build mode and needs access to unpkg.com.
-' +
-    'Offline? Build it with Vite instead: 
-
-  cd soundproofroom
-  npm install
-  npm run build
-
-' +
-    'after building, reload and it will use the local files.';
+  el.textContent = 'Could not load three.js\n\n' + msg +
+    '\n\nThis page runs in no-build mode and needs access to unpkg.com.\n' +
+    'Offline? Build it with Vite instead:\n\n' +
+    '  cd soundproofroom\n  npm install\n  npm run build\n\n' +
+    'After building, reload and it will use the local files.';
 }
 </script>
 <script type="module" src="/soundproofroom/src/main.js"></script>

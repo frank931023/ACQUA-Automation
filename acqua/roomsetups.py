@@ -17,9 +17,11 @@
       "description": "手持裝置的近場測試",
       "created": "2026-09-15T14:30:52",
       "updated": "2026-09-15T14:31:10",
-      "axes": {"hats.mrp": 1.2, "hats.head": 17.0, ...},
-      "source": "setup"          ← 這組數字是設定模式畫的,還是實機讀回來的
+      "axes": {"hats.mrp": 1.2, "hats.head": 17.0, ...}
     }
+
+擺位只在 3D 頁設計(soundproofroom/),測試執行時由 SetupCoordinator 依
+測項的 Setup 標籤用**名稱**找到並套用。
 
 axes 的鍵就是 acqua/crane.py 的 AXES 鍵,也是 soundproofroom/src/main.js PANEL
 的控制項 id。三邊同一組字串 —— 所以存檔能直接餵給天車,不需要任何轉換表。
@@ -104,8 +106,7 @@ class RoomSetups:
         """
         return datetime.now().isoformat(timespec="milliseconds")
 
-    def save(self, *, name="", description="", axes=None, setup_id=None,
-             source="setup") -> dict:
+    def save(self, *, name="", description="", axes=None, setup_id=None) -> dict:
         """新增或更新。setup_id 給了就是更新(沿用原本的 created)。"""
         now = self._now()
         cleaned = clean_axes(axes)
@@ -120,8 +121,10 @@ class RoomSetups:
             "updated": now,
             "axes": cleaned["axes"],
             "count": len(cleaned["axes"]),
-            "source": source,
         })
+        # 舊檔有 source(以前分「3D 畫的 / 實機讀回來的」)。現在擺位只有
+        # 一個來源,更新時順手拿掉,不要留一個看起來有意義的欄位。
+        data.pop("source", None)
         if cleaned["dropped"]:
             data["dropped"] = cleaned["dropped"]
         self._write(data)

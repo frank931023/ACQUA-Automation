@@ -2,9 +2,9 @@
  * 聲學測試室 —— 外觀
  *
  * 顏色、透明度、燈光、相機。**跟實體尺寸無關**,改這裡不會影響任何量測意義。
- * 要改尺寸請去 spec.js。
+ * 要改尺寸請去 spec.json。
  *
- * 結構刻意跟 spec.js 對齊,config.js 會把兩邊深層合併成一個 CONFIG。
+ * 結構刻意跟 spec.json 對齊,config.js 會把兩邊深層合併成一個 CONFIG。
  */
 
 export const LOOK = {

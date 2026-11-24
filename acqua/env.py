@@ -26,6 +26,7 @@
 from __future__ import annotations
 
 import io
+import json
 import os
 
 #: 環境變數 → config.json 裡的位置。這張表就是「哪些東西算機器專屬」的定義。
@@ -39,8 +40,9 @@ MAPPING = {
     "ACQUA_WEB_HOST":         ("web", "host"),
     "ACQUA_WEB_PORT":         ("web", "port"),
     "ACQUA_REPORT_DIR":       ("report", "output_dir"),
-    # 天車控制中心的位址。空的 = 用模擬位置(見 acqua/crane.py)
-    "ACQUA_SETUP_CONTROLLER": ("setup_controller", "url"),
+    # 天車控制中心的位址與 token。位址空的 = 模擬機構(見 acqua/crane.py)
+    "ACQUA_SETUP_CONTROLLER":       ("setup_controller", "url"),
+    "ACQUA_SETUP_CONTROLLER_TOKEN": ("setup_controller", "token"),
 }
 
 #: 這幾個要轉型,不然 port 會變成字串、旗標會變成 "0" 這種永遠為真的東西
@@ -100,6 +102,25 @@ def apply_to(config: dict, path=".env") -> list:
         node[where[-1]] = _cast(key, raw)
         src = "環境變數" if key in os.environ else ".env"
         # 密碼不進 log
-        shown = "***" if "PASSWORD" in key else node[where[-1]]
+        shown = "***" if ("PASSWORD" in key or "TOKEN" in key) else node[where[-1]]
         applied.append("%s=%s(%s)" % (key, shown, src))
     return applied
+
+
+def load_config(base_dir: str, path: str = None) -> dict:
+    """讀 config.json(沒有就退回 config.example.json),再套上 .env。
+
+    app.py 與 tools/ 都用這一支,讀到的設定才會一致 —— 以前各寫一份,
+    有的工具忘了套 .env,改了 .env 它還在掃舊的資料庫。
+    回傳的 dict 多兩個欄位:_loaded_from(讀了哪個檔)、_env_overrides(蓋了哪些)。
+    """
+    for candidate in filter(None, [path,
+                                   os.path.join(base_dir, "config.json"),
+                                   os.path.join(base_dir, "config.example.json")]):
+        if os.path.exists(candidate):
+            with io.open(candidate, encoding="utf-8") as fh:
+                cfg = json.load(fh)
+            cfg["_loaded_from"] = os.path.basename(candidate)
+            cfg["_env_overrides"] = apply_to(cfg, os.path.join(base_dir, ".env"))
+            return cfg
+    raise SystemExit("找不到 config.json 或 config.example.json")

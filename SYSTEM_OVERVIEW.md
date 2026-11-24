@@ -41,7 +41,8 @@
 | 用 COM 驅動 ACQUA,一筆一筆送測項(`StartSingleMeasurement`) | 寫入 ACQUA 的資料庫(一律唯讀,目前 0 筆寫入) |
 | 從 SQL 讀專案樹、條件執行、測項的 `Setup` 標籤 | 編輯標籤(只能在 ACQUA 介面改) |
 | 依 `Setup` 標籤決定這筆要哪個擺位,沒到位就先移動 | 機構怎麼安全地走到那裡(見 §7,建議交給 MCC) |
-| 擺位存檔(`setups/*.json`,房間座標) | 韌體指令的細節 |
+| 擺位存檔(`setups/*.json`,房間座標),在 3D 頁設計 | 韌體指令的細節 |
+| 測試執行時依標籤自動套用擺位 | 看實機即時位置、手動推機構(屬於 MCC 的網頁) |
 | 開跑前把測項依擺位分組,減少移動次數 | |
 | 麥克風卡極化電壓(ACQUA 不碰這塊) | |
 | 自動關掉 ACQUA 的彈窗(`winwatch`) | |
@@ -112,7 +113,9 @@ setups/<id>.json        { name: "Center_1m", axes: { "hats.z": 0.40, "hats.rot":
 crane.AXES["hats.z"]    Axis(pi="pi-003", ch="SZ", lo=-1.85, hi=1.85, unit="m")
       │ to_device:(0.40 − lo) × 1000 = 2250 mm
       ▼
-MCC                     POST /api/pi/pi-003/command {"command": "SZM,2250", "timeout": 90}
+MCC                     POST /api/motion/jobs
+                        {"label": "Center_1m", "targets": {"pi-003": {"SZM": 2250, "RM": 90, ...}, ...}}
+      │ MCC 決定順序 / 並行 / 防撞
       ▼
 Pi → Arduino            "SZM,2250\n" → … "DONE"(或多一行 "Exceeded Max travel.")
 ```
@@ -125,16 +128,22 @@ Pi → Arduino            "SZM,2250\n" → … "DONE"(或多一行 "Exceeded Max
 
 ### 4.1 ACQUA Automation → MCC
 
+換擺位**整組交給 MCC**:名稱 + 每台 Pi 的目標一次送出,MCC 決定怎麼走,我們每秒問一次進度。
+**完整約定在 [docs/MCC_MOTION_API.md](docs/MCC_MOTION_API.md)**,我們這邊已照它實作(`HttpCrane`),
+MCC 那邊還沒有。
+
 | 用途 | 呼叫 | 備註 |
 |---|---|---|
-| 送指令 | `POST /api/pi/<id>/command` `{command, timeout}` | 回 `pi_response.arduino_result`(`DONE`/`ERR`)和 `arduino_response`(多行陣列) |
-| 裝置狀態 | `GET /api/pis` | 我們快取 4 秒。讀取類 API 不需要 token |
-| (尚未使用)指令表 | `GET /api/pi/<id>/commands` | 可以拿來確認某台有哪些軸、逾時多少 |
-| (尚未使用)停車位置 | `PATCH /api/pi/<id>` `{park}` | |
+| 送出作業 | `POST /api/motion/jobs` `{label, targets}` | `targets` = `{pi_id: {"SZM": 公釐, "RM": 度, …}}`,跟 MCC 的 `park` 同格式。回 `job_id` |
+| 查進度 | `GET /api/motion/jobs/<job_id>` | `state`:`queued` / `running` / `done` / `error` / `aborted`;選填 `positions` = 結束時實際位置 |
+| (尚未使用)裝置狀態 | `GET /api/pis` | 開跑前可以拿來確認每台 Pi 都在線 |
+| (尚未使用)歸位 | `POST /api/motion/home` | 建議 MCC 提供,批次開跑前先校正 / 歸位 |
 
-狀態碼:`409` = 那台正在忙,`401` = 有設 `API_TOKEN` 但沒帶,`502` / `504` = 連不到 Pi 或逾時。
+狀態碼:`400` 內容不對、`401` token 不對、`409` 已有作業在跑或裝置正忙、`503` 裝置離線。
+被拒絕或作業 `error` 時,那一筆記成「擺位未套用」(附 MCC 給的原因),照常量測。
+有設 `API_TOKEN` 的話,`.env` 填 `ACQUA_SETUP_CONTROLLER_TOKEN`。
 
-一個指令走完整條路:
+一個擺位走完整條路:
 
 ![一個韌體指令](docs/diagrams/07_seq_command.svg)
 
@@ -177,59 +186,62 @@ Pi → Arduino            "SZM,2250\n" → … "DONE"(或多一行 "Exceeded Max
 
 ## 6. 已知問題(接上真機前要處理)
 
-| # | 嚴重度 | 問題 | 後果 | 建議 |
+| # | 狀態 | 問題 | 後果 | 建議 / 處理 |
 |---|---|---|---|---|
-| 1 | 🔴 | 韌體的 `RP` / `TP` 查詢會**順便讓轉盤歸位**;而 `HttpCrane` 閒置時**每 2 秒查一次所有軸**,每次移動後也會查一次 | 轉盤會一直自己歸位;轉到目標角度後馬上被查,又回到 0° | 轉盤和傾角不要主動查位置,改記住最後一次下的目標。韌體修好再開放 |
+| 1 | ✅ 我們這邊已修 | 韌體的 `RP` / `TP` 查詢會**順便讓轉盤歸位**;舊版 `HttpCrane` 每 2 秒查一次所有軸 | 轉盤會一直自己歸位 | 2026-11-24 改成不主動查位置,以 MCC 作業結束時回報的 `positions` 為準。**MCC 實作作業時也不要在中途查 `RP` / `TP`** |
 | 2 | 🔴 | **行程對不上**:19 根軸有 14 根超過韌體上限。例如 `hats.z` 需要 3700 mm(Z 上限 300)、`speakers.x` 需要 1500 mm(X 上限 1000)、`hats.head` 要到 −15°(T 只有 0–90°) | 韌體回 `DONE` 加一行 `Exceeded`,機構不動 → 擺位全部記成未套用 | 確認真機的行程。韌體上限是校正量出來的,3D 頁的數字是照房間規格畫的,兩邊要對齊 |
 | 3 | 🟡 | 軸接在哪台 Pi **寫死**成 `pi-001` … `pi-007`,但 MCC 範例是 `pi-01` 格式,而且接線還沒對過 | 找不到裝置,狀態顯示 `missing` | 搬到設定檔;開機時用 Pi 回報的 `rig_name` 和 `board` 核對 |
 | 4 | 🟡 | `TM`(傾角)**目前不會真的驅動機構**,只會更新內部數值 | 傾角回報到位,其實沒動 → 數據錯了卻看起來正常 | 韌體修好前,`hats.head` 一律記成未套用 |
-| 5 | 🟡 | 移動逾時**寫死 90 秒**,Pi 預設 130、上限 300 | 長距離移動時我們先判定失敗,機構還在動,下一個指令吃 `409` | 不帶 `timeout`,讓 MCC 用 Pi 的值;或先讀 `/api/pis` 的 `command_timeout` |
-| 6 | 🟡 | 沒有帶 `API_TOKEN` | MCC 設了 token 之後所有指令都 `401` | `.env` 加 `ACQUA_SETUP_CONTROLLER_TOKEN`,送 `Authorization: Bearer` |
+| 5 | ✅ 已修 | 舊版移動逾時寫死 90 秒,Pi 預設 130 | 長距離移動被誤判失敗 | 每個指令的逾時交給 MCC(它本來就用 Pi 回報的值);我們只有整個換擺位的總逾時(`move_timeout_sec`,預設 900 秒) |
+| 6 | ✅ 已修 | 沒有帶 `API_TOKEN` | MCC 設了 token 之後全部 `401` | `.env` 填 `ACQUA_SETUP_CONTROLLER_TOKEN`,會送 `Authorization: Bearer` |
 | 7 | 🟡 | 「校正 / 歸位」沒有對外 API。MCC 的 Home all 是**瀏覽器**依序送的,關掉頁面就斷了 | 過夜批次沒辦法在開跑前確保機構已歸位 | MCC 加 `POST /api/motion/home`(見 §7) |
-| 8 | 🟡 | `409` 一律當成失敗 | 有人在 MCC 網頁手動操作時,自動化那筆會被記成未套用 | 收到 `409` 先等一下再重試幾次 |
-| 9 | 🟢 | `_parse_position` 取「最後一行的最後一個數字」,韌體文件說要取**第一行** | `RP` 多一行 `Homing rotation` 時可能讀錯 | 改成取第一行 |
-| 10 | 🟢 | MCC 30 秒沒有 API 呼叫就暫停狀態檢查;我們每 2 秒輪詢,等於讓它一直檢查 | 對 Arduino 多一點流量,不會壞 | 修第 1 項時一併降低頻率 |
+| 8 | 🟡 MCC | 有人在 MCC 網頁手動操作時,作業會被 `409` 拒絕 | 那一筆記成未套用 | 由 MCC 決定:作業內遇到單台忙碌時要等一下再送,還是直接拒絕並寫清楚原因 |
+| 9 | ✅ 已移除 | 舊版解析位置查詢回應的方式跟韌體文件不同 | — | 不再查位置,這段程式已刪除 |
+| 10 | ✅ 已移除 | 舊版每 2 秒輪詢,讓 MCC 一直在檢查狀態 | — | 只在作業進行中每秒查一次進度,作業結束就停 |
 
-問題 1 的過程:
+問題 1 的過程(舊版;我們這邊已修,但 MCC 實作作業時要避免同樣的事):
 
 ![轉盤一直歸位](docs/diagrams/11_issue_homing.svg)
 
 > 目前 `.env` 的 `ACQUA_SETUP_CONTROLLER` 是空的,所以用的是 `MockCrane`,**上面的問題都還沒對真機造成影響**。
-> **在第 1、2 項修好之前,不要填這個設定。**
+> 要填它,得先等 MCC 實作 [docs/MCC_MOTION_API.md](docs/MCC_MOTION_API.md);接真機前還要先解決第 2 項(行程)。
+> 在那之前可以用 `tools/fake_mcc.py` 當 MCC 把整條路跑通。
 
 ---
 
-## 7. 移動順序:建議放在 MCC
+## 7. 移動順序:交給 MCC(我們這邊已完成)
 
-目前 `HttpCrane` 是**一根一根軸依序移動**,沒有考慮碰撞,也沒有讓不同的 Pi 同時動。這段邏輯建議放在 MCC:
+換擺位時,我們把**擺位名稱 + 每台 Pi 的目標**整組送給 MCC,**怎麼走由 MCC 決定**:
 
 ```
 ACQUA Automation 負責                  MCC 負責
 ────────────────                        ────────
 哪一筆測項要哪個擺位                     這個擺位怎麼安全地走到
-什麼時候移動、等到位才量                 ・哪根先動(例如先升高再橫移)
-沒到位 → 記警告、照常量測                ・不同 Pi 同時動,同一台依序動
-                                         ・開跑前校正 / 歸位
+房間座標 → 韌體數值(換算在這邊)        ・哪根先動(例如先升高再橫移)
+什麼時候移動、等到位才量                 ・不同 Pi 同時動,同一台依序動
+沒到位 → 記警告、照常量測                ・開跑前校正 / 歸位
                                          ・逾時、409、超出行程的判斷
 ```
 
-理由:會不會撞、能不能同時動,都是**機構本身**的知識;MCC 本來就管著裝置清單、鎖和 Home all 順序。這樣以後換機構或韌體,只需要改 MCC。
+理由:會不會撞、能不能同時動,都是**機構本身**的知識;MCC 本來就管著裝置清單、鎖和 Home all 順序。
+以後換機構或韌體,只需要改 MCC。
 
-建議的 API 形狀。形狀跟我們現在的 `CraneBridge` 一樣,所以 `SetupCoordinator` 不用改,只要換掉 `HttpCrane` 的內容:
+已經定案的兩件事:
 
-```
-POST /api/motion/jobs         {label, targets: {"pi-01": {"SXM": 200, "RM": 90}, ...}}  → {job_id}
-GET  /api/motion/jobs/<id>    → {state: running|done|error|aborted, steps: [...], error}
-POST /api/motion/jobs/<id>/abort
-POST /api/motion/home         開跑前校正 / 歸位(伺服器端執行,不靠瀏覽器)
-```
+- **名稱和目標一起送,不是只送名稱。** 只送名稱的話 MCC 得自己存一份擺位,兩邊要同步,遲早對不上。
+  擺位的唯一來源是我們的 `setups/*.json`,名稱只給 MCC 顯示、記錄。
+- **單位換算留在我們這邊**(`crane.py` 的 `AXES`)。MCC 只看得到韌體數值,鍵用韌體移動指令名稱,
+  跟它既有的停車位置格式一樣。
 
-改完之後的流程:
+| 誰 | 狀態 |
+|---|---|
+| ACQUA Automation | ✅ `HttpCrane` 已改成送作業、輪詢進度;`tools/test_mcc_jobs.py` 與 `test_hook_bridge`(經假 MCC)全過 |
+| MCC | ⬜ 照 [docs/MCC_MOTION_API.md](docs/MCC_MOTION_API.md) 加 `POST /api/motion/jobs`、`GET /api/motion/jobs/<id>` |
+| 測試用 | `tools/fake_mcc.py`:照規格回應的假 MCC,可以單獨跑 |
 
-![建議的移動作業](docs/diagrams/12_proposed_motion.svg)
+MCC 內部之後可以怎麼做(示意,待 MCC 設計):
 
-要一起決定的:**單位換算放哪一邊。** 擺位檔存的是房間座標(公尺),目前在 `crane.py` 換成公釐。
-換算只能在一個地方做。如果移到 MCC,`targets` 就改傳房間座標,`AXES` 也跟著搬過去。
+![MCC 移動作業](docs/diagrams/12_proposed_motion.svg)
 
 ---
 
@@ -240,11 +252,12 @@ POST /api/motion/home         開跑前校正 / 歸位(伺服器端執行,不靠
 ![路線圖](docs/diagrams/13_roadmap.svg)
 
 ### 硬體串接
-- [ ] §6 的第 1、2 項(🔴)
+- [ ] §6 的第 2 項(行程對不上,🔴)
 - [ ] 軸 ↔ Pi 對應表搬到設定檔,並照現場接線核對
 - [ ] 真機韌體上線。目前 Arduino 燒的是 **LED 模擬版**,機構還沒接上
-- [ ] MCC 的移動作業 API 和歸位 API(§7)
-- [ ] 碰撞規則和移動順序(還沒設計)
+- [ ] MCC 實作移動作業 API([docs/MCC_MOTION_API.md](docs/MCC_MOTION_API.md);我們這邊已完成,用假 MCC 測過)
+- [ ] MCC 的歸位 API,以及我們在批次開跑前呼叫它
+- [ ] 碰撞規則和移動順序(MCC 那邊,還沒設計)
 - [ ] 先用 LED 模擬台跑 `tools/test_hook_bridge.py` 和一批真的測項,再上真機
 
 ### ACQUA 這一側

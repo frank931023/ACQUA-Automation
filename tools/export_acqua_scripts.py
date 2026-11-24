@@ -147,8 +147,7 @@ def main():
                     help="輸出資料夾")
     args = ap.parse_args()
 
-    cfg = json.load(io.open(os.path.join(ROOT, "config.json"), encoding="utf-8"))
-    env.apply_to(cfg, os.path.join(ROOT, ".env"))
+    cfg = env.load_config(ROOT)
     server = cfg["database"]["server"]
 
     dbs = [args.db] if args.db else [

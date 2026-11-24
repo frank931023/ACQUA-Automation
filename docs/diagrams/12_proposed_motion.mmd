@@ -1,13 +1,13 @@
-%% 建議:移動順序交給 MCC 的「移動作業」
+%% MCC 內部可以怎麼做(示意,待 MCC 設計)。我們這邊只送作業、查進度,見 07
 sequenceDiagram
     autonumber
     participant C as SetupCoordinator
-    participant H as HttpCrane(改版)
+    participant H as HttpCrane
     participant M as MCC 移動作業(待開發)
     participant P1 as Pi 01
     participant P2 as Pi 03
 
-    Note over C,M: 批次開跑前
+    Note over C,M: 批次開跑前(之後再接,目前不會呼叫)
     C->>H: home_all()
     H->>M: POST /api/motion/home
     M->>P1: SXC / SXH …

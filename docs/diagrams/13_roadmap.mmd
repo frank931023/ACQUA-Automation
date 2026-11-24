@@ -1,11 +1,11 @@
 %% 接上真機的建議順序
 flowchart TB
-    subgraph S1["1・我們這邊先修"]
+    subgraph S1["1・我們這邊 ✅ 已完成"]
         direction LR
-        a1["R / T 不主動查位置"]
-        a2["逾時改用 Pi 的值"]
-        a3["取第一行解析位置"]
-        a4["API_TOKEN・409 重試"]
+        a1["整組送 MCC 作業 API"]
+        a2["不主動查位置"]
+        a3["逾時交給 MCC"]
+        a4["API_TOKEN"]
     end
     subgraph S2["2・對齊資料"]
         direction LR
@@ -15,8 +15,8 @@ flowchart TB
     end
     subgraph S3["3・MCC 加功能"]
         direction LR
+        c2["移動作業 API<br/>docs/MCC_MOTION_API.md"]
         c1["POST /api/motion/home"]
-        c2["移動作業 API"]
         c3["碰撞規則・並行"]
     end
     subgraph S4["4・驗證"]
@@ -28,4 +28,6 @@ flowchart TB
     S1 --> S2 --> S3 --> S4
 
     classDef red fill:#fee2e2,stroke:#dc2626,color:#7f1d1d
-    class a1,b3 red
+    classDef done fill:#dcfce7,stroke:#16a34a,color:#14532d
+    class b3,c2 red
+    class a1,a2,a3,a4 done
